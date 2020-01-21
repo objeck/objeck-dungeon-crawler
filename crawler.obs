@@ -1,0 +1,201 @@
+use Game.SDL2;
+use Game.Framework;
+use System.IO.File;
+
+class Dungeon {
+	@framework : GameFramework;
+
+	@hallway_imgs : AnimatedImageSprite;
+	@hallway_index : Int;
+	@hallway_index_max : Int;
+
+	@map : Char[,];
+	@map_start : Int[];
+	@map_end : Int[];
+	@player_pos : Int[];
+
+	function : Main(args : String[]) ~ Nil {
+		Dungeon->New()->Run();
+	}
+
+	New() {
+		@framework := GameFramework->New(GameConsts->SCREEN_WIDTH, GameConsts->SCREEN_HEIGHT, "Dungeon");
+		@framework->SetClearColor(Color->New(0, 0, 0));
+		
+		hallway_path := "./media/images.png";
+		@hallway_index_max := 11;
+		@hallway_imgs := @framework->AddAnimatedImageSprite(hallway_path);	
+		for(i := 0; i < @hallway_index_max; i += 1;) {
+			@hallway_imgs->AddClip(Rect->New(i * 400, 0, 400, 300));
+		};
+		@hallway_imgs->SetTop(16);
+		@hallway_imgs->SetLeft(16);
+
+		LoadMap();
+
+		@player_pos := @map_start;
+	}
+	
+	method : LoadMap() ~ Nil {
+		map_path := "./media/map.dat";
+		map_file := FileReader->New(map_path);
+		leaving {
+			map_file->Close();
+		};
+		
+		size_line := map_file->ReadString();		
+		dimensions := size_line->Split("x");
+		length := 0; width := 0;
+		if(dimensions->Size() = 2) {
+			length := dimensions[0]->ToInt(); 
+			width := dimensions[1]->ToInt();
+		};
+
+		@map := Char->New[length, width];
+		@map_start := Int->New[2];
+		@map_end := Int->New[2];
+
+		for(i := 0; i < length; i += 1;) {
+			line := map_file->ReadString();
+			if(line->Size() <> width) {
+				"--- Invalid map width! ---"->ErrorLine();
+				Runtime->Exit(1);
+			};
+
+			each(j : line) {
+				value := line->Get(j);				
+				if(value = 'S') {
+					@map_start[0] := i;
+					@map_start[1] := j;
+				}
+				else if(value = 'E') {
+					@map_end[0] := i;
+					@map_end[1] := j;	
+				};
+				
+				@map[i, j] := value;
+			};
+		};
+	}
+
+	method : Run() ~ Nil {
+		if(@framework->IsOk()) {
+			e := @framework->GetEvent();
+			
+			frame_count := 0;
+			quit := false;
+			while(<>quit) {
+				@framework->FrameStart();
+				
+				# process input
+				while(e->Poll() <> 0) {
+					# quit
+					if(e->GetType() = EventType->SDL_QUIT) {
+						quit := true;
+					}
+					# keyboard
+					else if(e->GetType() = EventType->SDL_KEYDOWN & e->GetKey()->GetRepeat() = 0) {
+				        GetInput(e);
+				    };
+				};
+
+				Render(frame_count);
+
+				@framework->FrameEnd();
+
+				frame_count += 1;
+				if(frame_count >= @framework->GetFps()) {
+					frame_count := 0;
+				};
+			};
+		}
+		else {
+			"--- Error Initializing Environment ---"->ErrorLine();
+			return;
+		};
+
+		leaving {
+			@framework->Quit();
+		};
+	}
+
+	method : GetInput(e : Event) ~ Nil {
+        select(e->GetKey()->GetKeysym()->GetScancode()) {
+        	label Scancode->SDL_SCANCODE_UP:
+        	label Scancode->SDL_SCANCODE_W: {
+        		MoveForwad();
+        	}
+
+        	label Scancode->SDL_SCANCODE_DOWN:
+        	label Scancode->SDL_SCANCODE_S: {
+        		
+        	}
+
+        	label Scancode->SDL_SCANCODE_LEFT:
+        	label Scancode->SDL_SCANCODE_A: {
+        		
+        	}
+
+        	label Scancode->SDL_SCANCODE_RIGHT:
+        	label Scancode->SDL_SCANCODE_D: {
+        		
+        	}
+        };
+
+        # @player_pos
+	}
+
+	method : MoveForwad() ~ Nil {
+		map_dimensions := @map->Size();
+
+		player_pos_x := @player_pos[1];
+		player_pos_y := @player_pos[0];
+		
+		# bounds
+		if(player_pos_y > -1) {
+			# check ahead
+			forward_dist := 0;
+			if(player_pos_y - 1 >= 0) {
+				player_pos_y -= 1;
+				if(@map[player_pos_y, player_pos_x] = '0') {
+					@player_pos[0] -= 1;
+					forward_dist += 1;
+					if(player_pos_y - 1 >= 0) {
+						player_pos_y -= 1;
+						if(@map[player_pos_y, player_pos_x] = '0') {
+							forward_dist += 1;
+						};
+					};
+				};
+			};
+
+			if(forward_dist = 2) {
+"- frame=0 -"->PrintLine();
+				@hallway_index := 0;
+			}
+			else if(forward_dist = 1) {
+"- frame=1 -"->PrintLine();			
+				@hallway_index := 1;	
+			}
+			else {
+"- frame=6 -"->PrintLine();			
+				@hallway_index := 2;
+			};
+"pos: x={$player_pos_x}, y={$player_pos_y}; forward_dist={$forward_dist}"->PrintLine();			
+		};
+	}
+
+	method : Render(frame_count : Int) ~ Nil {
+		@framework->Clear();
+
+		@hallway_imgs->Render(@hallway_index);
+
+		@framework->Show();
+	}
+}
+
+consts GameConsts {
+	SCREEN_WIDTH := 800,
+	SCREEN_HEIGHT := 600,
+	REC_REFRESH := 15
+}
