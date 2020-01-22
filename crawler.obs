@@ -11,22 +11,22 @@ class Dungeon {
 
 	@map : Char[,];
 
-
 	@map_start : Int[];
 	@map_end : Int[];
 
 	@player_pos : Int[];
+	@player_dir : Int;
 	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
 	}
 
 	New() {
-		@framework := GameFramework->New(GameConsts->SCREEN_WIDTH, GameConsts->SCREEN_HEIGHT, "Dungeon");
+		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
 		@framework->SetClearColor(Color->New(0, 0, 0));
 		
 		tunnel_path := "./media/images.png";
-		@tunnel_image_max := GameConsts->IMAGE_MAX;
+		@tunnel_image_max := ScreenConsts->IMAGE_MAX;
 		@tunnel_imgs := @framework->AddAnimatedImageSprite(tunnel_path);	
 		for(i := 0; i < @tunnel_image_max; i += 1;) {
 			@tunnel_imgs->AddClip(Rect->New(i * 400, 0, 400, 300));
@@ -37,11 +37,7 @@ class Dungeon {
 		LoadMap();
 
 		@player_pos := @map_start;
-#~
-sx := @player_pos[1];
-sy := @player_pos[0];
-"start={$sx},{$sy}"->PrintLine();
-~#
+		@player_dir := Direction->NORTH;
 	}
 	
 	method : LoadMap() ~ Nil {
@@ -85,7 +81,7 @@ sy := @player_pos[0];
 			};
 		};
 
-		tunnel_index := 0;
+		@tunnel_index := 0;
 	}
 
 	method : Run() ~ Nil {
@@ -136,19 +132,48 @@ sy := @player_pos[0];
         		MoveForwad();
         	}
 
-        	label Scancode->SDL_SCANCODE_DOWN:
-        	label Scancode->SDL_SCANCODE_S: {
-        		
-        	}
-
         	label Scancode->SDL_SCANCODE_LEFT:
         	label Scancode->SDL_SCANCODE_A: {
-        		
+        		select(@player_dir) {
+        			label Direction->NORTH {
+        				@player_dir := Direction->WEST;
+        			}
+
+        			label Direction->SOUTH {
+        				@player_dir := Direction->EAST;
+        				
+        			}
+
+        			label Direction->EAST {
+        				@player_dir := Direction->NORTH;
+        			}
+
+        			label Direction->WEST {
+        				@player_dir := Direction->SOUTH;
+        			}
+        		};
         	}
 
         	label Scancode->SDL_SCANCODE_RIGHT:
         	label Scancode->SDL_SCANCODE_D: {
- 				
+ 				select(@player_dir) {
+        			label Direction->NORTH {
+        				@player_dir := Direction->EAST;
+        			}
+
+        			label Direction->SOUTH {
+        				@player_dir := Direction->WEST;
+        				
+        			}
+
+        			label Direction->EAST {
+        				@player_dir := Direction->SOUTH;
+        			}
+
+        			label Direction->WEST {
+        				@player_dir := Direction->NORTH;
+        			}
+        		};	
         	}
         };
 
@@ -283,8 +308,15 @@ value := @map[player_y, player_x];
 	}
 }
 
-consts GameConsts {
+consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 600,
 	IMAGE_MAX := 15
+}
+
+enum Direction {
+	NORTH,
+	SOUTH,
+	EAST,
+	WEST
 }
