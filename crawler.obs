@@ -5,39 +5,47 @@ use System.IO.File;
 class Dungeon {
 	@framework : GameFramework;
 
-	@hallway_imgs : AnimatedImageSprite;
-	@hallway_index : Int;
-	@hallway_index_max : Int;
+	@tunnel_imgs : AnimatedImageSprite;
+	@tunnel_index : Int;
+	@tunnel_index_max : Int;
 
 	@map : Char[,];
+
+
 	@map_start : Int[];
 	@map_end : Int[];
-	@player_pos : Int[];
 
+	@player_pos : Int[];
+	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
 	}
 
 	New() {
-		@framework := GameFramework->New(GameConsts->SCREEN_WIDTH, GameConsts->SCREEN_HEIGHT, "Dungeon");
+		@framework := GameFramework->New(GameConsts->SCREEN_cols, GameConsts->SCREEN_HEIGHT, "Dungeon");
 		@framework->SetClearColor(Color->New(0, 0, 0));
 		
-		hallway_path := "./media/images.png";
-		@hallway_index_max := 11;
-		@hallway_imgs := @framework->AddAnimatedImageSprite(hallway_path);	
-		for(i := 0; i < @hallway_index_max; i += 1;) {
-			@hallway_imgs->AddClip(Rect->New(i * 400, 0, 400, 300));
+		tunnel_path := "./media/images.png";
+		@tunnel_index_max := 13;
+		@tunnel_imgs := @framework->AddAnimatedImageSprite(tunnel_path);	
+		for(i := 0; i < @tunnel_index_max; i += 1;) {
+			@tunnel_imgs->AddClip(Rect->New(i * 400, 0, 400, 300));
 		};
-		@hallway_imgs->SetTop(16);
-		@hallway_imgs->SetLeft(16);
+		@tunnel_imgs->SetTop(16);
+		@tunnel_imgs->SetLeft(16);
 
 		LoadMap();
 
 		@player_pos := @map_start;
+#~
+sx := @player_pos[1];
+sy := @player_pos[0];
+"start={$sx},{$sy}"->PrintLine();
+~#
 	}
 	
 	method : LoadMap() ~ Nil {
-		map_path := "./media/map.dat";
+		map_path := "./media/debug.dat";
 		map_file := FileReader->New(map_path);
 		leaving {
 			map_file->Close();
@@ -45,20 +53,20 @@ class Dungeon {
 		
 		size_line := map_file->ReadString();		
 		dimensions := size_line->Split("x");
-		length := 0; width := 0;
+		rows := 0; cols := 0;
 		if(dimensions->Size() = 2) {
-			length := dimensions[0]->ToInt(); 
-			width := dimensions[1]->ToInt();
+			rows := dimensions[0]->ToInt(); 
+			cols := dimensions[1]->ToInt();
 		};
 
-		@map := Char->New[length, width];
+		@map := Char->New[rows, cols];
 		@map_start := Int->New[2];
 		@map_end := Int->New[2];
 
-		for(i := 0; i < length; i += 1;) {
+		for(i := 0; i < rows; i += 1;) {
 			line := map_file->ReadString();
-			if(line->Size() <> width) {
-				"--- Invalid map width! ---"->ErrorLine();
+			if(line->Size() <> cols) {
+				"--- Invalid map cols! ---"->ErrorLine();
 				Runtime->Exit(1);
 			};
 
@@ -138,7 +146,7 @@ class Dungeon {
 
         	label Scancode->SDL_SCANCODE_RIGHT:
         	label Scancode->SDL_SCANCODE_D: {
-        		
+ 				
         	}
         };
 
@@ -147,55 +155,70 @@ class Dungeon {
 
 	method : MoveForwad() ~ Nil {
 		map_dimensions := @map->Size();
+		map_dimension_x := map_dimensions[1];
+		map_dimension_y := map_dimensions[0];
 
-		player_pos_x := @player_pos[1];
-		player_pos_y := @player_pos[0];
-		
-		# bounds
-		if(player_pos_y > -1) {
-			# check ahead
-			forward_dist := 0;
-			if(player_pos_y - 1 >= 0) {
-				player_pos_y -= 1;
-				if(@map[player_pos_y, player_pos_x] = '0') {
-					@player_pos[0] -= 1;
-					forward_dist += 1;
-					if(player_pos_y - 1 >= 0) {
-						player_pos_y -= 1;
-						if(@map[player_pos_y, player_pos_x] = '0') {
-							forward_dist += 1;
-						};
-					};
-				};
-			};
+"map: x={$map_dimension_x}, y={$map_dimension_y}"->PrintLine();
 
-			if(forward_dist = 2) {
-"- frame=0 -"->PrintLine();
-				@hallway_index := 0;
-			}
-			else if(forward_dist = 1) {
-"- frame=1 -"->PrintLine();			
-				@hallway_index := 1;	
-			}
-			else {
-"- frame=6 -"->PrintLine();			
-				@hallway_index := 2;
-			};
-"pos: x={$player_pos_x}, y={$player_pos_y}; forward_dist={$forward_dist}"->PrintLine();			
+		player_x := @player_pos[1];
+		player_y := @player_pos[0];
+
+		# check left
+		to_left := false;		
+		if(player_x - 1 > -1 & @map[player_y, player_x - 1] = '@') {
+"--- left ---"->PrintLine();
+			to_left := true;
 		};
+
+		# check right
+		to_right := false;
+		if(player_x + 1 < map_dimension_x & @map[player_y, player_x + 1] = '@') {
+"--- right ---"->PrintLine();
+			to_right := true;
+		};
+
+		# check front
+		to_front := 0;
+		to_front_left := to_front_right := false;
+		if(player_y - 1 < map_dimension_y & @map[player_y - 1, player_x] = '@') {
+"--- forward 1 ---"->PrintLine();
+			to_front += 1; 
+			
+			# check ahead two
+			if(player_y - 2 < map_dimension_y & @map[player_y - 2, player_x] = '@') {
+"--- forward 2 ---"->PrintLine();
+				to_front += 1;
+			};
+
+			# left front
+			if(player_x - 1 > -1 & @map[player_y - 1, player_x - 1] = '@') {
+"--- forward left ---"->PrintLine();
+				to_front_left := true;
+			};
+
+			# right front
+			if(player_x + 1 < map_dimension_x & @map[player_y - 1, player_x + 1] = '@') {
+"--- forward right ---"->PrintLine();
+				to_front_right := true;
+			};
+		};
+
+value := @map[player_y, player_x];
+"pos: x={$player_x}, y={$player_y}, value='{$value}'\n======"->PrintLine();
+
 	}
 
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
 
-		@hallway_imgs->Render(@hallway_index);
+		@tunnel_imgs->Render(@tunnel_index);
 
 		@framework->Show();
 	}
 }
 
 consts GameConsts {
-	SCREEN_WIDTH := 800,
+	SCREEN_cols := 800,
 	SCREEN_HEIGHT := 600,
 	REC_REFRESH := 15
 }
