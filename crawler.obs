@@ -7,7 +7,7 @@ class Dungeon {
 
 	@tunnel_imgs : AnimatedImageSprite;
 	@tunnel_index : Int;
-	@tunnel_index_max : Int;
+	@tunnel_image_max : Int;
 
 	@map : Char[,];
 
@@ -22,13 +22,13 @@ class Dungeon {
 	}
 
 	New() {
-		@framework := GameFramework->New(GameConsts->SCREEN_cols, GameConsts->SCREEN_HEIGHT, "Dungeon");
+		@framework := GameFramework->New(GameConsts->SCREEN_WIDTH, GameConsts->SCREEN_HEIGHT, "Dungeon");
 		@framework->SetClearColor(Color->New(0, 0, 0));
 		
 		tunnel_path := "./media/images.png";
-		@tunnel_index_max := 13;
+		@tunnel_image_max := GameConsts->IMAGE_MAX;
 		@tunnel_imgs := @framework->AddAnimatedImageSprite(tunnel_path);	
-		for(i := 0; i < @tunnel_index_max; i += 1;) {
+		for(i := 0; i < @tunnel_image_max; i += 1;) {
 			@tunnel_imgs->AddClip(Rect->New(i * 400, 0, 400, 300));
 		};
 		@tunnel_imgs->SetTop(16);
@@ -84,6 +84,8 @@ sy := @player_pos[0];
 				@map[i, j] := value;
 			};
 		};
+
+		tunnel_index := 0;
 	}
 
 	method : Run() ~ Nil {
@@ -154,58 +156,100 @@ sy := @player_pos[0];
 	}
 
 	method : MoveForwad() ~ Nil {
-		map_dimensions := @map->Size();
+		map_dimensions := @map->Size();		
 		map_dimension_x := map_dimensions[1];
 		map_dimension_y := map_dimensions[0];
-
-"map: x={$map_dimension_x}, y={$map_dimension_y}"->PrintLine();
 
 		player_x := @player_pos[1];
 		player_y := @player_pos[0];
 
-		# check left
-		to_left := false;		
+		# check if we can move forward
+		if(player_y - 1 < map_dimension_y & @map[player_y - 1, player_x] = '@') {
+			@player_pos[0] := --player_y;
+			UpdateView(map_dimension_x, map_dimension_y);			
+		};
+
+value := @map[player_y, player_x];
+"pos: x={$player_x}, y={$player_y}, value='{$value}'\n======"->PrintLine();
+	}
+
+	method : UpdateView(map_dimension_x : Int, map_dimension_y : Int) ~ Nil {
+		player_x := @player_pos[1];
+		player_y := @player_pos[0];
+
+		# check left view
+		to_left := false;
 		if(player_x - 1 > -1 & @map[player_y, player_x - 1] = '@') {
 "--- left ---"->PrintLine();
 			to_left := true;
 		};
 
-		# check right
+		# check right view
 		to_right := false;
 		if(player_x + 1 < map_dimension_x & @map[player_y, player_x + 1] = '@') {
 "--- right ---"->PrintLine();
 			to_right := true;
 		};
 
-		# check front
+		# check front view
 		to_front := 0;
 		to_front_left := to_front_right := false;
 		if(player_y - 1 < map_dimension_y & @map[player_y - 1, player_x] = '@') {
 "--- forward 1 ---"->PrintLine();
 			to_front += 1; 
 			
-			# check ahead two
+			# check view two ahead
 			if(player_y - 2 < map_dimension_y & @map[player_y - 2, player_x] = '@') {
 "--- forward 2 ---"->PrintLine();
 				to_front += 1;
 			};
 
-			# left front
+			# left front view
 			if(player_x - 1 > -1 & @map[player_y - 1, player_x - 1] = '@') {
 "--- forward left ---"->PrintLine();
 				to_front_left := true;
 			};
 
-			# right front
+			# right front view
 			if(player_x + 1 < map_dimension_x & @map[player_y - 1, player_x + 1] = '@') {
 "--- forward right ---"->PrintLine();
 				to_front_right := true;
 			};
 		};
 
-value := @map[player_y, player_x];
-"pos: x={$player_x}, y={$player_y}, value='{$value}'\n======"->PrintLine();
+		# find the right image
+		if(to_front_left & to_front_right) {
+			if(to_front = 2) {
+				@tunnel_index := 14;
+			}
+			else {
+				@tunnel_index := 5;	
+			};
+		}
+		else if(to_left & to_right) {
+			if(to_front = 2) {
+				@tunnel_index := 0;
+			}
+			else if(to_front = 1) {
+				@tunnel_index := 2;
+			}
+			else {
+				@tunnel_index := 7;	
+			};
+		}
 
+
+
+
+		else if(to_front = 2) {
+			@tunnel_index := 0;
+		}
+		else if(to_front = 1) {
+			@tunnel_index := 1;
+		}
+		else {
+			@tunnel_index := 2;	
+		};
 	}
 
 	method : Render(frame_count : Int) ~ Nil {
@@ -218,7 +262,7 @@ value := @map[player_y, player_x];
 }
 
 consts GameConsts {
-	SCREEN_cols := 800,
+	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 600,
-	REC_REFRESH := 15
+	IMAGE_MAX := 15
 }
