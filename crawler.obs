@@ -212,11 +212,64 @@ class Dungeon {
 	}
 
 	method : UpdateView() ~ Nil {
+		map_dimensions := @map->Size();
+
+		map_dimension_x := map_dimensions[1];
+		map_dimension_y := map_dimensions[0];
+
+		player_x := @player_pos[1];
+		player_y := @player_pos[0];
+
 		if(Direction->NORTH = @player_dir) {
+			# foward
+			if(player_y - 2 > -1) {
+				if(@map[player_y - 2, player_x] = '@' & @map[player_y - 1, player_x] = '@') {
+					@image_index := 11;
+				}
+				# check for left and right paths
+				else if(@map[player_y - 1, player_x] = '@') {
+					# right
+					if(player_x + 1 < map_dimension_x & @map[player_y - 1, player_x + 1] = '@') {
+						@image_index := 6;						
+					}
+					else if(player_x - 1 > -1 & @map[player_y - 1, player_x - 1] = '@') {
+						@image_index := 5;
+					}
+					else {
+						@image_index := 7;
+					};
+				}
+				else {
+					# handle left and right
+					@image_index := 3;
+				};
+			};
 		}
 		else if(Direction->EAST = @player_dir) {
 		}
 		else if(Direction->SOUTH = @player_dir) {
+			# foward, no left or right path
+			if(player_y + 2 < map_dimension_y) {
+				if(@map[player_y + 2, player_x] = '@' & @map[player_y + 1, player_x] = '@') {
+					@image_index := 11;
+				}
+				else if(@map[player_y + 1, player_x] = '@') {
+					# right
+					if(player_x - 1 > -1 & @map[player_y + 1, player_x - 1] = '@') {
+						@image_index := 6;						
+					}
+					else if(player_x + 1 < map_dimension_x & @map[player_y + 1, player_x + 1] = '@') {
+						@image_index := 5;
+					}
+					else {
+						@image_index := 7;
+					};
+				}
+				else {
+					# handle left and right
+					@image_index := 3;
+				};
+			};
 		}
 		else if(Direction->WEST = @player_dir) {
 		};
