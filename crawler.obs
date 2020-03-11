@@ -16,8 +16,6 @@ class Dungeon {
 
 	@player_pos : Int[];
 	@player_dir : Direction;
-
-	@timer_text : TextSprite;
 	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
@@ -25,7 +23,7 @@ class Dungeon {
 
 	New() {
 		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
-		@framework->SetClearColor(Color->New(255, 255, 255));
+		@framework->SetClearColor(Color->New(0, 0, 0));
 		
 		tunnel_path := "./media/artwork.png";
 		@image_max := ScreenConsts->IMAGE_MAX;
@@ -33,8 +31,8 @@ class Dungeon {
 		for(i := 0; i < @image_max; i += 1;) {
 			@images->AddClip(Rect->New(i * 400, 0, 400, 300));
 		};
-		@images->SetTop(16);
-		@images->SetLeft(16);
+		@images->SetTop(10);
+		@images->SetLeft(10);
 
 		LoadMap();
 	}
@@ -182,8 +180,8 @@ class Dungeon {
 
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
+		@images->Render(@image_max - 1);
 		@images->Render(@image_index);
-		@timer_text->Render(500, 10);
 		@framework->Show();
 	}
 
@@ -380,16 +378,13 @@ class Dungeon {
 			"\n"->Print();
 		};
 		"--- {$player_x},{$player_y} ---\n"->PrintLine();
-
-		@timer_text := @framework->AddTextSprite();
-		@timer_text->RenderedText("buffer\rbuffer\rbuffer");
 	}
 }
 
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 600,
-	IMAGE_MAX := 13
+	IMAGE_MAX := 14
 }
 
 enum Direction {
