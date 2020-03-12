@@ -16,6 +16,11 @@ class Dungeon {
 
 	@player_pos : Int[];
 	@player_dir : Direction;
+
+	@map_image : ImageSprite;
+
+	@stat_text : TextSprite;
+	@stat_color : Color;
 	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
@@ -25,15 +30,22 @@ class Dungeon {
 		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
 		@framework->SetClearColor(Color->New(0, 0, 0));
 		
-		tunnel_path := "./media/artwork.png";
 		@image_max := ScreenConsts->IMAGE_MAX;
-		@images := @framework->AddAnimatedImageSprite(tunnel_path);	
+		@images := @framework->AddAnimatedImageSprite("./media/artwork.png");
 		for(i := 0; i < @image_max; i += 1;) {
 			@images->AddClip(Rect->New(i * 400, 0, 400, 300));
 		};
-		@images->SetTop(10);
-		@images->SetLeft(10);
+		@images->SetTop(35);
+		@images->SetLeft(35);
 
+		@map_image := @framework->AddAnimatedImageSprite("./media/artwork2.png");
+		@map_image->SetTop(55);
+		@map_image->SetLeft(475);
+		
+		@stat_text := @framework->AddTextSprite();
+		@stat_color := Color->New(249,249,249);
+		@stat_text->RenderedText("HP=75, END=9, STR=8", @stat_color);
+		
 		LoadMap();
 	}
 	
@@ -180,8 +192,11 @@ class Dungeon {
 
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
-		@images->Render(@image_max - 1);
+
+		@map_image->Render();
 		@images->Render(@image_index);
+		@stat_text->Render(500, 35);
+
 		@framework->Show();
 	}
 
@@ -383,7 +398,7 @@ class Dungeon {
 
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
-	SCREEN_HEIGHT := 600,
+	SCREEN_HEIGHT := 400,
 	IMAGE_MAX := 14
 }
 
