@@ -37,7 +37,7 @@ class Dungeon {
 		@dungeon_image_max := ScreenConsts->DUNGEON_IMAGE_MAX;
 		@dungeon_images := @framework->AddAnimatedImageSprite("./media/artwork.png");
 		for(i := 0; i < @dungeon_image_max; i += 1;) {
-			@dungeon_images->AddClip(Rect->New(i * 410, 0, 400, 310));
+			@dungeon_images->AddClip(Rect->New(i * 410, 0, 410, 310));
 		};
 		@dungeon_images->SetTop(35);
 		@dungeon_images->SetLeft(35);
@@ -56,7 +56,7 @@ class Dungeon {
 		
 		@stat_text := @framework->AddTextSprite();
 		@stat_color := Color->New(249, 249, 249);
-		@stat_text->RenderedText("HP=75, END=9, STR=8", @stat_color);
+		@stat_text->RenderedText("HP: 75, END: 9, STR: 8", @stat_color);
 		
 		LoadMap();
 	}
@@ -207,11 +207,61 @@ class Dungeon {
 
 		@map_image->Render();
 		@dungeon_images->Render(@dungeon_image_index);
+		@stat_text->Render(500, 35);
 
-		@fps_images->SetTop(77);
-		@fps_images->SetLeft(499);
+		RenderMap(frame_count);
+
+		@framework->Show();
+	}
+
+	method : RenderMap(frame_count : Int) ~ Nil {
+		top := 77;
+		left := 499;
+		inc := 29;
+
+		@fps_images->SetTop(top);
+		@fps_images->SetLeft(left);
 		@fps_images->Render(0);
 
+		map_dimensions := @map->Size();
+
+		player_x := @player_pos[1];
+		player_y := @player_pos[0];
+
+		for(i := 0; i < map_dimensions[0]; i += 1;) {
+			for(j := 0; j < map_dimensions[0]; j += 1;) {
+				value := @map[i,j];
+				if(i = player_y & j = player_x) {
+					select(@player_dir) {
+	        			label Direction->NORTH {
+	        				value := '↑';
+	        			}
+
+	        			label Direction->SOUTH {
+	        				value := '↓';
+	        			}
+
+	        			label Direction->EAST {
+	        				value := '→';
+	        			}
+
+	        			label Direction->WEST {
+	        				value := '←';
+	        			}
+	        		};
+				}
+				else if(value = '@' | value = 'S') {
+					@fps_images->SetTop(top);
+					@fps_images->SetLeft(left);
+					@fps_images->Render(0);
+				};
+				left += inc;
+			};
+			top += inc;
+			left := 499;
+		};
+
+#~
 		@fps_images->SetTop(77);
 		@fps_images->SetLeft(499 + 29);
 		@fps_images->Render(0);
@@ -228,10 +278,7 @@ class Dungeon {
 		@fps_images->SetLeft(499 + 29 * 2);
 		@fps_images->SetAngle(180);
 		@fps_images->Render(1);
-		
-		@stat_text->Render(500, 35);
-
-		@framework->Show();
+~#
 	}
 
 	method : MoveForwad() ~ Nil {
