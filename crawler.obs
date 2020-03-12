@@ -5,9 +5,13 @@ use System.IO.File;
 class Dungeon {
 	@framework : GameFramework;
 
-	@images : AnimatedImageSprite;
-	@image_index : Int;
-	@image_max : Int;
+	@dungeon_images : AnimatedImageSprite;
+	@dungeon_image_index : Int;
+	@dungeon_image_max : Int;
+
+	@fps_images : AnimatedImageSprite;
+	@fps_image_index : Int;
+	@fps_image_max : Int;
 
 	@map : Char[,];
 
@@ -30,20 +34,28 @@ class Dungeon {
 		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
 		@framework->SetClearColor(Color->New(0, 0, 0));
 		
-		@image_max := ScreenConsts->IMAGE_MAX;
-		@images := @framework->AddAnimatedImageSprite("./media/artwork.png");
-		for(i := 0; i < @image_max; i += 1;) {
-			@images->AddClip(Rect->New(i * 400, 0, 400, 300));
+		@dungeon_image_max := ScreenConsts->DUNGEON_IMAGE_MAX;
+		@dungeon_images := @framework->AddAnimatedImageSprite("./media/artwork.png");
+		for(i := 0; i < @dungeon_image_max; i += 1;) {
+			@dungeon_images->AddClip(Rect->New(i * 410, 0, 400, 310));
 		};
-		@images->SetTop(35);
-		@images->SetLeft(35);
+		@dungeon_images->SetTop(35);
+		@dungeon_images->SetLeft(35);
+
+		@fp_image_max := ScreenConsts->FPS_IMAGE_MAX;
+		@fps_images := @framework->AddAnimatedImageSprite("./media/artwork3.png");
+		for(i := 0; i < @fp_image_max; i += 1;) {
+			@fps_images->AddClip(Rect->New(i * 27, 0, 27, 27));
+		};
+		@fps_images->SetTop(10);
+		@fps_images->SetLeft(10);
 
 		@map_image := @framework->AddAnimatedImageSprite("./media/artwork2.png");
 		@map_image->SetTop(55);
 		@map_image->SetLeft(475);
 		
 		@stat_text := @framework->AddTextSprite();
-		@stat_color := Color->New(249,249,249);
+		@stat_color := Color->New(249, 249, 249);
 		@stat_text->RenderedText("HP=75, END=9, STR=8", @stat_color);
 		
 		LoadMap();
@@ -85,7 +97,7 @@ class Dungeon {
 			};
 		};
 
-		@image_index := 0;
+		@dungeon_image_index := 0;
 		@player_pos := @map_start;
 		@player_dir := Direction->NORTH;
 
@@ -194,7 +206,29 @@ class Dungeon {
 		@framework->Clear();
 
 		@map_image->Render();
-		@images->Render(@image_index);
+		@dungeon_images->Render(@dungeon_image_index);
+
+		@fps_images->SetTop(77);
+		@fps_images->SetLeft(499);
+		@fps_images->Render(0);
+
+		@fps_images->SetTop(77);
+		@fps_images->SetLeft(499 + 29);
+		@fps_images->Render(0);
+
+		@fps_images->SetTop(77 + 29);
+		@fps_images->SetLeft(499 + 29);
+		@fps_images->Render(0);
+
+		@fps_images->SetTop(77 + 29 * 2);
+		@fps_images->SetLeft(499 + 29);
+		@fps_images->Render(0);
+
+		@fps_images->SetTop(77 + 29 * 2);
+		@fps_images->SetLeft(499 + 29 * 2);
+		@fps_images->SetAngle(180);
+		@fps_images->Render(1);
+		
 		@stat_text->Render(500, 35);
 
 		@framework->Show();
@@ -318,43 +352,43 @@ class Dungeon {
 
 		# foward 2
 		if(is_forward_2 & is_left_1 & is_right_1) {
-			@image_index := 8;
+			@dungeon_image_index := 8;
 		}
 		else if(is_forward_2 & is_left_1) {
-			@image_index := 9;
+			@dungeon_image_index := 9;
 		}
 		else if(is_forward_2 & is_right_1) {
-			@image_index := 10;
+			@dungeon_image_index := 10;
 		}
 		# foward 1
 		else if(is_forward_1 & is_left_1 & is_right_1) {
-			@image_index := 4;
+			@dungeon_image_index := 4;
 		}
 		else if(is_forward_1 & is_left_1) {
-			@image_index := 5;
+			@dungeon_image_index := 5;
 		}
 		else if(is_forward_1 & is_right_1) {
-			@image_index := 6;
+			@dungeon_image_index := 6;
 		}
 		# foward 0
 		else if(is_forward_0 & is_left_0 & is_right_0) {
-			@image_index := 0;
+			@dungeon_image_index := 0;
 		}
 		else if(is_forward_0 & is_left_0) {
-			@image_index := 1;
+			@dungeon_image_index := 1;
 		}
 		else if(is_forward_0 & is_right_0) {
-			@image_index := 2;
+			@dungeon_image_index := 2;
 		}
 		# tunnel
 		else if(is_forward_2) {
-			@image_index := 11;	
+			@dungeon_image_index := 11;	
 		}
 		else if(is_forward_1) {
-			@image_index := 7;		
+			@dungeon_image_index := 7;		
 		}
 		else {
-			@image_index := 3;
+			@dungeon_image_index := 3;
 		};
 
 		ShowMap();
@@ -399,7 +433,8 @@ class Dungeon {
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 400,
-	IMAGE_MAX := 14
+	DUNGEON_IMAGE_MAX := 14,
+	FPS_IMAGE_MAX := 2
 }
 
 enum Direction {
