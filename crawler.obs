@@ -32,7 +32,7 @@ class Dungeon {
 
 	New() {
 		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
-		@framework->SetClearColor(Color->New(0, 0, 0));
+		@framework->SetClearColor(Color->New(20, 51, 6));
 		
 		@dungeon_image_max := ScreenConsts->DUNGEON_IMAGE_MAX;
 		@dungeon_images := @framework->AddAnimatedImageSprite("./media/artwork.png");
@@ -219,10 +219,6 @@ class Dungeon {
 		left := 499;
 		inc := 29;
 
-		@fps_images->SetTop(top);
-		@fps_images->SetLeft(left);
-		@fps_images->Render(0);
-
 		map_dimensions := @map->Size();
 
 		player_x := @player_pos[1];
@@ -231,28 +227,33 @@ class Dungeon {
 		for(i := 0; i < map_dimensions[0]; i += 1;) {
 			for(j := 0; j < map_dimensions[0]; j += 1;) {
 				value := @map[i,j];
+
+				@fps_images->SetTop(top);
+				@fps_images->SetLeft(left);
+
 				if(i = player_y & j = player_x) {
 					select(@player_dir) {
 	        			label Direction->NORTH {
-	        				value := '↑';
+	        				@fps_images->SetAngle(0);
+	        				@fps_images->Render(1);
 	        			}
 
+						label Direction->EAST {
+	        				@fps_images->SetAngle(90);
+	        				@fps_images->Render(1);
+	        			}
 	        			label Direction->SOUTH {
-	        				value := '↓';
-	        			}
-
-	        			label Direction->EAST {
-	        				value := '→';
+	        				@fps_images->SetAngle(180);
+	        				@fps_images->Render(1);
 	        			}
 
 	        			label Direction->WEST {
-	        				value := '←';
+	        				@fps_images->SetAngle(270);
+	        				@fps_images->Render(1);
 	        			}
 	        		};
 				}
-				else if(value = '@' | value = 'S') {
-					@fps_images->SetTop(top);
-					@fps_images->SetLeft(left);
+				else if(value = '@' | value = 'S') {					
 					@fps_images->Render(0);
 				};
 				left += inc;
