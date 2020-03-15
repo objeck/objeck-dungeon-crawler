@@ -9,9 +9,13 @@ class Dungeon {
 	@dungeon_image_index : Int;
 	@dungeon_image_max : Int;
 
-	@fps_images : AnimatedImageSprite;
-	@fps_image_index : Int;
-	@fps_image_max : Int;
+	@monster_images : AnimatedImageSprite;
+	@monster_image_index : Int;
+	@monster_image_max : Int;
+
+	@map_icons : AnimatedImageSprite;
+	@map_icon_index : Int;
+	@map_icon_max : Int;
 
 	@map : Char[,];
 
@@ -25,6 +29,8 @@ class Dungeon {
 
 	@stat_text : TextSprite;
 	@stat_color : Color;
+
+	@monster_encounter : Bool;
 	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
@@ -42,13 +48,21 @@ class Dungeon {
 		@dungeon_images->SetTop(35);
 		@dungeon_images->SetLeft(35);
 
-		@fp_image_max := ScreenConsts->FPS_IMAGE_MAX;
-		@fps_images := @framework->AddAnimatedImageSprite("./media/artwork3.png");
-		for(i := 0; i < @fp_image_max; i += 1;) {
-			@fps_images->AddClip(Rect->New(i * 27, 0, 27, 27));
+		@monster_image_max := ScreenConsts->MONSTER_IMAGE_MAX;
+		@monster_images := @framework->AddAnimatedImageSprite("./media/artwork4.png");
+		for(i := 0; i < @monster_image_max; i += 1;) {
+			@monster_images->AddClip(Rect->New(i * 266, 0, 266, 174));
 		};
-		@fps_images->SetTop(10);
-		@fps_images->SetLeft(10);
+		@monster_images->SetTop(80);
+		@monster_images->SetLeft(100);
+
+		@fp_image_max := ScreenConsts->MAP_ICON_MAX;
+		@map_icons := @framework->AddAnimatedImageSprite("./media/artwork3.png");
+		for(i := 0; i < @fp_image_max; i += 1;) {
+			@map_icons->AddClip(Rect->New(i * 27, 0, 27, 27));
+		};
+		@map_icons->SetTop(10);
+		@map_icons->SetLeft(10);
 
 		@map_image := @framework->AddAnimatedImageSprite("./media/artwork2.png");
 		@map_image->SetTop(55);
@@ -149,7 +163,13 @@ class Dungeon {
         select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP:
         	label Scancode->SDL_SCANCODE_W: {
-        		MoveForwad();
+        		if(MoveForwad() & Int->Random(3) = 0) {
+        			@monster_encounter := true;
+        		}
+        		else {
+        			@monster_encounter := false;
+        		};
+
         		UpdateView();
         	}
 
@@ -207,6 +227,17 @@ class Dungeon {
 
 		@map_image->Render();
 		@dungeon_images->Render(@dungeon_image_index);
+
+		if(@monster_encounter) {
+			if(frame_count % 30 = 0) {
+				@monster_image_index += 1;
+				if(@monster_image_index >= ScreenConsts->MONSTER_IMAGE_MAX) {
+					@monster_image_index := 0;
+				};
+			};
+			@monster_images->Render(@monster_image_index);
+		};
+		
 		@stat_text->Render(500, 35);
 
 		RenderMap(frame_count);
@@ -228,61 +259,42 @@ class Dungeon {
 			for(j := 0; j < map_dimensions[0]; j += 1;) {
 				value := @map[i,j];
 
-				@fps_images->SetTop(top);
-				@fps_images->SetLeft(left);
+				@map_icons->SetTop(top);
+				@map_icons->SetLeft(left);
 
 				if(i = player_y & j = player_x) {
 					select(@player_dir) {
 	        			label Direction->NORTH {
-	        				@fps_images->SetAngle(0);
-	        				@fps_images->Render(1);
+	        				@map_icons->SetAngle(0);
+	        				@map_icons->Render(1);
 	        			}
 
 						label Direction->EAST {
-	        				@fps_images->SetAngle(90);
-	        				@fps_images->Render(1);
+	        				@map_icons->SetAngle(90);
+	        				@map_icons->Render(1);
 	        			}
 	        			label Direction->SOUTH {
-	        				@fps_images->SetAngle(180);
-	        				@fps_images->Render(1);
+	        				@map_icons->SetAngle(180);
+	        				@map_icons->Render(1);
 	        			}
 
 	        			label Direction->WEST {
-	        				@fps_images->SetAngle(270);
-	        				@fps_images->Render(1);
+	        				@map_icons->SetAngle(270);
+	        				@map_icons->Render(1);
 	        			}
 	        		};
 				}
-				else if(value = '@' | value = 'S') {					
-					@fps_images->Render(0);
+				else if(value = 'X') {					
+					@map_icons->Render(0);
 				};
 				left += inc;
 			};
 			top += inc;
 			left := 499;
 		};
-
-#~
-		@fps_images->SetTop(77);
-		@fps_images->SetLeft(499 + 29);
-		@fps_images->Render(0);
-
-		@fps_images->SetTop(77 + 29);
-		@fps_images->SetLeft(499 + 29);
-		@fps_images->Render(0);
-
-		@fps_images->SetTop(77 + 29 * 2);
-		@fps_images->SetLeft(499 + 29);
-		@fps_images->Render(0);
-
-		@fps_images->SetTop(77 + 29 * 2);
-		@fps_images->SetLeft(499 + 29 * 2);
-		@fps_images->SetAngle(180);
-		@fps_images->Render(1);
-~#
 	}
 
-	method : MoveForwad() ~ Nil {
+	method : MoveForwad() ~ Bool {
 		map_dimensions := @map->Size();
 
 		map_dimension_x := map_dimensions[1];
@@ -291,22 +303,33 @@ class Dungeon {
 		player_x := @player_pos[1];
 		player_y := @player_pos[0];
 
+		# mark title discovered
+		if(@map[player_y, player_x] = '@' | @map[player_y, player_x] = 'S') {
+			@map[player_y, player_x] := 'X';
+		};
+
 		if(Direction->NORTH = @player_dir & player_y - 1 > -1 & 
-				(@map[player_y - 1, player_x] = '@' | @map[player_y - 1, player_x] = 'S')) {
+				CheckViewPosition(player_y - 1, player_x)) {
 			@player_pos[0] := player_y - 1;
+			return true;
 		}
 		else if(Direction->EAST = @player_dir & player_x + 1 < map_dimension_x & 
-				(@map[player_y, player_x + 1] = '@' | @map[player_y, player_x + 1] = 'S')) {
+				CheckViewPosition(player_y, player_x + 1)) {
 			@player_pos[1] := player_x + 1;
+			return true;
 		}
 		else if(Direction->SOUTH = @player_dir & player_y + 1 < map_dimension_y & 
-				(@map[player_y + 1, player_x] = '@' | @map[player_y + 1, player_x] = 'S')) {
+				CheckViewPosition(player_y + 1, player_x)) {
 			@player_pos[0] := player_y + 1;
+			return true;
 		}
 		else if(Direction->WEST = @player_dir & player_x - 1 > -1 & 
-				(@map[player_y, player_x - 1] = '@' | @map[player_y, player_x - 1] = 'S')) {
+				CheckViewPosition(player_y, player_x - 1)) {
 			@player_pos[1] := player_x - 1;
+			return true;
 		};
+
+		return false;
 	}
 
 	method : CheckViewPosition(player_y : Int, player_x : Int) ~ Bool {
@@ -323,7 +346,7 @@ class Dungeon {
 			return false;
 		};
 
-		if(@map[player_y, player_x] = '@' | @map[player_y, player_x] = 'S') {
+		if(@map[player_y, player_x] = 'X' | @map[player_y, player_x] = '@' | @map[player_y, player_x] = 'S') {
 			return true;
 		}
 		else {
@@ -340,7 +363,7 @@ class Dungeon {
 		is_right_1 : Bool; is_right_0 : Bool;
 		
 		if(Direction->NORTH = @player_dir) {
-"NORTH"->PrintLine();		
+# "NORTH"->PrintLine();		
 			# foward
 			is_forward_2 := CheckViewPosition(player_y - 2, player_x) & CheckViewPosition(player_y - 1, player_x);
 			is_forward_1 := CheckViewPosition(player_y - 1, player_x);
@@ -353,7 +376,7 @@ class Dungeon {
 			is_right_0 := CheckViewPosition(player_y, player_x + 1);
 		}
 		else if(Direction->EAST = @player_dir) {
-"EAST"->PrintLine();			
+# "EAST"->PrintLine();			
 			# foward
 			is_forward_2 := CheckViewPosition(player_y, player_x + 2) & CheckViewPosition(player_y, player_x + 1);
 			is_forward_1 := CheckViewPosition(player_y, player_x + 1);
@@ -366,7 +389,7 @@ class Dungeon {
 			is_right_0 := CheckViewPosition(player_y + 1, player_x);
 		}
 		else if(Direction->SOUTH = @player_dir) {
-"SOUTH"->PrintLine();
+# "SOUTH"->PrintLine();
 			# foward
 			is_forward_2 := CheckViewPosition(player_y + 2, player_x) & CheckViewPosition(player_y + 1, player_x);
 			is_forward_1 := CheckViewPosition(player_y + 1, player_x);
@@ -379,7 +402,7 @@ class Dungeon {
 			is_right_0 := CheckViewPosition(player_y, player_x - 1);	
 		}
 		else if(Direction->WEST = @player_dir) {
-"WEST"->PrintLine();
+# "WEST"->PrintLine();
 			# foward
 			is_forward_2 := CheckViewPosition(player_y, player_x - 2) & CheckViewPosition(player_y, player_x - 1);
 			is_forward_1 := CheckViewPosition(player_y, player_x - 1);
@@ -392,11 +415,15 @@ class Dungeon {
 			is_right_0 := CheckViewPosition(player_y - 1, player_x);	
 		};
 
+#~
 "  fwd_2={$is_forward_2}, fwd_1={$is_forward_1}, fwd_0={$is_forward_0}"->PrintLine();
 "  left_1={$is_left_1}, right_1={$is_right_1}"->PrintLine();
 "  left_0={$is_left_0}, right_0={$is_right_0}"->PrintLine();
+~#
 
+		#
 		# common logic
+		#
 
 		# foward 2
 		if(is_forward_2 & is_left_1 & is_right_1) {
@@ -439,7 +466,7 @@ class Dungeon {
 			@dungeon_image_index := 3;
 		};
 
-		ShowMap();
+#		ShowMap();
 	}
 
 	method : ShowMap() ~ Nil {
@@ -482,7 +509,8 @@ consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 400,
 	DUNGEON_IMAGE_MAX := 14,
-	FPS_IMAGE_MAX := 2
+	MONSTER_IMAGE_MAX := 3,
+	MAP_ICON_MAX := 2
 }
 
 enum Direction {
