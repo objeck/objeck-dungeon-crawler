@@ -204,7 +204,6 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_SPACE: {
         		if(@monster <> Nil) {
 "--- Sword ---"->PrintLine();
-					@hit_view_timer := 10;
         			Fight(AttackType->SWORD);
         		};
         	}
@@ -259,30 +258,39 @@ class Dungeon {
 
 		# TOOD: update button logic
 		@action_icons->SetTop(350);
-		@action_icons->SetLeft(165);
+		@action_icons->SetLeft(105);
 		if(@hit_view_timer > 0) {
-	    	@action_icons->Render(3);
+	    	@action_icons->Render(4);
 	    }
 	    else {
 	    	@action_icons->Render(0);
 	    };
 
 	    @action_icons->SetTop(350);
-		@action_icons->SetLeft(235);
+		@action_icons->SetLeft(175);
 #		if(@hit_view_timer > 0) {
-#	    	@action_icons->Render(3);
+#	    	@action_icons->Render(4);
 #	    }
 #	    else {
 	    	@action_icons->Render(1);
 #	    };
 
 	    @action_icons->SetTop(350);
-		@action_icons->SetLeft(300);
+		@action_icons->SetLeft(240);
 #		if(@hit_view_timer > 0) {
-#	    	@action_icons->Render(3);
+#	    	@action_icons->Render(4);
 #	    }
 #	    else {
 	    	@action_icons->Render(2);
+#	    };
+
+		@action_icons->SetTop(350);
+		@action_icons->SetLeft(305);
+#		if(@hit_view_timer > 0) {
+#	    	@action_icons->Render(4);
+#	    }
+#	    else {
+	    	@action_icons->Render(3);
 #	    };
 
 		if(@monster <> Nil) {
@@ -297,16 +305,16 @@ class Dungeon {
 			@action_icons->SetTop(50);
 			@action_icons->SetLeft(60);
 			if(@monster_percent > 0.75) {
-				@action_icons->Render(4);
+				@action_icons->Render(5);
 			}
 			else if(@monster_percent <= 0.75 & @monster_percent > 0.50) {
-				@action_icons->Render(5);
+				@action_icons->Render(6);
 			}
 			else if(@monster_percent <= 0.50 & @monster_percent > 0.25) {
-				@action_icons->Render(5);
+				@action_icons->Render(7);
 			}
 			else {
-				@action_icons->Render(7);
+				@action_icons->Render(8);
 			};
 		};
 
@@ -627,6 +635,8 @@ class Dungeon {
 	}
 
 	method : Fight(type : AttackType) ~ Nil {
+		@hit_view_timer := 10;
+
 		player_attack := @player->MakeAttack();
 		player_defense := @player->MakeDefence();
 
@@ -662,8 +672,8 @@ class Player from Entity {
 		Parent(EntityType->SLIME,	# type
 			1, 						# level
 			Int->Random(8, 12),		# max hp
-			Int->Random(3, 5),		# attack
-			Int->Random(2, 4));		# defense
+			Int->Random(4, 5),		# attack
+			Int->Random(3, 4));		# defense
 	}
 
 	method : public : Rest() ~ Nil {
@@ -678,9 +688,9 @@ class Slime from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
 			0,						# level
-			Int->Random(3, 6),		# max hp
+			Int->Random(3, 5),		# max hp
 			Int->Random(4, 6),		# attack
-			Int->Random(5, 7));		# defense
+			Int->Random(5, 6));		# defense
 	}
 }
 
