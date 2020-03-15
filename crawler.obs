@@ -267,14 +267,47 @@ class Dungeon {
 		@framework->Clear();
 
 		@map_image->Render();
+		RenderCave(frame_count);		
+		@stat_text->Render(500, 35);
+		RenderMap(frame_count);
 
+		@framework->Show();
+	}
+
+	method : RenderCave(frame_count : Int) ~ Nil {
 		if(@hit_monster > 0) {
 			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 1);
-			@hit_monster -= 1;
 		}
 		else {
 			@dungeon_images->Render(@dungeon_image_index);
 		};
+
+		@action_icons->SetTop(350);
+		@action_icons->SetLeft(165);
+		if(@hit_monster > 0) {
+	    	@action_icons->Render(3);
+	    }
+	    else {
+	    	@action_icons->Render(0);
+	    };
+
+	    @action_icons->SetTop(350);
+		@action_icons->SetLeft(235);
+#		if(@hit_monster > 0) {
+#	    	@action_icons->Render(3);
+#	    }
+#	    else {
+	    	@action_icons->Render(1);
+#	    };
+
+	    @action_icons->SetTop(350);
+		@action_icons->SetLeft(300);
+#		if(@hit_monster > 0) {
+#	    	@action_icons->Render(3);
+#	    }
+#	    else {
+	    	@action_icons->Render(2);
+#	    };
 
 		if(@monster_fight) {
 			if(frame_count % 30 = 0) {
@@ -284,25 +317,15 @@ class Dungeon {
 				};
 			};
 			@monster_images->Render(@monster_image_index);
+
+			@action_icons->SetTop(50);
+			@action_icons->SetLeft(60);
+			@action_icons->Render(4);
 		};
-		
-		@stat_text->Render(500, 35);
 
-		RenderMap(frame_count);
-
-		@action_icons->SetTop(350);
-		@action_icons->SetLeft(165);
-	    @action_icons->Render(0);
-
-	    @action_icons->SetTop(350);
-		@action_icons->SetLeft(235);
-	    @action_icons->Render(1);
-
-	    @action_icons->SetTop(350);
-		@action_icons->SetLeft(300);
-	    @action_icons->Render(2);
-
-		@framework->Show();
+		if(@hit_monster > 0) {
+			@hit_monster -= 1;
+		};
 	}
 
 	method : RenderMap(frame_count : Int) ~ Nil {
@@ -599,7 +622,7 @@ consts ScreenConsts {
 	DUNGEON_IMAGE_MAX := 14,
 	MONSTER_IMAGE_MAX := 3,
 	MAP_ICON_MAX := 2,
-	ACTIONS_ICON_MAX := 4
+	ACTIONS_ICON_MAX := 7
 }
 
 enum FightType {
