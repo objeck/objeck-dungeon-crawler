@@ -702,8 +702,8 @@ class Player from Entity {
 			Int->Random(4, 5),		# attack
 			Int->Random(3, 4));		# defense
 
-		@potion_count := 3;
-		@tent_count := 2;
+		@potion_count := 2;
+		@tent_count := 1;
 	}
 
 	method : public : Rest() ~ Nil {
@@ -719,7 +719,7 @@ class Player from Entity {
 	method : public : TakePotion() ~ Nil {
 		if(@potion_count > 0) {
 			@potion_count -= 1;
-			@hp += @max_hp * 0.75;
+			@hp += @max_hp * 0.33;
 			if(@hp > @max_hp) {
 				@hp := @max_hp;
 			};
