@@ -7,15 +7,15 @@ class Dungeon {
 
 	@dungeon_images : AnimatedImageSprite;
 	@dungeon_image_index : Int;
-	@dungeon_image_max : Int;
 
 	@monster_images : AnimatedImageSprite;
 	@monster_image_index : Int;
-	@monster_image_max : Int;
 
 	@map_icons : AnimatedImageSprite;
 	@map_icon_index : Int;
-	@map_icon_max : Int;
+
+	@action_icons : AnimatedImageSprite;
+	@action_icon_index : Int;
 
 	@map : Char[,];
 
@@ -31,6 +31,7 @@ class Dungeon {
 	@stat_color : Color;
 
 	@monster_fight : Bool;
+	@hit_monster : Int;
 	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
@@ -40,29 +41,31 @@ class Dungeon {
 		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
 		@framework->SetClearColor(Color->New(20, 51, 6));
 		
-		@dungeon_image_max := ScreenConsts->DUNGEON_IMAGE_MAX;
 		@dungeon_images := @framework->AddAnimatedImageSprite("./media/artwork.png");
-		for(i := 0; i < @dungeon_image_max; i += 1;) {
+		for(i := 0; i < ScreenConsts->DUNGEON_IMAGE_MAX; i += 1;) {
 			@dungeon_images->AddClip(Rect->New(i * 410, 0, 410, 310));
 		};
 		@dungeon_images->SetTop(35);
 		@dungeon_images->SetLeft(35);
 
-		@monster_image_max := ScreenConsts->MONSTER_IMAGE_MAX;
 		@monster_images := @framework->AddAnimatedImageSprite("./media/artwork4.png");
-		for(i := 0; i < @monster_image_max; i += 1;) {
+		for(i := 0; i < ScreenConsts->MONSTER_IMAGE_MAX; i += 1;) {
 			@monster_images->AddClip(Rect->New(i * 266, 0, 266, 174));
 		};
 		@monster_images->SetTop(80);
 		@monster_images->SetLeft(100);
 
-		@fp_image_max := ScreenConsts->MAP_ICON_MAX;
 		@map_icons := @framework->AddAnimatedImageSprite("./media/artwork3.png");
-		for(i := 0; i < @fp_image_max; i += 1;) {
+		for(i := 0; i < ScreenConsts->MAP_ICON_MAX; i += 1;) {
 			@map_icons->AddClip(Rect->New(i * 27, 0, 27, 27));
 		};
 		@map_icons->SetTop(10);
 		@map_icons->SetLeft(10);
+
+		@action_icons := @framework->AddAnimatedImageSprite("./media/artwork5.png");
+		for(i := 0; i < ScreenConsts->ACTIONS_ICON_MAX; i += 1;) {
+			@action_icons->AddClip(Rect->New(i * 52, 0, 52, 52));
+		};
 
 		@map_image := @framework->AddAnimatedImageSprite("./media/artwork2.png");
 		@map_image->SetTop(55);
@@ -230,7 +233,8 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_SPACE: {
         		if(@monster_fight) {
 "--- Sword ---"->PrintLine();
-        			Fight(FightConsts->SWORD);
+					@hit_monster := 10;
+        			Fight(FightType->SWORD);
         		};
         	}
 
@@ -241,7 +245,7 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_S: {
         		if(@monster_fight) {
 "--- Spell ---"->PrintLine();
-        			Fight(FightConsts->SPELL);
+        			Fight(FightType->SPELL);
         		};
         	}
         };
@@ -253,7 +257,7 @@ class Dungeon {
 
 	}
 
-	method : Fight(type : FightConsts) ~ Nil {
+	method : Fight(type : FightType) ~ Nil {
 
 	}
 
@@ -263,7 +267,14 @@ class Dungeon {
 		@framework->Clear();
 
 		@map_image->Render();
-		@dungeon_images->Render(@dungeon_image_index);
+
+		if(@hit_monster > 0) {
+			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 1);
+			@hit_monster -= 1;
+		}
+		else {
+			@dungeon_images->Render(@dungeon_image_index);
+		};
 
 		if(@monster_fight) {
 			if(frame_count % 30 = 0) {
@@ -279,18 +290,17 @@ class Dungeon {
 
 		RenderMap(frame_count);
 
-		@map_icons->SetAngle(0);
-		@map_icons->SetTop(350);
-		@map_icons->SetLeft(200);
-	    @map_icons->Render(2);
+		@action_icons->SetTop(350);
+		@action_icons->SetLeft(165);
+	    @action_icons->Render(0);
 
-	    @map_icons->SetTop(350);
-		@map_icons->SetLeft(235);
-	    @map_icons->Render(3);
+	    @action_icons->SetTop(350);
+		@action_icons->SetLeft(235);
+	    @action_icons->Render(1);
 
-	    @map_icons->SetTop(350);
-		@map_icons->SetLeft(270);
-	    @map_icons->Render(4);
+	    @action_icons->SetTop(350);
+		@action_icons->SetLeft(300);
+	    @action_icons->Render(2);
 
 		@framework->Show();
 	}
@@ -568,12 +578,12 @@ class Player {
 }
 
 class Monster {
-	@type : MonsterConsts;
+	@type : MonsterType;
 	@hp : Int;
 	@attack : Int;
 	@defence : Int;
 
-	New(type : MonsterConsts) {
+	New(type : MonsterType) {
 		@type := type;
 		@hp := Int->Random(3, 5);
 		@attack := Int->Random(2, 3);
@@ -585,18 +595,19 @@ class Monster {
 
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
-	SCREEN_HEIGHT := 400,
+	SCREEN_HEIGHT := 420,
 	DUNGEON_IMAGE_MAX := 14,
 	MONSTER_IMAGE_MAX := 3,
-	MAP_ICON_MAX := 5
+	MAP_ICON_MAX := 2,
+	ACTIONS_ICON_MAX := 4
 }
 
-enum FightConsts {
+enum FightType {
 	SWORD,
 	SPELL
 }
 
-enum MonsterConsts {
+enum MonsterType {
 	SLIME,
 	RAT
 }
