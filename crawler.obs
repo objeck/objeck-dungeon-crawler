@@ -92,7 +92,7 @@ class Dungeon {
 		tent_count := @player->GetTentCount();
 
 		@stats_text := @framework->AddTextSprite();
-		@stats_text->RenderedText("HP={$hp}/{$max_hp}, ATK={$attack}, DEF={$attack}", @text_color);
+		@stats_text->RenderedText("HP={$hp}/{$max_hp}, ATK={$attack}, DEF={$defense}", @text_color);
 
 		@potion_text := @framework->AddTextSprite();
 		@potion_text->RenderedText("{$potion_count}", @text_color);
@@ -263,7 +263,7 @@ class Dungeon {
 		potion_count := @player->GetPotionCount();
 		tent_count := @player->GetTentCount();
 
-		@stats_text->RenderedText("HP={$max_hp}/{$hp}, ATK={$attack}, DEF={$attack}", @text_color);
+		@stats_text->RenderedText("HP={$max_hp}/{$hp}, ATK={$attack}, DEF={$defense}", @text_color);
 		@stats_text->Render(495, 35);
 
 		@potion_text->RenderedText("{$potion_count}", @text_color);
