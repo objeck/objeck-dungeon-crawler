@@ -30,7 +30,7 @@ class Dungeon {
 	@stat_text : TextSprite;
 	@stat_color : Color;
 
-	@monster_encounter : Bool;
+	@monster_fight : Bool;
 	
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
@@ -163,64 +163,101 @@ class Dungeon {
         select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP:
         	label Scancode->SDL_SCANCODE_W: {
-        		if(MoveForwad() & Int->Random(3) = 0) {
-        			@monster_encounter := true;
-        		}
-        		else {
-        			@monster_encounter := false;
-        		};
+        		if(<>@monster_fight) {
+	        		if(MoveForwad() & Int->Random(3) = 0) {
+	        			@monster_fight := true;
+	        			StartFight();
+	        		}
+	        		else {
+	        			@monster_fight := false;
+	        		};
 
-        		UpdateView();
+	        		UpdateView();
+	        	};
         	}
 
         	label Scancode->SDL_SCANCODE_LEFT:
         	label Scancode->SDL_SCANCODE_A: {
-        		select(@player_dir) {
-        			label Direction->NORTH {
-        				@player_dir := Direction->WEST;
-        			}
+        		if(<>@monster_fight) {
+	        		select(@player_dir) {
+	        			label Direction->NORTH {
+	        				@player_dir := Direction->WEST;
+	        			}
 
-        			label Direction->SOUTH {
-        				@player_dir := Direction->EAST;
-        			}
+	        			label Direction->SOUTH {
+	        				@player_dir := Direction->EAST;
+	        			}
 
-        			label Direction->EAST {
-        				@player_dir := Direction->NORTH;
-        			}
+	        			label Direction->EAST {
+	        				@player_dir := Direction->NORTH;
+	        			}
 
-        			label Direction->WEST {
-        				@player_dir := Direction->SOUTH;
-        			}
-        		};
+	        			label Direction->WEST {
+	        				@player_dir := Direction->SOUTH;
+	        			}
+	        		};
 
-        		UpdateView();
+	        		UpdateView();
+	        	};
         	}
 
         	label Scancode->SDL_SCANCODE_RIGHT:
         	label Scancode->SDL_SCANCODE_D: {
- 				select(@player_dir) {
-        			label Direction->NORTH {
-        				@player_dir := Direction->EAST;
-        			}
+        		if(<>@monster_fight) {
+	 				select(@player_dir) {
+	        			label Direction->NORTH {
+	        				@player_dir := Direction->EAST;
+	        			}
 
-        			label Direction->SOUTH {
-        				@player_dir := Direction->WEST;
-        				
-        			}
+	        			label Direction->SOUTH {
+	        				@player_dir := Direction->WEST;
+	        				
+	        			}
 
-        			label Direction->EAST {
-        				@player_dir := Direction->SOUTH;
-        			}
+	        			label Direction->EAST {
+	        				@player_dir := Direction->SOUTH;
+	        			}
 
-        			label Direction->WEST {
-        				@player_dir := Direction->NORTH;
-        			}
+	        			label Direction->WEST {
+	        				@player_dir := Direction->NORTH;
+	        			}
+	        		};
+
+	        		UpdateView();
+	        	};
+        	}
+
+        	label Scancode->SDL_SCANCODE_SPACE: {
+        		if(@monster_fight) {
+"--- Sword ---"->PrintLine();
+        			Fight(FightConsts->SWORD);
         		};
+        	}
 
-        		UpdateView();
+        	label Scancode->SDL_SCANCODE_P: {
+"--- Potion ---"->PrintLine();
+        	}
+
+        	label Scancode->SDL_SCANCODE_S: {
+        		if(@monster_fight) {
+"--- Spell ---"->PrintLine();
+        			Fight(FightConsts->SPELL);
+        		};
         	}
         };
 	}
+
+	# -------
+
+	method : StartFight() ~ Nil {
+
+	}
+
+	method : Fight(type : FightConsts) ~ Nil {
+
+	}
+
+	# -------
 
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
@@ -228,7 +265,7 @@ class Dungeon {
 		@map_image->Render();
 		@dungeon_images->Render(@dungeon_image_index);
 
-		if(@monster_encounter) {
+		if(@monster_fight) {
 			if(frame_count % 30 = 0) {
 				@monster_image_index += 1;
 				if(@monster_image_index >= ScreenConsts->MONSTER_IMAGE_MAX) {
@@ -241,6 +278,19 @@ class Dungeon {
 		@stat_text->Render(500, 35);
 
 		RenderMap(frame_count);
+
+		@map_icons->SetAngle(0);
+		@map_icons->SetTop(350);
+		@map_icons->SetLeft(200);
+	    @map_icons->Render(2);
+
+	    @map_icons->SetTop(350);
+		@map_icons->SetLeft(235);
+	    @map_icons->Render(3);
+
+	    @map_icons->SetTop(350);
+		@map_icons->SetLeft(270);
+	    @map_icons->Render(4);
 
 		@framework->Show();
 	}
@@ -510,7 +560,12 @@ consts ScreenConsts {
 	SCREEN_HEIGHT := 400,
 	DUNGEON_IMAGE_MAX := 14,
 	MONSTER_IMAGE_MAX := 3,
-	MAP_ICON_MAX := 2
+	MAP_ICON_MAX := 5
+}
+
+enum FightConsts {
+	SWORD,
+	SPELL
 }
 
 enum Direction {
