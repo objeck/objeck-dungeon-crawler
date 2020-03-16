@@ -232,6 +232,7 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_P: {
 "--- Potion ---"->PrintLine();
 				@player->TakePotion();
+				Fight(AttackType->POTION);
         	}
 
         	label Scancode->SDL_SCANCODE_S: {
@@ -321,8 +322,8 @@ class Dungeon {
 		if(@monster <> Nil) {
 			if(frame_count % 30 = 0) {
 				@monster_image_index += 1;
-				if(@monster_image_index >= ScreenConsts->MONSTER_IMAGE_MAX) {
-					@monster_image_index := 0;
+				if(@monster_image_index >= @monster->GetImageIndex() + 3) {
+					@monster_image_index := @monster->GetImageIndex();
 				};
 			};
 			@monster_images->Render(@monster_image_index);
@@ -655,8 +656,14 @@ class Dungeon {
 	# ------- Game Logic -------
 
 	method : StartFight() ~ Nil {
-		@monster := Slime->New();
+		if(Float->Random() < 0.5) {
+			@monster := Slime->New();
+		}
+		else {
+			@monster := Rat->New();
+		};
 		@monster_health_percent := @monster->GetHpPercentage();
+		@monster_image_index := @monster->GetImageIndex();
 	}
 
 	method : Fight(type : AttackType) ~ Nil {
@@ -684,7 +691,7 @@ class Dungeon {
 			"--- DEAD ---"->PrintLine();
 		};
 
-		if(@monster->SetHp(monster_diff, true)) {
+		if(type <> AttackType->POTION & @monster->SetHp(monster_diff, true)) {
 			@monster := Nil;
 		};
 	}
@@ -700,7 +707,7 @@ class Player from Entity {
 			1, 						# level
 			Int->Random(8, 12),		# max hp
 			Int->Random(4, 5),		# attack
-			Int->Random(3, 4));		# defense
+			Int->Random(3, 4), -1);		# defense
 
 		@potion_count := 2;
 		@tent_count := 1;
@@ -739,9 +746,21 @@ class Slime from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
 			0,						# level
-			Int->Random(4b, 5),		# max hp
+			Int->Random(4, 5),		# max hp
 			Int->Random(4, 5),		# attack
-			Int->Random(5, 6));		# defense
+			Int->Random(5, 6),		# defense
+			0);						#image index
+	}
+}
+
+class Rat from Entity {
+	New() {
+		Parent(EntityType->SLIME,	# type
+			1,						# level
+			Int->Random(5, 6),		# max hp
+			Int->Random(2, 3),		# attack
+			Int->Random(2, 3),		# defense
+			3);						# image index
 	}
 }
 
@@ -753,14 +772,16 @@ class Entity {
 	@attack : Int;
 	@defense : Int;
 	@levels : Float[];
+	@image_index : Int;
 	
-	New(type : EntityType, level : Int, max_hp : Int, attack : Int, defense : Int) {
+	New(type : EntityType, level : Int, max_hp : Int, attack : Int, defense : Int, image_index : Int) {
 		@type := type;
 		@level := level;
 		@max_hp := max_hp;
 		@hp := @max_hp;
 		@attack := attack;
 		@defense := defense;
+		@image_index := image_index;
 
 		factor := 0.25;
 		@levels := Float->New[10];
@@ -772,6 +793,11 @@ class Entity {
 
 	method : public : GetHpPercentage() ~ Float {
 		return @hp->As(Float) / @max_hp->As(Float);
+	}
+
+
+	method : public : GetImageIndex() ~ Int {
+		return @image_index;
 	}
 
 	method : public : GetHp() ~ Int {
@@ -850,14 +876,15 @@ consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 440,
 	DUNGEON_IMAGE_MAX := 14,
-	MONSTER_IMAGE_MAX := 3,
+	MONSTER_IMAGE_MAX := 6,
 	MAP_ICON_MAX := 2,
 	ACTIONS_ICON_MAX := 9
 }
 
 enum AttackType {
 	SWORD,
-	SPELL
+	SPELL,
+	POTION
 }
 
 enum EntityType {
