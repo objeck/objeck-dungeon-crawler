@@ -39,7 +39,8 @@ class Dungeon {
 	@is_forward_0 : Bool;
 
 	# --- text stuff ---
-	@stats_text : TextSprite;
+	@stat_ability_text : TextSprite;
+	@stat_experience_text : TextSprite;
 	@potion_text : TextSprite;
 	@tent_text : TextSprite;
 	@text_color : Color;
@@ -91,8 +92,11 @@ class Dungeon {
 		potion_count := @player->GetPotionCount();
 		tent_count := @player->GetTentCount();
 
-		@stats_text := @framework->AddTextSprite();
-		@stats_text->RenderedText("HP={$hp}/{$max_hp}, ATK={$attack}, DEF={$defense}", @text_color);
+		@stat_ability_text := @framework->AddTextSprite();
+		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, ATK={$attack}, DEF={$defense}", @text_color);
+
+		@stat_experience_text := @framework->AddTextSprite();
+		@stat_experience_text->RenderedText("L=1, EXP=10, G=1000", @text_color);
 
 		@potion_text := @framework->AddTextSprite();
 		@potion_text->RenderedText("{$potion_count}", @text_color);
@@ -251,7 +255,9 @@ class Dungeon {
 		@framework->Clear();
 
 		@dungeon_map_image->Render();
-		RenderCave(frame_count);		
+		RenderCave(frame_count);
+		RenderTresure(frame_count);
+		RenderMonster(frame_count);	
 		RenderStats(frame_count);
 		RenderMap(frame_count);
 
@@ -266,8 +272,11 @@ class Dungeon {
 		potion_count := @player->GetPotionCount();
 		tent_count := @player->GetTentCount();
 
-		@stats_text->RenderedText("HP={$max_hp}/{$hp}, ATK={$attack}, DEF={$defense}", @text_color);
-		@stats_text->Render(495, 35);
+		@stat_ability_text->RenderedText("HP={$max_hp}/{$hp}, ATK={$attack}, DEF={$defense}", @text_color);
+		@stat_ability_text->Render(495, 35);
+
+#		@stat_experience_text->RenderedText("HP={$max_hp}/{$hp}, ATK={$attack}, DEF={$defense}", @text_color);
+		@stat_experience_text->Render(495, 360);
 
 		@potion_text->RenderedText("{$potion_count}", @text_color);
 		@potion_text->Render(200, 405);
@@ -278,7 +287,7 @@ class Dungeon {
 
 	method : RenderCave(frame_count : Int) ~ Nil {
 		if(@monster_hit_timer > 0) {
-			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 1);
+			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 3);
 		}
 		else {
 			@dungeon_images->Render(@dungeon_image_index);
@@ -320,7 +329,30 @@ class Dungeon {
 #	    else {
 	    	@action_icons->Render(3);
 #	    };
+	}
 
+	# Map codes
+	#	tunnel:		'@' -> '0'
+	#	start:		'S' -> '1'
+	#	end:		'E' -> '2'
+	#	tresure:	'T' -> '3'
+	#	potion:		'P' -> '4'
+	method : RenderTresure(frame_count : Int) ~ Nil {
+		if(@dungeon_image_index = 3) {
+			player_x := @player_pos[1];
+			player_y := @player_pos[0];
+			
+			value := @dungeon_map[player_y, player_x];
+			if(value = 'T' | value = '3') {
+				@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 2);
+			}
+			else if(value = 'P' | value = '4') {
+				@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 1);
+			};
+		};
+	}
+
+	method : RenderMonster(frame_count : Int) ~ Nil {
 		if(@monster <> Nil) {
 			if(frame_count % 30 = 0) {
 				@monster_image_index += 1;
@@ -399,7 +431,7 @@ class Dungeon {
 	        			}
 	        		};
 				}
-				else if(value = 'X') {					
+				else if(value >= '0' & value <= '4') {					
 					@dungeon_map_icons->Render(0);
 				};
 				left += inc;
@@ -421,9 +453,7 @@ class Dungeon {
 		player_y := @player_pos[0];
 
 		# mark title discovered
-		if(@dungeon_map[player_y, player_x] = '@' | @dungeon_map[player_y, player_x] = 'S') {
-			@dungeon_map[player_y, player_x] := 'X';
-		};
+		UpdateMapPosition(player_y, player_x);
 
 		if(Direction->NORTH = @player_dir & player_y - 1 > -1 & 
 				CheckPlayerPosition(player_y - 1, player_x)) {
@@ -564,7 +594,51 @@ class Dungeon {
 #		ShowMap();
 	}
 
-	method : CheckPlayerPosition(player_y : Int, player_x : Int) ~ Bool {
+	# Map codes
+	#	tunnel:		'@' -> '0'
+	#	start:		'S' -> '1'
+	#	end:		'E' -> '2'
+	#	tresure:	'T' -> '3'
+	#	potion:		'P' -> '4'
+	method : native : UpdateMapPosition(player_y : Int, player_x : Int) ~ Nil {
+		map_dimensions := @dungeon_map->Size();
+
+		map_dimension_x := map_dimensions[1];
+		map_dimension_y := map_dimensions[0];
+
+		if(player_y < 0 | player_y >= map_dimension_y) {
+			return;
+		};
+
+		if(player_x < 0 | player_x >= map_dimension_x) {
+			return;
+		};
+
+		value := @dungeon_map[player_y, player_x];
+		select(value) {
+			label '@' {
+				@dungeon_map[player_y, player_x] := '0';
+			}
+
+			label 'S' {
+				@dungeon_map[player_y, player_x] := '1';
+			}
+
+			label 'E' { 
+				@dungeon_map[player_y, player_x] := '2';
+			}
+
+			label 'T' {
+				@dungeon_map[player_y, player_x] := '3';
+			}
+
+			label 'P' {
+				@dungeon_map[player_y, player_x] := '4';
+			}
+		};
+	}
+
+	method : native : CheckPlayerPosition(player_y : Int, player_x : Int) ~ Bool {
 		map_dimensions := @dungeon_map->Size();
 
 		map_dimension_x := map_dimensions[1];
@@ -578,7 +652,9 @@ class Dungeon {
 			return false;
 		};
 
-		if(@dungeon_map[player_y, player_x] = 'X' | @dungeon_map[player_y, player_x] = '@' | @dungeon_map[player_y, player_x] = 'S') {
+		value := @dungeon_map[player_y, player_x];
+		if((value >= '0' & value <= '4') | value = '@' | value = 'S' | 
+				value = 'E' |value = 'T' | value = 'P') {
 			return true;
 		}
 		else {
@@ -586,6 +662,12 @@ class Dungeon {
 		};
 	}
 
+	# Map codes
+	#	tunnel:		'@' -> '0'
+	#	start:		'S' -> '1'
+	#	end:		'E' -> '2'
+	#	tresure:	'T' -> '3'
+	#	potion:		'P' -> '4'
 	method : LoadMap() ~ Nil {
 		map_path := "./media/debug.dat";
 		map_file := FileReader->New(map_path);
@@ -710,6 +792,7 @@ class Dungeon {
 
 class Player from Entity {
 	@experience : Int;
+	@gold : Int;
 	@potion_count : Int;
 	@tent_count : Int;
 
@@ -722,6 +805,36 @@ class Player from Entity {
 
 		@potion_count := 2;
 		@tent_count := 1;
+	}
+
+	method : public : AddExperince(value : Int) ~ Nil {
+		@experience += value;
+	}
+
+	method : public : GetExperince() ~ Int {
+		return @experience;
+	}
+
+	method : public : AddGold(value : Int) ~ Nil {
+		@gold += value;
+	}
+
+	method : public : GetGold() ~ Int {
+		return @gold;
+	}
+
+	method : public : GetLevel() ~ Int {
+		if(@experience > 100) {
+			return 4;
+		}
+		else if(@experience <= 100 & @experience > 65) {
+			return 3;
+		}
+		else if(@experience <= 65 & @experience > 25) {
+			return 2;
+		};
+
+		return 1;
 	}
 
 	method : public : Rest() ~ Nil {
@@ -886,7 +999,7 @@ class Entity {
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 440,
-	DUNGEON_IMAGE_MAX := 15,
+	DUNGEON_IMAGE_MAX := 16,
 	MONSTER_IMAGE_MAX := 6,
 	MAP_ICON_MAX := 2,
 	ACTIONS_ICON_MAX := 9
