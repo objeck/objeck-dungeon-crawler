@@ -847,7 +847,7 @@ class Slime from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
 			1,						# level
-			Int->Random(8, 12),		# max hp
+			Int->Random(7, 12),		# max hp
 			Int->Random(12, 14),	# strength
 			Int->Random(10, 11),	# agility
 			Int->Random(14, 15),	# stamina
@@ -867,7 +867,7 @@ class Rat from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
 			1,						# level
-			Int->Random(6, 10),		# max hp
+			Int->Random(5, 10),		# max hp
 			Int->Random(14, 16),	# strength
 			Int->Random(14, 15),	# agility
 			Int->Random(8, 10),		# stamina
