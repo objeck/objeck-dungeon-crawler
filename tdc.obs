@@ -24,9 +24,7 @@ class Dungeon {
 
 	# --- dungeon stuff ---
 	@dungeon_map : Char[,];
-
 	@dungeon_map_start : Int[];
-	@dungeon_map_end : Int[];
 
 	@dungeon_tresure_images : AnimatedImageSprite;
 	@dungeon_image_index : Int;
@@ -760,7 +758,6 @@ class Dungeon {
 
 		@dungeon_map := Char->New[rows, cols];
 		@dungeon_map_start := Int->New[2];
-		@dungeon_map_end := Int->New[2];
 
 		for(i := 0; i < rows; i += 1;) {
 			line := map_file->ReadString();
@@ -774,10 +771,6 @@ class Dungeon {
 				if(value = 'S') {
 					@dungeon_map_start[0] := i;
 					@dungeon_map_start[1] := j;
-				}
-				else if(value = 'E') {
-					@dungeon_map_end[0] := i;
-					@dungeon_map_end[1] := j;	
 				};
 				
 				@dungeon_map[i,j] := value;
