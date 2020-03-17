@@ -10,6 +10,7 @@ class Dungeon {
 	@player_pos : Int[];
 	@player_dir : Direction;
 	@player_health_percent : Float;
+	@take_item_id : Char;
 
 	# --- monster stuff ---
 	@monster : Entity;
@@ -57,7 +58,7 @@ class Dungeon {
 	New() {
 		@player := Player->New();
 
-		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Dungeon");
+		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(20, 51, 6));
 		
 		@dungeon_images := @framework->AddAnimatedImageSprite("./media/artwork.png");
@@ -94,14 +95,17 @@ class Dungeon {
 		max_hp := @player->GetMaxHp();
 		attack := @player->GetAttack();
 		defense := @player->GetDefense();
+		experience := @player->GetExperince();
+		gold := @player->GetGold();
+		level := @player->GetLevel();
 		potion_count := @player->GetPotionCount();
 		tent_count := @player->GetTentCount();
 
 		@stat_ability_text := @framework->AddTextSprite();
-		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP=10", @text_color);
+		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_color);
 
 		@stat_experience_text := @framework->AddTextSprite();
-		@stat_experience_text->RenderedText("G=1000, LVL=1", @text_color);
+		@stat_experience_text->RenderedText("G={$gold}, LVL={$level}", @text_color);
 
 		@potion_text := @framework->AddTextSprite();
 		@potion_text->RenderedText("{$potion_count}", @text_color);
@@ -240,10 +244,21 @@ class Dungeon {
 				};
         	}
 
+        	# rest
+        	label Scancode->SDL_SCANCODE_T: {
+				if(@monster = Nil) {
+					if(@player->TakeItem(@take_item_id)) {
+						player_x := @player_pos[1];
+						player_y := @player_pos[0];
+						@dungeon_map[player_y, player_x] := '0';
+					};
+				};
+        	}
+
         	# potion
         	label Scancode->SDL_SCANCODE_P: {
         		@potion_timer := 10;
-				@player->TakePotion();
+				@player->UsePotion();
 				if(@monster <> Nil) {
 					Fight(AttackType->POTION);
 				};
@@ -273,18 +288,22 @@ class Dungeon {
 	method : RenderStats(frame_count : Int) ~ Nil {
 		hp := @player->GetHp();
 		max_hp := @player->GetMaxHp();
+		attack := @player->GetAttack();
+		defense := @player->GetDefense();
 		experience := @player->GetExperince();
+		gold := @player->GetGold();
+		level := @player->GetLevel();
 		potion_count := @player->GetPotionCount();
 		tent_count := @player->GetTentCount();
 
 		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_color);
 		@stat_ability_text->Render(495, 35);
 
-#		@stat_experience_text->RenderedText("HP={$max_hp}/{$hp}, ATK={$attack}, DEF={$defense}", @text_color);
+		@stat_experience_text->RenderedText("G={$gold}, LVL={$level}", @text_color);
 		@stat_experience_text->Render(495, 360);
 
 		@potion_text->RenderedText("{$potion_count}", @text_color);
-		@potion_text->Render(200, 405);
+		@potion_text->Render(150, 405);
 
 		@tent_text->RenderedText("{$tent_count}", @text_color);
 		@tent_text->Render(325, 405);
@@ -365,10 +384,18 @@ class Dungeon {
 			value := @dungeon_map[player_y, player_x];
 			if(value = 'T' | value = '3') {
 				@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 2);
+				@take_item_id := 'T';
 			}
 			else if(value = 'P' | value = '4') {
 				@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 1);
+				@take_item_id := 'P';
+			}
+			else {
+				@can_take := '\0';
 			};
+		}
+		else {
+			@can_take := '\0';
 		};
 	}
 
@@ -886,7 +913,7 @@ class Player from Entity {
 		};
 	}
 
-	method : public : TakePotion() ~ Nil {
+	method : public : UsePotion() ~ Nil {
 		if(@potion_count > 0) {
 			@potion_count -= 1;
 			@hp += @max_hp * 0.33;
@@ -894,6 +921,19 @@ class Player from Entity {
 				@hp := @max_hp;
 			};
 		};
+	}
+
+	method : public : TakeItem(id : Char) ~ Bool {
+		if(id = 'T') {
+			@gold += Int->Random(5, 35);
+			return true;
+		}
+		else if(id = 'P') {
+			@potion_count += 1;
+			return true;
+		};
+
+		return false;
 	}
 
 	method : public : GetPotionCount() ~ Int {
