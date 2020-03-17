@@ -1,3 +1,8 @@
+#~~
+# Tiny Little Dungeon
+# Copyright (c) 2020 Randy Hollines
+~~#
+
 use Game.SDL2;
 use Game.Framework;
 use System.IO.File;
@@ -805,6 +810,11 @@ class Dungeon {
 		# monster attack player
 		if(@monster->IsAlive()) {
 			@monster->Attack(@player);
+
+			if(<>@player->IsAlive()) {
+				"--- YOU DEAD! ---"->ErrorLine();
+				Runtime->Exit(0);
+			};
 		}
 		# monster dead
 		else {
