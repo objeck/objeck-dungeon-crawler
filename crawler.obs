@@ -419,10 +419,10 @@ class Dungeon {
 			};
 
 			if(@is_forward_0) {
-				@monster_images->SetTop(125);
+				@monster_images->SetTop(155);
 			}
 			else {
-				@monster_images->SetTop(75);
+				@monster_images->SetTop(95);
 			};
 			@monster_images->SetLeft(100);
 
@@ -644,7 +644,15 @@ class Dungeon {
 			@dungeon_image_index := 7;		
 		}
 		else {
-			@dungeon_image_index := 3;
+			if(@dungeon_map[player_y, player_x] = 'E' | @dungeon_map[player_y, player_x] = '2') {
+				@dungeon_image_index := 12;
+			}
+			else if(@dungeon_map[player_y, player_x] = 'S' | @dungeon_map[player_y, player_x] = '1') {
+				@dungeon_image_index := 13;
+			}
+			else {
+				@dungeon_image_index := 3;
+			};
 		};
 
 #		ShowAsciiMap();
@@ -1073,7 +1081,7 @@ class Entity {
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 440,
-	DUNGEON_IMAGE_MAX := 17,
+	DUNGEON_IMAGE_MAX := 18,
 	MONSTER_IMAGE_MAX := 6,
 	MAP_ICON_MAX := 2,
 	ACTIONS_ICON_MAX := 10
