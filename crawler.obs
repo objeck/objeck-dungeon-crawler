@@ -54,6 +54,7 @@ class Dungeon {
 	# TODO: add spell and take
 	@attack_timer : Int;
 	@potion_timer : Int;
+	@take_timer : Int;
 	@rest_timer : Int;
 
 	function : Main(args : String[]) ~ Nil {
@@ -244,13 +245,14 @@ class Dungeon {
         	# rest
         	label Scancode->SDL_SCANCODE_R: {
 				if(@monster = Nil) {				
-					@rest_timer := 10;
+					@rest_timer := 120;
 					@player->Rest();
 				};
         	}
 
         	# rest
         	label Scancode->SDL_SCANCODE_T: {
+        		@take_timer := 10;
 				if(@monster = Nil) {
 					if(@player->TakeItem(@take_item_id)) {
 						player_x := @player_pos[1];
@@ -318,6 +320,9 @@ class Dungeon {
 		if(@attack_timer > 0) {
 			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 3);
 		}
+		else if(@rest_timer > 0) {
+			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 4);	
+		}
 		else {
 			@dungeon_images->Render(@dungeon_image_index);
 		};
@@ -357,12 +362,12 @@ class Dungeon {
 		# -- take --
 		@action_icons->SetTop(350);
 		@action_icons->SetLeft(245);
-#		if(@attack_timer > 0) {
-#	    	@action_icons->Render(4);
-#	    }
-#	    else {
+		if(@take_timer > 0) {
+	    	@action_icons->Render(4);
+	    }
+	    else {
 	    	@action_icons->Render(9);
-#	    };
+	    };
 
 		# -- rest --
 		@action_icons->SetTop(350);
@@ -414,10 +419,10 @@ class Dungeon {
 			};
 
 			if(@is_forward_0) {
-				@monster_images->SetTop(140);
+				@monster_images->SetTop(125);
 			}
 			else {
-				@monster_images->SetTop(80);
+				@monster_images->SetTop(75);
 			};
 			@monster_images->SetLeft(100);
 
@@ -449,6 +454,10 @@ class Dungeon {
 
 		if(@rest_timer > 0) {
 			@rest_timer -= 1;
+		};
+
+		if(@take_timer > 0) {
+			@take_timer -= 1;
 		};
 	}
 
@@ -1064,7 +1073,7 @@ class Entity {
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 440,
-	DUNGEON_IMAGE_MAX := 16,
+	DUNGEON_IMAGE_MAX := 17,
 	MONSTER_IMAGE_MAX := 6,
 	MAP_ICON_MAX := 2,
 	ACTIONS_ICON_MAX := 10
