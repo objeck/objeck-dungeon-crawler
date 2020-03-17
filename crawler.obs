@@ -14,8 +14,7 @@ class Dungeon {
 	# --- monster stuff ---
 	@monster : Entity;
 	@monster_health_percent : Float;
-	@monster_hit_timer : Int;
-	
+
 	# --- dungeon stuff ---
 	@dungeon_map : Char[,];
 
@@ -44,6 +43,12 @@ class Dungeon {
 	@potion_text : TextSprite;
 	@tent_text : TextSprite;
 	@text_color : Color;
+
+	# --- timers ---
+	# TODO: add spell and take
+	@attack_timer : Int;
+	@potion_timer : Int;
+	@rest_timer : Int;
 
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
@@ -222,19 +227,22 @@ class Dungeon {
         	# sword
         	label Scancode->SDL_SCANCODE_SPACE: {
         		if(@monster <> Nil) {
+        			@attack_timer := 10;
         			Fight(AttackType->SWORD);
         		};
         	}
 
         	# rest
         	label Scancode->SDL_SCANCODE_R: {
-				if(@monster = Nil) {
+				if(@monster = Nil) {				
+					@rest_timer := 10;
 					@player->Rest();
 				};
         	}
 
         	# potion
         	label Scancode->SDL_SCANCODE_P: {
+        		@potion_timer := 10;
 				@player->TakePotion();
 				if(@monster <> Nil) {
 					Fight(AttackType->POTION);
@@ -283,7 +291,7 @@ class Dungeon {
 	}
 
 	method : RenderCave(frame_count : Int) ~ Nil {
-		if(@monster_hit_timer > 0) {
+		if(@attack_timer > 0) {
 			@dungeon_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 3);
 		}
 		else {
@@ -295,7 +303,7 @@ class Dungeon {
 		# -- attack --
 		@action_icons->SetTop(350);
 		@action_icons->SetLeft(65);
-		if(@monster_hit_timer > 0) {
+		if(@attack_timer > 0) {
 	    	@action_icons->Render(4);
 	    }
 	    else {
@@ -305,17 +313,17 @@ class Dungeon {
 	    # -- potion --
 	    @action_icons->SetTop(350);
 		@action_icons->SetLeft(125);
-#		if(@monster_hit_timer > 0) {
-#	    	@action_icons->Render(4);
-#	    }
-#	    else {
+		if(@potion_timer > 0) {
+	    	@action_icons->Render(4);
+	    }
+	    else {
 	    	@action_icons->Render(1);
-#	    };
+	    };
 
 		# -- spell --
 	    @action_icons->SetTop(350);
 		@action_icons->SetLeft(190);
-#		if(@monster_hit_timer > 0) {
+#		if(@attack_timer > 0) {
 #	    	@action_icons->Render(4);
 #	    }
 #	    else {
@@ -325,22 +333,22 @@ class Dungeon {
 		# -- take --
 		@action_icons->SetTop(350);
 		@action_icons->SetLeft(245);
-#		if(@monster_hit_timer > 0) {
+#		if(@attack_timer > 0) {
 #	    	@action_icons->Render(4);
 #	    }
 #	    else {
 	    	@action_icons->Render(9);
 #	    };
 
-		# -- tent --
+		# -- rest --
 		@action_icons->SetTop(350);
 		@action_icons->SetLeft(305);
-#		if(@monster_hit_timer > 0) {
-#	    	@action_icons->Render(4);
-#	    }
-#	    else {
+		if(@rest_timer > 0) {
+	    	@action_icons->Render(4);
+	    }
+	    else {
 	    	@action_icons->Render(3);
-#	    };
+	    };
 	}
 
 	# map codes
@@ -399,8 +407,16 @@ class Dungeon {
 			};
 		};
 
-		if(@monster_hit_timer > 0) {
-			@monster_hit_timer -= 1;
+		if(@attack_timer > 0) {
+			@attack_timer -= 1;
+		};
+
+		if(@potion_timer > 0) {
+			@potion_timer -= 1;
+		};
+
+		if(@rest_timer > 0) {
+			@rest_timer -= 1;
 		};
 	}
 
@@ -768,36 +784,6 @@ class Dungeon {
 			@player->AddExperince(@monster);
 			@monster := Nil;
 		};
-
-#~		
-		@monster_hit_timer := 10;
-
-		player_attack := @player->Attack();
-		player_defense := @player->Defend();
-
-		monster_attack := @monster->Attack();
-		monster_defense := @monster->Defend();
-
-		player_diff := monster_attack - player_defense;
-		monster_diff := player_attack - monster_defense;
-
-		player_hp := @player->GetHp();
-		@player_health_percent := @player->GetHpPercentage();	
-
-		monster_hp := @monster->GetHp();
-		@monster_health_percent := @monster->GetHpPercentage();	
-
-"Player Hit: attack={$monster_attack}, defense={$player_defense} -> [{$player_diff}, {$player_hp}, {$@player_health_percent}]"->PrintLine();
-"Monster Hit: attack={$player_attack}, defense={$monster_defense} -> [{$monster_diff}, {$monster_hp}, {$@monster_health_percent}]"->PrintLine();
-
-		if(@player->SetHp(player_diff, true)) {
-			"--- DEAD ---"->PrintLine();
-		};
-
-		if(type <> AttackType->POTION & @monster->SetHp(monster_diff, true)) {
-			@monster := Nil;
-		};
-~#		
 	}
 }
 
@@ -807,7 +793,7 @@ class Slime from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
 			1,						# level
-			Int->Random(8, 12),	# max hp
+			Int->Random(8, 12),		# max hp
 			Int->Random(12, 14),	# strength
 			Int->Random(10, 11),	# agility
 			Int->Random(14, 15),	# stamina
@@ -827,7 +813,7 @@ class Rat from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
 			1,						# level
-			Int->Random(6, 10),	# max hp
+			Int->Random(6, 10),		# max hp
 			Int->Random(14, 16),	# strength
 			Int->Random(14, 15),	# agility
 			Int->Random(8, 10),		# stamina
@@ -856,11 +842,9 @@ class Player from Entity {
 			Int->Random(13, 15),	# strength
 			Int->Random(12, 14),	# agility
 			Int->Random(13, 15));	# stamina
-
 		@potion_count := 2;
 		@tent_count := 1;
 	}
-
 
 	method : public : AddExperince(monster : Entity) ~ Nil {
 		@experience += monster->GetFightExperince();
