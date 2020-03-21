@@ -25,8 +25,11 @@ class Dungeon {
 	@dungeon_map : Char[,];
 	@dungeon_map_start : Int[];
 
-	@dungeon_tresure_images : AnimatedImageSprite;
+	@dungeon_images : AnimatedImageSprite;
 	@dungeon_image_index : Int;
+
+	@treasure_images : AnimatedImageSprite;
+	@treasure_image_index : Int;
 
 	@map_sheet_images : AnimatedImageSprite;
 
@@ -64,12 +67,19 @@ class Dungeon {
 		@framework := GameFramework->New(ScreenConsts->SCREEN_WIDTH, ScreenConsts->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(20, 51, 6));
 		
-		@dungeon_tresure_images := @framework->AddAnimatedImageSprite("./media/dungeon_tresure.png");
+		@dungeon_images := @framework->AddAnimatedImageSprite("./media/dungeon.png");
 		for(i := 0; i < ScreenConsts->DUNGEON_IMAGE_MAX; i += 1;) {
-			@dungeon_tresure_images->AddClip(Rect->New(i * 410, 0, 410, 310));
+			@dungeon_images->AddClip(Rect->New(i * 410, 0, 410, 310));
 		};
-		@dungeon_tresure_images->SetTop(35);
-		@dungeon_tresure_images->SetLeft(35);
+		@dungeon_images->SetTop(35);
+		@dungeon_images->SetLeft(35);
+
+		@treasure_images := @framework->AddAnimatedImageSprite("./media/treasure.png");
+		for(i := 0; i < ScreenConsts->DUNGEON_IMAGE_MAX; i += 1;) {
+			@treasure_images->AddClip(Rect->New(i * 410, 0, 410, 310));
+		};
+		@treasure_images->SetTop(35);
+		@treasure_images->SetLeft(35);
 
 		@monster_images := @framework->AddAnimatedImageSprite("./media/monsters.png");
 		for(i := 0; i < ScreenConsts->MONSTER_IMAGE_MAX; i += 1;) {
@@ -327,13 +337,13 @@ class Dungeon {
 
 	method : RenderDungeon(frame_count : Int) ~ Nil {
 		if(@attack_timer > 0) {
-			@dungeon_tresure_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 3);
+			@treasure_images->Render(1);
 		}
 		else if(@rest_timer > 0) {
-			@dungeon_tresure_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 4);	
+			@treasure_images->Render(0);	
 		}
 		else {
-			@dungeon_tresure_images->Render(@dungeon_image_index);
+			@dungeon_images->Render(@dungeon_image_index);
 		};
 
 		# TOOD: update button logic
@@ -402,11 +412,11 @@ class Dungeon {
 			
 			value := @dungeon_map[player_y, player_x];
 			if(value = 'T' | value = '3') {
-				@dungeon_tresure_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 2);
+				@treasure_images->Render(2);
 				@take_item_id := 'T';
 			}
 			else if(value = 'P' | value = '4') {
-				@dungeon_tresure_images->Render(ScreenConsts->DUNGEON_IMAGE_MAX - 1);
+				@treasure_images->Render(3);
 				@take_item_id := 'P';
 			}
 			else {
@@ -1189,7 +1199,7 @@ class Entity {
 consts ScreenConsts {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 440,
-	DUNGEON_IMAGE_MAX := 20,
+	DUNGEON_IMAGE_MAX := 16,
 	MONSTER_IMAGE_MAX := 6,
 	MAP_ICON_MAX := 2,
 	MAP_SHEET_MAX := 2,
