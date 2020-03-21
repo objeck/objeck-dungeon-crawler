@@ -843,7 +843,7 @@ class Dungeon {
 			map_file->Close();
 		};
 		
-		size_line := map_file->ReadString();		
+		size_line := map_file->ReadString();
 		rows := cols := size_line->ToInt();
 
 		@dungeon_map := Char->New[rows, cols];
