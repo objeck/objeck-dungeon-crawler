@@ -945,7 +945,7 @@ class Dungeon {
 	}
 }
 
-# ------------
+# --- Slime ---
 
 class Slime from Entity {
 	New() {
@@ -967,6 +967,8 @@ class Slime from Entity {
 	}
 }
 
+# --- Rat ---
+
 class Rat from Entity {
 	New() {
 		Parent(EntityType->SLIME,	# type
@@ -986,6 +988,8 @@ class Rat from Entity {
 		return Int->Random(12, 15);
 	}
 }
+
+# --- Player ---
 
 class Player from Entity {
 	@experience : Int;
