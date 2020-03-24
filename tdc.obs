@@ -181,7 +181,7 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_UP:
         	label Scancode->SDL_SCANCODE_W: {
         		if(<>@monster <> Nil) {
-	        		if(MoveForwad() & Float->Random() < 0.33) {
+	        		if(MoveForwad() & Float->Random() < 0.25) {
 	        			StartFight();
 	        		}
 	        		else {
@@ -581,6 +581,11 @@ class Dungeon {
 			return true;
 		};
 
+		player_x := @player_pos[1];	player_y := @player_pos[0];
+		if(GetSpecialPosition(player_y, player_x) = FowardType->NONE) {
+			return true;
+		};
+
 		return false;
 	}
 
@@ -715,7 +720,7 @@ class Dungeon {
 				@dungeon_image_index := 3;
 			};
 		};
-@forward_1_type ->PrintLine();
+		
 #		ShowAsciiMap();
 	}
 
