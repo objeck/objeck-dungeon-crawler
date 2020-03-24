@@ -581,8 +581,7 @@ class Dungeon {
 			return true;
 		};
 
-		player_x := @player_pos[1];	player_y := @player_pos[0];
-		if(GetSpecialPosition(player_y, player_x) = FowardType->NONE) {
+		if(GetSpecialPosition(@player_pos[0], @player_pos[1]) = FowardType->NONE) {
 			return true;
 		};
 
