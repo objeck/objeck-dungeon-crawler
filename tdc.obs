@@ -60,6 +60,9 @@ class Dungeon {
 	@take_timer : Int;
 	@rest_timer : Int;
 
+	# --- sound ---
+	@music : MixMusic;
+
 	function : Main(args : String[]) ~ Nil {
 		Dungeon->New()->Run();
 	}
@@ -70,6 +73,15 @@ class Dungeon {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(20, 51, 6));
 		
+		LoadSprites();
+		LoadSounds();
+		LoadText();
+
+		@maps := Maps->New();
+		NewLevel();
+	}
+
+	method : LoadSprites() ~ Nil {
 		# load sprite sheets
 		@dungeon_images := @framework->AddAnimatedImageSprite("./media/dungeon.png");
 		for(i := 0; i < Game->DUNGEON_IMAGE_MAX; i += 1;) {
@@ -106,7 +118,19 @@ class Dungeon {
 		for(i := 0; i < Game->MAP_SHEET_MAX; i += 1;) {
 			@map_sheet_images->AddClip(Rect->New(i * 300, 0, 300, 300));
 		};
-		
+	}
+
+	method : LoadSounds() ~ Nil {
+		# load music and sounds
+		music_path := "./media/music.wav";
+		@music := MixMusic->New(music_path);
+		if(@music->IsNull()) {
+			"--- Cannot load music: '{$music_path}'! ---"->ErrorLine();
+			Runtime->Exit(1);
+		};
+	}
+
+	method : LoadText() ~ Nil {
 		# set screen text
 		@text_color := Color->New(249, 249, 249);
 
@@ -131,19 +155,26 @@ class Dungeon {
 		
 		@tent_text := @framework->AddTextSprite();
 		@tent_text->RenderedText("{$tent_count}", @text_color);
-
-		# load dungeon maps
-		@maps := Maps->New();
-		LoadMap();
 	}
 	
 	# --- Game Loop ---
 	method : Run() ~ Nil {
+		leaving {
+			@music->Free();
+			@framework->Quit();
+		};
+
 		if(@framework->IsOk()) {
-			e := @framework->GetEvent();
-			
+			if(MixMusic->Playing()) {
+				MixMusic->Resume();
+			}
+			else {
+				@music->FadeInMusic(-1, 2000);
+			};
+
 			frame_count := 0;
 			quit := false;
+			e := @framework->GetEvent();
 			while(<>quit) {
 				@framework->FrameStart();
 				
@@ -173,10 +204,6 @@ class Dungeon {
 			"--- Error Initializing Environment ---"->ErrorLine();
 			return;
 		};
-
-		leaving {
-			@framework->Quit();
-		};
 	}
 
 	# --- Input Logic ---
@@ -194,7 +221,7 @@ class Dungeon {
 	        		};
 
 	        		if(GetSpecialPosition(@player_pos[0], @player_pos[1]) = MapType->END) {
-	        			LoadMap();
+	        			NewLevel();
 	        		}
 	        		else {
 	        			UpdateDungeonView();
@@ -837,16 +864,16 @@ class Dungeon {
 		};
 	}
 
-	# ------- Game Logic -------
-
-	method : LoadMap() ~ Nil {
-		@dungeon_map := @maps->GetNewMap();
+	method : NewLevel() ~ Nil {
+		@dungeon_map := @maps->GetNewLevel();
 		@dungeon_image_index := 0;
 		@player_pos := @dungeon_map_start := @maps->GetStart();
 		@player_dir := Direction->NORTH;
 
 		UpdateDungeonView();
 	}
+
+	# ------- Fighting Logic -------
 
 	method : StartFight() ~ Nil {
 		if(Float->Random() < 0.6) {
@@ -1153,7 +1180,7 @@ class Maps {
 		LoadMaps("./media/debug.dat");
 	}
 
-	method : public : GetNewMap() ~ Char[,] {
+	method : public : GetNewLevel() ~ Char[,] {
 		@current_map_index := Int->Random(0, @dungeon_maps->Size() - 1);
 		return @dungeon_maps->Get(@current_map_index)->Get();
 	}
