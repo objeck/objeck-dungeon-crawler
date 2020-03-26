@@ -876,12 +876,19 @@ class Dungeon {
 	# ------- Fighting Logic -------
 
 	method : StartFight() ~ Nil {
-		if(Float->Random() < 0.6) {
+		value := Float->Random();
+
+		@monster := Skeleton->New();
+		if(value < 0.4) {
 			@monster := Slime->New();
 		}
-		else {
+		else if(value > 0.4 & value <= 0.8) {
 			@monster := Rat->New();
+		}
+		else {
+			@monster := Skeleton->New();
 		};
+		
 		@monster_image_index := @monster->GetImageIndex();
 	}
 
@@ -906,6 +913,28 @@ class Dungeon {
 			@player->AddExperince(@monster);
 			@monster := Nil;
 		};
+	}
+}
+
+# --- Slime ---
+
+class Skeleton from Entity {
+	New() {
+		Parent(EntityType->SKELETON,	# type
+			1,						# level
+			Int->Random(9, 13),		# max hp
+			Int->Random(15, 18),	# strength
+			Int->Random(11, 13),		# agility
+			Int->Random(7, 10),	# stamina
+			6);						# image offset
+	}
+
+	method : public : GetName() ~ String {
+		return "Slime";
+	}
+
+	method : public : GetFightExperince() ~ Int {
+		return Int->Random(9, 11);
 	}
 }
 
@@ -1288,7 +1317,8 @@ enum MapType {
 enum EntityType {
 	PERSON,
 	SLIME,
-	RAT
+	RAT,
+	SKELETON
 }
 
 enum Direction {
@@ -1302,7 +1332,7 @@ consts Game {
 	SCREEN_WIDTH := 800,
 	SCREEN_HEIGHT := 440,
 	DUNGEON_IMAGE_MAX := 19,
-	MONSTER_IMAGE_MAX := 6,
+	MONSTER_IMAGE_MAX := 9,
 	MAP_ICON_MAX := 2,
 	MAP_SHEET_MAX := 2,
 	ACTIONS_ICON_MAX := 10
