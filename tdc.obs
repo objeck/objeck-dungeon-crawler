@@ -3,6 +3,7 @@ Tiny Dungeon Crawler
 Copyright (c) 2020 Randy Hollines
 ~#
 
+use System.Concurrency;
 use Collection.Generic;
 use Game.SDL2;
 use Game.Framework;
@@ -64,6 +65,7 @@ class Dungeon {
 	@music : MixMusic;
 
 	function : Main(args : String[]) ~ Nil {
+		Entity->Init();
 		Dungeon->New()->Run();
 	}
 
@@ -1042,11 +1044,13 @@ class Player from Entity {
 	}
 
 	method : public : UsePotion() ~ Nil {
-		if(@potion_count > 0) {
-			@potion_count -= 1;
-			@hp += Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5;
-			if(@hp > @max_hp) {
-				@hp := @max_hp;
+		critical(@level_mutex) {
+			if(@potion_count > 0) {
+				@potion_count -= 1;
+				@hp += Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5;
+				if(@hp > @max_hp) {
+					@hp := @max_hp;
+				};
 			};
 		};
 	}
@@ -1091,6 +1095,11 @@ class Entity {
 	@stamina : Float;
 	@levels : Float[];
 	@image_index : Int;
+	@level_mutex : static : ThreadMutex;
+
+	function : Init() ~ Nil {
+		@level_mutex := ThreadMutex->New("level_lock");
+	}
 	
 	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int, image_index : Int := -1) {
 		@type := type;
@@ -1156,23 +1165,25 @@ class Entity {
 	}
 
 	method : public : SetHp(adjustment : Int, is_potion : Bool := false) ~ Bool {
-		if(<>is_potion) {
-			if(adjustment <= 0) {
-				return false;
+		critical(@level_mutex) {
+			if(<>is_potion) {
+				if(adjustment <= 0) {
+					return false;
+				};
+				@hp -= adjustment;
+			}
+			else {
+				@hp += adjustment;
 			};
-			@hp -= adjustment;
-		}
-		else {
-			@hp += adjustment;
-		};
 
-		if(@hp < 1) {
-			@hp := 0;
-			return true;
-		};
+			if(@hp < 1) {
+				@hp := 0;
+				return true;
+			};
 
-		if(@hp > @max_hp) {
-			@hp := @max_hp;
+			if(@hp > @max_hp) {
+				@hp := @max_hp;
+			};
 		};
 
 		return false;
