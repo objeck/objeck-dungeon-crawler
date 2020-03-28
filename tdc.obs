@@ -1044,15 +1044,13 @@ class Player from Entity {
 	}
 
 	method : public : UsePotion() ~ Nil {
-		critical(@level_mutex) {
 			if(@potion_count > 0) {
 				@potion_count -= 1;
-				@hp += Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5;
+				SetHp(Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5, true);
 				if(@hp > @max_hp) {
 					@hp := @max_hp;
 				};
 			};
-		};
 	}
 
 	method : public : TakeItem(id : Char) ~ Bool {
