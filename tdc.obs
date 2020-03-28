@@ -1038,7 +1038,7 @@ class Player from Entity {
 			@tent_count -= 1;
 			@hp += Int->Random(0, 1) = 0 ? @max_hp * 0.33 : @max_hp * 0.66;
 			if(@hp > @max_hp) {
-				@hp := @max_hp;
+				SetHp(@max_hp, true);
 			};
 		};
 	}
@@ -1048,7 +1048,7 @@ class Player from Entity {
 				@potion_count -= 1;
 				SetHp(Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5, true);
 				if(@hp > @max_hp) {
-					@hp := @max_hp;
+					SetHp(@max_hp, true);
 				};
 			};
 	}
