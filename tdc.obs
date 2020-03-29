@@ -99,7 +99,7 @@ class Dungeon {
 
 		@monster_images := @framework->AddAnimatedImageSprite("./media/monsters.png");
 		for(i := 0; i < Game->MONSTER_IMAGE_MAX; i += 1;) {
-			@monster_images->AddClip(Rect->New(i * 266, 0, 266, 174));
+			@monster_images->AddClip(Rect->New(i * 400, 0, 400, 300));
 		};
 
 		@map_blocks := @framework->AddAnimatedImageSprite("./media/map_blocks.png");
@@ -481,13 +481,8 @@ class Dungeon {
 				};
 			};
 
-			if(@is_forward_0) {
-				@monster_images->SetTop(155);
-			}
-			else {
-				@monster_images->SetTop(95);
-			};
-			@monster_images->SetLeft(100);
+			@monster_images->SetTop(10);
+			@monster_images->SetLeft(10);
 
 			@monster_images->Render(@monster_image_index);
 
