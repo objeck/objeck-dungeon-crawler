@@ -63,6 +63,8 @@ class Dungeon {
 
 	# --- sound ---
 	@music : MixMusic;
+	@player_attack_chunk : MixChunk;
+	@monster_attack_chunk : MixChunk;
 
 	function : Main(args : String[]) ~ Nil {
 		Entity->Init();
@@ -124,10 +126,24 @@ class Dungeon {
 
 	method : LoadSounds() ~ Nil {
 		# load music and sounds
-		music_path := "./media/music.wav";
-		@music := MixMusic->New(music_path);
+		sound_path := "./media/music.wav";
+		@music := MixMusic->New(sound_path);
 		if(@music->IsNull()) {
-			"--- Cannot load music: '{$music_path}'! ---"->ErrorLine();
+			"--- Cannot load music: '{$sound_path}'! ---"->ErrorLine();
+			Runtime->Exit(1);
+		};
+
+		sound_path := "./media/player_attack.wav";
+		@player_attack_chunk := MixChunk->New(sound_path);
+		if(@player_attack_chunk->IsNull()) {
+			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
+			Runtime->Exit(1);
+		};
+
+		sound_path := "./media/monster_attack.wav";
+		@monster_attack_chunk := MixChunk->New(sound_path);
+		if(@monster_attack_chunk->IsNull()) {
+			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
 			Runtime->Exit(1);
 		};
 	}
@@ -163,6 +179,8 @@ class Dungeon {
 	method : Run() ~ Nil {
 		leaving {
 			@music->Free();
+			@player_attack_chunk->Free();
+			@monster_attack_chunk->Free();
 			@framework->Quit();
 		};
 
@@ -172,6 +190,8 @@ class Dungeon {
 			}
 			else {
 				@music->FadeInMusic(-1, 2000);
+				MixMusic->VolumeMusic(4);
+				Mixer->Volume(-1, 4);
 			};
 
 			frame_count := 0;
@@ -215,7 +235,9 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_UP:
         	label Scancode->SDL_SCANCODE_W: {
         		if(<>@monster <> Nil) {
-	        		if(MoveForwad() & Float->Random() < 0.25) {
+	        		if(MoveForwad() & Float->Random() < 0.25 &  
+	        				GetSpecialPosition(@player_pos[0], @player_pos[1]) <> MapType->TRESURE & 
+	        				GetSpecialPosition(@player_pos[0], @player_pos[1]) <> MapType->POTION) {
 	        			StartFight();
 	        		}
 	        		else {
@@ -292,7 +314,7 @@ class Dungeon {
 
         	# rest
         	label Scancode->SDL_SCANCODE_R: {
-				if(@monster = Nil) {				
+				if(@monster = Nil & @player->HasTent()) {
 					@rest_timer := 100;
 					@player->UseTent();
 				};
@@ -483,14 +505,17 @@ class Dungeon {
 				};
 			};
 
-			@monster_images->SetTop(10);
-			@monster_images->SetLeft(10);
-
+			if(@is_forward_0 & @player->GetImageIndex() < 6) {
+				@monster_images->SetTop(85);
+			}
+			else {
+				@monster_images->SetTop(35);
+			};
+			@monster_images->SetLeft(40);
 			@monster_images->Render(@monster_image_index);
 
 			@action_icons->SetTop(50);
-			@action_icons->SetLeft(60);
-
+			@action_icons->SetLeft(62);
 			monster_health_percent := @monster->GetHpPercentage();
 			if(monster_health_percent > 0.75) {
 				@action_icons->Render(5);
@@ -891,12 +916,13 @@ class Dungeon {
 
 	method : Fight(type : AttackType) ~ Nil {
 		# player attack monster
+		@player_attack_chunk->PlayChannel(-1, 0);
 		if(type <> AttackType->POTION) {
 			@player->Attack(@monster);
-			monster_health_percent := @monster->GetHpPercentage();
 		};
 
 		# monster attack player
+		@monster_attack_chunk->PlayChannel(-1, 0);
 		if(@monster->IsAlive()) {
 			@monster->Attack(@player);
 
@@ -913,17 +939,17 @@ class Dungeon {
 	}
 }
 
-# --- Slime ---
+# --- Skeleton ---
 
 class Skeleton from Entity {
 	New() {
 		Parent(EntityType->SKELETON,	# type
-			1,						# level
-			Int->Random(9, 13),		# max hp
-			Int->Random(15, 18),	# strength
+			1,							# level
+			Int->Random(9, 13),			# max hp
+			Int->Random(15, 18),		# strength
 			Int->Random(11, 13),		# agility
-			Int->Random(7, 10),	# stamina
-			6);						# image offset
+			Int->Random(7, 10),			# stamina
+			6);							# image offset
 	}
 
 	method : public : GetName() ~ String {
@@ -995,7 +1021,7 @@ class Player from Entity {
 			Int->Random(12, 14),	# agility
 			Int->Random(13, 15));	# stamina
 		@potion_count := 2;
-		@tent_count := 1;
+		@tent_count := 2;
 	}
 
 	method : public : AddExperince(monster : Entity) ~ Nil {
@@ -1026,6 +1052,10 @@ class Player from Entity {
 		};
 
 		return 1;
+	}
+
+	method : public : HasTent() ~ Bool {
+		return @tent_count > 0;
 	}
 
 	method : public : UseTent() ~ Nil {
