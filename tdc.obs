@@ -1079,17 +1079,32 @@ class Player from Entity {
 	}
 
 	method : public : GetLevel() ~ Int {
-		if(@experience > 200) {
-			return 4;
+		if(@experience > 300 & @level < 5) {
+			SetMaxHp(GetMaxHp() * 1.10);
+			SetHp(@max_hp, true);
+			@level := 5;
 		}
-		else if(@experience <= 200 & @experience > 130) {
-			return 3;
+		else if(@experience <= 300 & @experience > 200 & @level < 4) {
+			SetMaxHp(GetMaxHp() * 1.15);
+			SetHp(@max_hp, true);
+			@level := 4;
 		}
-		else if(@experience <= 130 & @experience > 50) {
-			return 2;
+		else if(@experience <= 200 & @experience > 130 & @level < 3) {
+			SetMaxHp(GetMaxHp() * 1.20);
+			SetHp(@max_hp, true);
+			@level := 3;
+		}
+		else if(@experience <= 130 & @experience > 50 & @level < 2) {
+			SetMaxHp(GetMaxHp() * 1.25);
+			SetHp(@max_hp, true);
+			@level := 2;
+		}
+		else if(@level = 1) {
+			@level := 1;
 		};
 
-		return 1;
+		return @level;
+		
 	}
 
 	method : public : HasTent() ~ Bool {
@@ -1178,7 +1193,7 @@ class Entity {
 		@levels := Float->New[30];
 		each(i : @levels) {
 			@levels[i] := base;
-			base += 0.15;
+			base += 0.05;
 		};
 	}
 
@@ -1206,6 +1221,10 @@ class Entity {
 		return @max_hp;
 	}
 
+	method : public : SetMaxHp(max_hp : Int) ~ Nil {
+		@max_hp := max_hp;
+	}
+
 	method : public : GetAttack() ~ Int {
 		return (@strength * 0.7 + @agility * 0.3) * @levels[Int->Random(@level - 1, @level + 1)];
 	}
@@ -1224,7 +1243,7 @@ class Entity {
 		diff := attack - defense;
 		opponent->SetHp(diff);
 
-"{$our_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
+# "{$our_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
 
 		return diff > 0;
 	}
