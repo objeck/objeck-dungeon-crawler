@@ -66,8 +66,8 @@ class Dungeon {
 	@music : MixMusic;
 	@player_attack_chunk : MixChunk;
 	@monster_die_chunk : MixChunk;
-	@potion_chunk : MixChunk;
-	@tresure_chunk : MixChunk;
+	@potion_take_chunk : MixChunk;
+	@tresure_take_chunk : MixChunk;
 
 	function : Main(args : String[]) ~ Nil {
 		Entity->Init();
@@ -89,11 +89,11 @@ class Dungeon {
 	}
 
 	method : public : PlayTresure() ~ Nil {
-		@tresure_chunk->PlayChannel(-1, 0);
+		@tresure_take_chunk->PlayChannel(-1, 0);
 	}
 
 	method : public : PlayPotion() ~ Nil { 
-		@potion_chunk->PlayChannel(-1, 0);
+		@potion_take_chunk->PlayChannel(-1, 0);
 	}	
 
 	method : LoadSprites() ~ Nil {
@@ -159,15 +159,15 @@ class Dungeon {
 		};
 
 		sound_path := "./media/potion.wav";
-		@potion_chunk := MixChunk->New(sound_path);
-		if(@potion_chunk->IsNull()) {
+		@potion_take_chunk := MixChunk->New(sound_path);
+		if(@potion_take_chunk->IsNull()) {
 			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
 			Runtime->Exit(1);
 		};
 
 		sound_path := "./media/treasure.wav";
-		@tresure_chunk := MixChunk->New(sound_path);
-		if(@tresure_chunk->IsNull()) {
+		@tresure_take_chunk := MixChunk->New(sound_path);
+		if(@tresure_take_chunk->IsNull()) {
 			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
 			Runtime->Exit(1);
 		};
@@ -207,8 +207,8 @@ class Dungeon {
 			@music->Free();
 			@player_attack_chunk->Free();
 			@monster_die_chunk->Free();
-			@tresure_chunk->Free();
-			@potion_chunk->Free();
+			@tresure_take_chunk->Free();
+			@potion_take_chunk->Free();
 			@framework->Quit();
 		};
 
