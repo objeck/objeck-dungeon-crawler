@@ -64,7 +64,9 @@ class Dungeon {
 	# --- sound ---
 	@music : MixMusic;
 	@player_attack_chunk : MixChunk;
-	@monster_attack_chunk : MixChunk;
+	@monster_die_chunk : MixChunk;
+	@potion_chunk : MixChunk;
+	@tresure_chunk : MixChunk;
 
 	function : Main(args : String[]) ~ Nil {
 		Entity->Init();
@@ -140,9 +142,23 @@ class Dungeon {
 			Runtime->Exit(1);
 		};
 
-		sound_path := "./media/monster_attack.wav";
-		@monster_attack_chunk := MixChunk->New(sound_path);
-		if(@monster_attack_chunk->IsNull()) {
+		sound_path := "./media/monster_die.wav";
+		@monster_die_chunk := MixChunk->New(sound_path);
+		if(@monster_die_chunk->IsNull()) {
+			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
+			Runtime->Exit(1);
+		};
+
+		sound_path := "./media/potion.wav";
+		@potion_chunk := MixChunk->New(sound_path);
+		if(@potion_chunk->IsNull()) {
+			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
+			Runtime->Exit(1);
+		};
+
+		sound_path := "./media/treasure.wav";
+		@tresure_chunk := MixChunk->New(sound_path);
+		if(@tresure_chunk->IsNull()) {
 			"--- Cannot load sound: '{$sound_path}'! ---"->ErrorLine();
 			Runtime->Exit(1);
 		};
@@ -180,7 +196,9 @@ class Dungeon {
 		leaving {
 			@music->Free();
 			@player_attack_chunk->Free();
-			@monster_attack_chunk->Free();
+			@monster_die_chunk->Free();
+			@tresure_chunk->Free();
+			@potion_chunk->Free();
 			@framework->Quit();
 		};
 
@@ -191,7 +209,7 @@ class Dungeon {
 			else {
 				@music->FadeInMusic(-1, 2000);
 				MixMusic->VolumeMusic(4);
-				Mixer->Volume(-1, 4);
+				Mixer->Volume(-1, 6);
 			};
 
 			frame_count := 0;
@@ -307,7 +325,7 @@ class Dungeon {
         	# sword
         	label Scancode->SDL_SCANCODE_SPACE: {
         		if(@monster <> Nil) {
-        			@attack_timer := 10;
+        			@attack_timer := 20;
         			Fight(AttackType->SWORD);
         		};
         	}
@@ -916,13 +934,17 @@ class Dungeon {
 
 	method : Fight(type : AttackType) ~ Nil {
 		# player attack monster
-		@player_attack_chunk->PlayChannel(-1, 0);
+		
 		if(type <> AttackType->POTION) {
-			@player->Attack(@monster);
+			if(@player->Attack(@monster) & @monster->IsAlive()) {
+				@player_attack_chunk->PlayChannel(-1, 0);		
+			}
+			else if(<>@monster->IsAlive()) {
+				@monster_die_chunk->PlayChannel(-1, 0);	
+			};
 		};
 
 		# monster attack player
-		@monster_attack_chunk->PlayChannel(-1, 0);
 		if(@monster->IsAlive()) {
 			@monster->Attack(@player);
 
@@ -1080,11 +1102,13 @@ class Player from Entity {
 
 	method : public : TakeItem(id : Char) ~ Bool {
 		if(id = 'T') {
-			@gold += Int->Random(5, 35);
+			@gold += Int->Random(10, 35);
+#			@treasure_chunk->PlayChannel(-1, 0);
 			return true;
 		}
 		else if(id = 'P') {
 			@potion_count += 1;
+#			@potion_chunk->PlayChannel(-1, 0);
 			return true;
 		};
 
@@ -1174,7 +1198,7 @@ class Entity {
 		return (@stamina * 0.6 + @agility * 0.4) * @levels[Int->Random(@level - 1, @level + 1)];
 	}
 
-	method : public : Attack(opponent : Entity) ~ Nil {
+	method : public : Attack(opponent : Entity) ~ Bool {
 		our_name := GetName();
 		attack := GetAttack();
 
@@ -1184,7 +1208,9 @@ class Entity {
 		diff := attack - defense;
 		opponent->SetHp(diff);
 
-# "{$our_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
+"{$our_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
+
+		return diff > 0;
 	}
 
 	method : public : SetHp(adjustment : Int, is_potion : Bool := false) ~ Bool {
