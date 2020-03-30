@@ -87,6 +87,14 @@ class Dungeon {
 		NewLevel();
 	}
 
+	method : public : PlayTresure() ~ Nil {
+		@tresure_chunk->PlayChannel(-1, 0);
+	}
+
+	method : public : PlayPotion() ~ Nil {
+		@potion_chunk->PlayChannel(-1, 0);
+	}	
+
 	method : LoadSprites() ~ Nil {
 		# load sprite sheets
 		@dungeon_images := @framework->AddAnimatedImageSprite("./media/dungeon.png");
@@ -342,7 +350,7 @@ class Dungeon {
         	label Scancode->SDL_SCANCODE_T: {
         		@take_timer := 10;
 				if(@monster = Nil) {
-					if(@player->TakeItem(@take_item_id)) {
+					if(@player->TakeItem(@take_item_id, @self)) {
 						player_x := @player_pos[1];
 						player_y := @player_pos[0];
 						@dungeon_map[player_y, player_x] := '0';
@@ -1100,15 +1108,15 @@ class Player from Entity {
 			};
 	}
 
-	method : public : TakeItem(id : Char) ~ Bool {
+	method : public : TakeItem(id : Char, dungeon : Dungeon) ~ Bool {
 		if(id = 'T') {
 			@gold += Int->Random(10, 35);
-#			@treasure_chunk->PlayChannel(-1, 0);
+			dungeon->PlayTresure();
 			return true;
 		}
 		else if(id = 'P') {
 			@potion_count += 1;
-#			@potion_chunk->PlayChannel(-1, 0);
+			dungeon->PlayPotion();
 			return true;
 		};
 
