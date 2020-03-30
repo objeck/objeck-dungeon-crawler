@@ -934,15 +934,14 @@ class Dungeon {
 	method : StartFight() ~ Nil {
 		value := Float->Random();
 
-		@monster := Skeleton->New();
 		if(value < 0.4) {
-			@monster := Slime->New();
+			@monster := Slime->New(@player->GetLevel());
 		}
 		else if(value > 0.4 & value <= 0.8) {
-			@monster := Rat->New();
+			@monster := Rat->New(@player->GetLevel());
 		}
 		else {
-			@monster := Skeleton->New();
+			@monster := Skeleton->New(@player->GetLevel());
 		};
 		
 		@monster_image_index := @monster->GetImageIndex();
@@ -980,11 +979,11 @@ class Dungeon {
 # --- Skeleton ---
 
 class Skeleton from Entity {
-	New() {
+	New(level : Int) {
 		Parent(EntityType->SKELETON,	# type
-			1,							# level
+			level,							# level
 			Int->Random(9, 13),			# max hp
-			Int->Random(15, 18),		# strength
+			Int->Random(17, 19),		# strength
 			Int->Random(11, 13),		# agility
 			Int->Random(7, 10),			# stamina
 			6);							# image offset
@@ -1002,11 +1001,11 @@ class Skeleton from Entity {
 # --- Slime ---
 
 class Slime from Entity {
-	New() {
+	New(level : Int) {
 		Parent(EntityType->SLIME,	# type
-			1,						# level
+			level,					# level
 			Int->Random(7, 11),		# max hp
-			Int->Random(12, 14),	# strength
+			Int->Random(14, 16),	# strength
 			Int->Random(10, 11),	# agility
 			Int->Random(14, 15),	# stamina
 			0);						# image offset
@@ -1024,11 +1023,11 @@ class Slime from Entity {
 # --- Rat ---
 
 class Rat from Entity {
-	New() {
+	New(level : Int) {
 		Parent(EntityType->SLIME,	# type
-			1,						# level
+			level,					# level
 			Int->Random(5, 10),		# max hp
-			Int->Random(14, 16),	# strength
+			Int->Random(15, 17),	# strength
 			Int->Random(14, 15),	# agility
 			Int->Random(8, 10),		# stamina
 			3);						# image offset
