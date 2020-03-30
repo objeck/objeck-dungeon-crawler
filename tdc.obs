@@ -52,7 +52,8 @@ class Dungeon {
 	@stat_experience_text : TextSprite;
 	@potion_text : TextSprite;
 	@tent_text : TextSprite;
-	@text_color : Color;
+	@text_white_color : Color;
+	@text_red_color : Color;
 
 	# --- timers ---
 	@attack_timer : Int;
@@ -91,7 +92,7 @@ class Dungeon {
 		@tresure_chunk->PlayChannel(-1, 0);
 	}
 
-	method : public : PlayPotion() ~ Nil {
+	method : public : PlayPotion() ~ Nil { 
 		@potion_chunk->PlayChannel(-1, 0);
 	}	
 
@@ -174,7 +175,8 @@ class Dungeon {
 
 	method : LoadText() ~ Nil {
 		# set screen text
-		@text_color := Color->New(249, 249, 249);
+		@text_white_color := Color->New(249, 249, 249);
+		@text_red_color := Color->New(255, 0, 56);
 
 		hp := @player->GetHp();
 		max_hp := @player->GetMaxHp();
@@ -187,16 +189,16 @@ class Dungeon {
 		tent_count := @player->GetTentCount();
 
 		@stat_ability_text := @framework->AddTextSprite();
-		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_color);
+		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_white_color);
 
 		@stat_experience_text := @framework->AddTextSprite();
-		@stat_experience_text->RenderedText("G={$gold}, LVL={$level}", @text_color);
+		@stat_experience_text->RenderedText("G={$gold}, LVL={$level}", @text_white_color);
 
 		@potion_text := @framework->AddTextSprite();
-		@potion_text->RenderedText("{$potion_count}", @text_color);
+		@potion_text->RenderedText("{$potion_count}", @text_white_color);
 		
 		@tent_text := @framework->AddTextSprite();
-		@tent_text->RenderedText("{$tent_count}", @text_color);
+		@tent_text->RenderedText("{$tent_count}", @text_white_color);
 	}
 	
 	# --- Game Loop ---
@@ -410,16 +412,22 @@ class Dungeon {
 		potion_count := @player->GetPotionCount();
 		tent_count := @player->GetTentCount();
 
-		@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_color);
+		if(hp->As(Float) / max_hp->As(Float) < 0.25) {
+			@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_red_color);
+		}
+		else {
+			@stat_ability_text->RenderedText("HP={$hp}/{$max_hp}, EXP={$experience}", @text_white_color);
+		};
+		
 		@stat_ability_text->Render(495, 35);
 
-		@stat_experience_text->RenderedText("G={$gold}, LVL={$level}", @text_color);
+		@stat_experience_text->RenderedText("G={$gold}, LVL={$level}", @text_white_color);
 		@stat_experience_text->Render(495, 360);
 
-		@potion_text->RenderedText("{$potion_count}", @text_color);
+		@potion_text->RenderedText("{$potion_count}", @text_white_color);
 		@potion_text->Render(150, 405);
 
-		@tent_text->RenderedText("{$tent_count}", @text_color);
+		@tent_text->RenderedText("{$tent_count}", @text_white_color);
 		@tent_text->Render(325, 405);
 	}
 
