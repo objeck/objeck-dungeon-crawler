@@ -1240,7 +1240,7 @@ class Entity {
 		defense := opponent->GetDefense();
 
 		diff := attack - defense;
-		opponent->SetHp(diff);
+		opponent->SetHp(diff < 0 ? Int->Random(0, 1) : diff);
 
 # "{$our_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
 
