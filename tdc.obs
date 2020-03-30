@@ -981,7 +981,7 @@ class Dungeon {
 class Skeleton from Entity {
 	New(level : Int) {
 		Parent(EntityType->SKELETON,	# type
-			level,							# level
+			level,						# level
 			Int->Random(9, 13),			# max hp
 			Int->Random(17, 19),		# strength
 			Int->Random(11, 13),		# agility
