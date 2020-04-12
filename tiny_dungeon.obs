@@ -1,0 +1,68 @@
+use Collection.Generic;
+use Game.SDL2;
+use Game.Framework;
+
+class TinyDungeon {
+	@framework : GameFramework;
+	@sprite_manager : SpriteManager;
+	@sound_manager : SoundManager;
+	@map_manager : MapManager;
+
+	New() {
+		@sprite_manager := SpriteManager->New("./images");
+		@sound_manager := SoundManager->New("./sounds");
+		@map_manager := MapManager->New("./maps");
+	}
+
+	function : Main(args : String[]) ~ Nil {
+
+	}
+
+	method : Run() ~ Nil {
+		leaving {
+			@map_manager->Unload();
+			@sprite_manager->Unload();
+			@sound_manager->Unload();
+		};
+
+		if(@framework->IsOk()) {
+			frame_count := 0;
+			quit := false;
+			e := @framework->GetEvent();
+			while(<>quit) {
+				@framework->FrameStart();
+				
+				# process input
+				while(e->Poll() <> 0) {
+					# quit
+					if(e->GetType() = EventType->SDL_QUIT) {
+						quit := true;
+					}
+					# keyboard
+					else if(e->GetType() = EventType->SDL_KEYDOWN & e->GetKey()->GetRepeat() = 0) {
+				        GetInput(e);
+				    };
+				};
+
+				Render(frame_count);
+
+				@framework->FrameEnd();
+
+				frame_count += 1;
+				if(frame_count >= @framework->GetFps()) {
+					frame_count := 0;
+				};
+			};
+		}
+		else {
+			"--- Error Initializing Environment ---"->ErrorLine();
+			return;
+		};
+	}
+
+	method : GetInput(e : Event) ~ Nil {
+	}
+
+	method : Render(frame_count : Int) ~ Nil {
+	}
+}

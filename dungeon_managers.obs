@@ -1,0 +1,48 @@
+use System.Concurrency;
+use Collection.Generic;
+use Game.SDL2;
+use Game.Framework;
+use System.IO.File;
+
+class Manager {
+	method : virtual : public : Unload() ~ Nil;
+}
+
+#~
+Managers map operations
+~#
+class MapManager from Manager {
+	New(path : String) {
+		Parent();
+	}	
+
+	method : public : Unload() ~ Nil {
+
+	}
+}
+
+#~
+Managers sprite images
+~#
+class SpriteManager from Manager {
+	New(path : String) {
+		Parent();
+	}	
+
+	method : public : Unload() ~ Nil {
+		
+	}
+}
+
+#~
+Managers sound assets
+~#
+class SoundManager from Manager {
+	New(path : String) {
+		Parent();
+	}	
+
+	method : public : Unload() ~ Nil {
+		
+	}
+}
