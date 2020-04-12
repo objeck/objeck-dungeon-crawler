@@ -5,6 +5,7 @@ use Game.Framework;
 use System.IO.File;
 
 class Manager {
+	method : virtual : public : Load() ~ Nil;
 	method : virtual : public : Unload() ~ Nil;
 }
 
@@ -41,6 +42,10 @@ class MapManager from Manager {
 		@maps := Vector->New()<MapHolder>;
 	}	
 
+	method : public : Load() ~ Nil {
+		LoadMaps();		
+	}
+
 	method : public : LoadMaps() ~ Nil {
 		map_file := FileReader->New(@path);
 		leaving {
@@ -56,6 +61,7 @@ class MapManager from Manager {
 
 			for(i := 0; i < rows; i += 1;) {
 				line := map_file->ReadString();
+"{$i}: \t{$line}"->PrintLine();
 				if(line->Size() <> cols) {
 					"--- Invalid map cols! ---"->ErrorLine();
 					Runtime->Exit(1);
@@ -93,7 +99,10 @@ Managers sprite images
 class SpriteManager from Manager {
 	New(path : String) {
 		Parent();
-	}	
+	}
+
+	method : public : Load() ~ Nil {
+	}
 
 	method : public : Unload() ~ Nil {
 		
@@ -107,6 +116,9 @@ class SoundManager from Manager {
 	New(path : String) {
 		Parent();
 	}	
+
+	method : public : Load() ~ Nil {
+	}
 
 	method : public : Unload() ~ Nil {
 		

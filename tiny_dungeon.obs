@@ -9,16 +9,21 @@ class TinyDungeon {
 	@map_manager : MapManager;
 
 	New() {
+		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
+		@framework->SetClearColor(Color->New(20, 51, 6));
+
 		@sprite_manager := SpriteManager->New("./images");
 		@sound_manager := SoundManager->New("./sounds");
 		@map_manager := MapManager->New("./maps");
 	}
 
 	function : Main(args : String[]) ~ Nil {
-
+		TinyDungeon->New()->Run();
 	}
 
 	method : Run() ~ Nil {
+		@map_manager->Load();
+		
 		leaving {
 			@map_manager->Unload();
 			@sprite_manager->Unload();
@@ -64,5 +69,10 @@ class TinyDungeon {
 	}
 
 	method : Render(frame_count : Int) ~ Nil {
+	}
+
+	consts Game {
+		SCREEN_WIDTH := 800,
+		SCREEN_HEIGHT := 600
 	}
 }
