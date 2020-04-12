@@ -21,6 +21,19 @@ class TinyDungeon {
 		TinyDungeon->New()->Run();
 	}
 
+	method : Debug() ~ Nil {
+start := @map_manager->GetStart();
+y := start[0]->As(Int);
+x := start[1]->As(Int);
+
+view := @map_manager->GetView(MapManager->Direction->NORTH, y, x);
+x := view[1,0]->As(Int);
+y := view[1,1]->As(Int);
+z := view[1,2]->As(Int);
+"{$x},{$y},{$z}"->PrintLine();
+
+	}
+
 	method : Run() ~ Nil {
 		@map_manager->Load();
 
@@ -31,12 +44,9 @@ class TinyDungeon {
 		};
 
 		if(@framework->IsOk()) {
-start := @map_manager->GetStart();
-x := start[0]->As(Int);
-y := start[1]->As(Int);
-"{$x},{$y}"->PrintLine();
+			# TODO: disable me
+			Debug();
 
-			
 			frame_count := 0;
 			quit := false;
 			e := @framework->GetEvent();
