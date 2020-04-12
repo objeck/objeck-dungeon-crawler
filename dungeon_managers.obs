@@ -5,7 +5,7 @@ use Game.Framework;
 use System.IO.File;
 
 class Manager {
-	method : virtual : public : Load() ~ Nil;
+	method : virtual : public : Load() ~ Bool;
 	method : virtual : public : Unload() ~ Nil;
 }
 
@@ -32,18 +32,20 @@ Managers map operations
 ~#
 class MapManager from Manager {
 	@maps : Vector<MapHolder>;
+	@map_index : Int;
 	@path : String;
 
 	New(path : String) {
 		Parent();
-#		@map := Byte->New[Consts->SIZE, Consts->SIZE];
+		
 		@path := String->New(path);
 		@path += "/debug.map";
 		@maps := Vector->New()<MapHolder>;
 	}	
 
-	method : public : Load() ~ Nil {
-		LoadMaps();		
+	method : public : Load() ~ Bool {
+		LoadMaps();
+		return true;
 	}
 
 	method : public : LoadMaps() ~ Nil {
@@ -61,7 +63,7 @@ class MapManager from Manager {
 
 			for(i := 0; i < rows; i += 1;) {
 				line := map_file->ReadString();
-"{$i}: \t{$line}"->PrintLine();
+# "{$i}: \t{$line}"->PrintLine();
 				if(line->Size() <> cols) {
 					"--- Invalid map cols! ---"->ErrorLine();
 					Runtime->Exit(1);
@@ -89,7 +91,14 @@ class MapManager from Manager {
 	}
 
 	consts Consts {
-		SIZE := 18
+		SIZE := 18,
+		CLEAR := 0,
+		BLOCKED := 1,
+		DOOR := 2,
+		POTION := 3,
+		TRESURE := 4,
+		TRAP := 5,
+		WARP := 6
 	}
 }
 
@@ -101,7 +110,8 @@ class SpriteManager from Manager {
 		Parent();
 	}
 
-	method : public : Load() ~ Nil {
+	method : public : Load() ~ Bool {
+		return false;
 	}
 
 	method : public : Unload() ~ Nil {
@@ -117,7 +127,8 @@ class SoundManager from Manager {
 		Parent();
 	}	
 
-	method : public : Load() ~ Nil {
+	method : public : Load() ~ Bool {
+		return false;
 	}
 
 	method : public : Unload() ~ Nil {
