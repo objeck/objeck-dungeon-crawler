@@ -47,7 +47,19 @@ class MapManager from Manager {
 		return true;
 	}
 
-	method : public : LoadMaps() ~ Nil {
+	method : public : GetCurrentMap() ~ Byte[,] {
+		return @maps->Get(@map_index)->Get();
+	}
+
+	method : public : GetMapType(y : Int, x : Int) ~ MapManager->Consts {
+		if(x < 0 | x >= Consts->SIZE | y < 0 | y >= Consts->SIZE) {
+			return Consts->NONE;
+		};
+
+		return GetCurrentMap()->As(MapManager->Consts);
+	}
+
+	method : LoadMaps() ~ Nil {
 		map_file := FileReader->New(@path);
 		leaving {
 			map_file->Close();
@@ -70,13 +82,39 @@ class MapManager from Manager {
 
 				each(j : line) {
 					value := line->Get(j);
-					# TODO: translate			
-					if(value = 'S') {
-						map_start[0] := i;
-						map_start[1] := j;
+					# TODO: translate
+
+					select(value) {
+						# start
+						label 'S' {
+							map[i,j] := Consts->START;
+"{$i}, {$j}"->PrintLine();
+						}
+						# end
+						label 'E' {
+							map[i,j] := Consts->END;
+						}
+						# chest
+						label 'C' {
+							map[i,j] := Consts->CHEST;
+						}
+						# potion
+						label 'P' {
+							map[i,j] := Consts->POTION;
+						}
+						# trap
+						label 'T' {
+							map[i,j] := Consts->TRAP;
+						}
+						# warp
+						label 'W' {
+							map[i,j] := Consts->WARP;
+						}
+						# blocked
+						other: {
+							map[i,j] := Consts->BLOCKED;
+						}
 					};
-					
-					map[i,j] := value;
 				};
 			};
 
@@ -95,11 +133,12 @@ class MapManager from Manager {
 		BLOCKED := 1,
 		DOOR := 2,
 		POTION := 3,
-		TRESURE := 4,
+		CHEST := 4,
 		TRAP := 5,
 		WARP := 6,
 		START := 7,
-		END := 8
+		END := 8,
+		NONE := 9
 	}
 }
 
