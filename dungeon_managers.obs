@@ -112,10 +112,7 @@ class MapManager from Manager {
 				};
 
 				each(j : line) {
-					value := line->Get(j);
-					# TODO: translate
-
-					select(value) {
+					select(line->Get(j)) {
 						# clear
 						label '@' {
 							map[i,j] := MapManager->Type->CLEAR;
@@ -124,7 +121,6 @@ class MapManager from Manager {
 						label 'S' {
 							map[i,j] := MapManager->Type->START;
 							map_start[0] := i; map_start[1] := j;
-
 						}
 						# end
 						label 'E' {
