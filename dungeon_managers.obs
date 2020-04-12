@@ -34,12 +34,14 @@ class MapManager from Manager {
 	@maps : Vector<MapHolder>;
 	@map_index : Int;
 	@path : String;
+	@player_view : Byte[];
 
 	New(path : String) {
 		Parent();
 
 		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
+		@player_view := Byte->New[7];
 	}	
 
 	method : public : Load() ~ Bool {
@@ -52,7 +54,11 @@ class MapManager from Manager {
 	}
 
 	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Byte[] {
-		return Nil;
+		if(dir = MapManager->Direction->NORTH) {
+
+		};
+
+		return @player_view;
 	}
 
 	method : public : GetType(y : Int, x : Int) ~ MapManager->Type {
