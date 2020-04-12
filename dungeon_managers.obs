@@ -11,9 +11,9 @@ class Manager {
 
 class MapHolder {
 	@map : Byte[,];
-	@map_start : Int[];
+	@map_start : Byte[];
 
-	New(map : Byte[,], map_start : Int[]) {
+	New(map : Byte[,], map_start : Byte[]) {
 		@map := map;
 		@map_start := map_start;
 	}
@@ -22,7 +22,7 @@ class MapHolder {
 		return @map;
 	}
 
-	method : public : GetStart() ~ Int[] {
+	method : public : GetStart() ~ Byte[] {
 		return @map_start;
 	}
 }
@@ -34,14 +34,14 @@ class MapManager from Manager {
 	@maps : Vector<MapHolder>;
 	@map_index : Int;
 	@path : String;
-	@player_view : Byte[];
+	@player_view : Byte[,];
 
 	New(path : String) {
 		Parent();
 
 		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
-		@player_view := Byte->New[7];
+		@player_view := Byte->New[3, 4];
 	}	
 
 	method : public : Load() ~ Bool {
@@ -49,13 +49,35 @@ class MapManager from Manager {
 		return true;
 	}
 
+	method : public : GetStart() ~ Byte[] {
+		return @maps->Get(@map_index)->GetStart();
+	}
+
 	method : GetMap() ~ Byte[,] {
 		return @maps->Get(@map_index)->Get();
 	}
 
-	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Byte[] {
+	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Byte[,] {
 		if(dir = MapManager->Direction->NORTH) {
+			# first
+			@player_view[0,0] := GetType(y, x - 1);
+			@player_view[0,1] := GetType(y, x);
+			@player_view[0,2] := GetType(y, x + 1);
 
+			# second
+			@player_view[0,0] := GetType(y - 1, x - 1);
+			@player_view[0,1] := GetType(y - 1, x);
+			@player_view[0,2] := GetType(y - 1, x + 1);
+
+			# thrid
+			@player_view[0,0] := GetType(y - 2, x - 1);
+			@player_view[0,1] := GetType(y - 2, x);
+			@player_view[0,2] := GetType(y - 2, x + 1);
+
+			# forth
+			@player_view[0,0] := GetType(y - 3, x - 1);
+			@player_view[0,1] := GetType(y - 3, x);
+			@player_view[0,2] := GetType(y - 3, x + 1);
 		};
 
 		return @player_view;
@@ -80,7 +102,7 @@ class MapManager from Manager {
 			rows := cols := Type->SIZE;
 
 			map := Byte->New[rows, cols];
-			map_start := Int->New[2];
+			map_start := Byte->New[2];
 
 			for(i := 0; i < rows; i += 1;) {
 				line := map_file->ReadString();
@@ -101,6 +123,8 @@ class MapManager from Manager {
 						# start
 						label 'S' {
 							map[i,j] := MapManager->Type->START;
+							map_start[0] := i; map_start[1] := j;
+
 						}
 						# end
 						label 'E' {

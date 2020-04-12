@@ -23,7 +23,7 @@ class TinyDungeon {
 
 	method : Run() ~ Nil {
 		@map_manager->Load();
-		
+
 		leaving {
 			@map_manager->Unload();
 			@sprite_manager->Unload();
@@ -31,6 +31,12 @@ class TinyDungeon {
 		};
 
 		if(@framework->IsOk()) {
+start := @map_manager->GetStart();
+x := start[0]->As(Int);
+y := start[1]->As(Int);
+"{$x},{$y}"->PrintLine();
+
+			
 			frame_count := 0;
 			quit := false;
 			e := @framework->GetEvent();
@@ -69,6 +75,7 @@ class TinyDungeon {
 	}
 
 	method : Render(frame_count : Int) ~ Nil {
+#		view := @map_manager->GetView();
 	}
 
 	consts Game {
