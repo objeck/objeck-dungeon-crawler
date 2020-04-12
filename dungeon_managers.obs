@@ -8,16 +8,42 @@ class Manager {
 	method : virtual : public : Unload() ~ Nil;
 }
 
+class MapHolder {
+	@map : Byte[,];
+	@map_start : Int[];
+
+	New(map : Byte[,], map_start : Int[]) {
+		@map := map;
+		@map_start := map_start;
+	}
+
+	method : public : Get() ~ Byte[,] {	
+		return @map;
+	}
+
+	method : public : GetStart() ~ Int[] {
+		return @map_start;
+	}
+}
+
 #~
 Managers map operations
 ~#
 class MapManager from Manager {
+	@maps : Vector<MapHolder>;
+
 	New(path : String) {
 		Parent();
+#		@map := Byte->New[Consts->SIZE, Consts->SIZE];
+		@maps := Vector->New()<MapHolder>;
 	}	
 
 	method : public : Unload() ~ Nil {
 
+	}
+
+	consts Consts {
+		SIZE := 16
 	}
 }
 
