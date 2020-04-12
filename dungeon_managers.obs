@@ -31,19 +31,59 @@ Managers map operations
 ~#
 class MapManager from Manager {
 	@maps : Vector<MapHolder>;
+	@path : String;
 
 	New(path : String) {
 		Parent();
 #		@map := Byte->New[Consts->SIZE, Consts->SIZE];
+		@path := String->New(path);
+		@path += "/debug.map";
 		@maps := Vector->New()<MapHolder>;
 	}	
+
+	method : public : LoadMaps() ~ Nil {
+		map_file := FileReader->New(@path);
+		leaving {
+			map_file->Close();
+		};
+
+		end_line := map_file->ReadString();
+		while(<>end_line->StartsWith('-')) {
+			rows := cols := Consts->SIZE;
+
+			map := Byte->New[rows, cols];
+			map_start := Int->New[2];
+
+			for(i := 0; i < rows; i += 1;) {
+				line := map_file->ReadString();
+				if(line->Size() <> cols) {
+					"--- Invalid map cols! ---"->ErrorLine();
+					Runtime->Exit(1);
+				};
+
+				each(j : line) {
+					value := line->Get(j);
+					# TODO: translate			
+					if(value = 'S') {
+						map_start[0] := i;
+						map_start[1] := j;
+					};
+					
+					map[i,j] := value;
+				};
+			};
+
+			@maps->AddBack(MapHolder->New(map, map_start));
+			end_line := map_file->ReadString();
+		};
+	}
 
 	method : public : Unload() ~ Nil {
 
 	}
 
 	consts Consts {
-		SIZE := 16
+		SIZE := 18
 	}
 }
 
