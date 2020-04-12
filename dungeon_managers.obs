@@ -38,8 +38,7 @@ class MapManager from Manager {
 	New(path : String) {
 		Parent();
 		
-		@path := String->New(path);
-		@path += "/debug.map";
+		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
 	}	
 
