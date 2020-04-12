@@ -47,16 +47,20 @@ class MapManager from Manager {
 		return true;
 	}
 
-	method : public : GetCurrentMap() ~ Byte[,] {
+	method : GetMap() ~ Byte[,] {
 		return @maps->Get(@map_index)->Get();
 	}
 
-	method : public : GetMapType(y : Int, x : Int) ~ MapManager->Consts {
-		if(x < 0 | x >= Consts->SIZE | y < 0 | y >= Consts->SIZE) {
-			return Consts->NONE;
+	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Byte[] {
+		return Nil;
+	}
+
+	method : public : GetType(y : Int, x : Int) ~ MapManager->Type {
+		if(x < 0 | x >= Type->SIZE | y < 0 | y >= Type->SIZE) {
+			return Type->NONE;
 		};
 
-		return GetCurrentMap()->As(MapManager->Consts);
+		return GetMap()->As(MapManager->Type);
 	}
 
 	method : LoadMaps() ~ Nil {
@@ -67,14 +71,13 @@ class MapManager from Manager {
 
 		end_line := map_file->ReadString();
 		while(<>end_line->StartsWith('-')) {
-			rows := cols := Consts->SIZE;
+			rows := cols := Type->SIZE;
 
 			map := Byte->New[rows, cols];
 			map_start := Int->New[2];
 
 			for(i := 0; i < rows; i += 1;) {
 				line := map_file->ReadString();
-# "{$i}: \t{$line}"->PrintLine();
 				if(line->Size() <> cols) {
 					"--- Invalid map cols! ---"->ErrorLine();
 					Runtime->Exit(1);
@@ -85,34 +88,37 @@ class MapManager from Manager {
 					# TODO: translate
 
 					select(value) {
+						# clear
+						label '@' {
+							map[i,j] := MapManager->Type->CLEAR;
+						}
 						# start
 						label 'S' {
-							map[i,j] := Consts->START;
-"{$i}, {$j}"->PrintLine();
+							map[i,j] := MapManager->Type->START;
 						}
 						# end
 						label 'E' {
-							map[i,j] := Consts->END;
+							map[i,j] := MapManager->Type->END;
 						}
 						# chest
 						label 'C' {
-							map[i,j] := Consts->CHEST;
+							map[i,j] := MapManager->Type->CHEST;
 						}
 						# potion
 						label 'P' {
-							map[i,j] := Consts->POTION;
+							map[i,j] := MapManager->Type->POTION;
 						}
 						# trap
 						label 'T' {
-							map[i,j] := Consts->TRAP;
+							map[i,j] := MapManager->Type->TRAP;
 						}
 						# warp
 						label 'W' {
-							map[i,j] := Consts->WARP;
+							map[i,j] := MapManager->Type->WARP;
 						}
 						# blocked
 						other: {
-							map[i,j] := Consts->BLOCKED;
+							map[i,j] := MapManager->Type->BLOCKED;
 						}
 					};
 				};
@@ -127,7 +133,7 @@ class MapManager from Manager {
 
 	}
 
-	consts Consts {
+	consts Type {
 		SIZE := 18,
 		CLEAR := 0,
 		BLOCKED := 1,
@@ -139,6 +145,13 @@ class MapManager from Manager {
 		START := 7,
 		END := 8,
 		NONE := 9
+	}
+
+	enum Direction {
+		NORTH,
+		SOUTH,
+		EAST,
+		WEST
 	}
 }
 
