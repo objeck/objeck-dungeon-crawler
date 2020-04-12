@@ -37,7 +37,7 @@ class MapManager from Manager {
 
 	New(path : String) {
 		Parent();
-		
+
 		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
 	}	
@@ -97,7 +97,9 @@ class MapManager from Manager {
 		POTION := 3,
 		TRESURE := 4,
 		TRAP := 5,
-		WARP := 6
+		WARP := 6,
+		START := 7,
+		END := 8
 	}
 }
 
