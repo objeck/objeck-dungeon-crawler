@@ -10,7 +10,7 @@ class TinyDungeon {
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
-		@framework->SetClearColor(Color->New(34, 32, 52));
+		@framework->SetClearColor(Color->New(50, 60, 57));
 
 		@sprite_manager := SpriteManager->New("./images", @framework);
 		@sound_manager := SoundManager->New("./sounds", @framework);
@@ -107,11 +107,15 @@ class TinyDungeon {
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
 
-		@sprite_manager->GetDungeonSprites()->Render(0);
-		@sprite_manager->GetDungeonSprites()->Render(1);
-		@sprite_manager->GetDungeonSprites()->Render(2);
+		# background
+		@sprite_manager->GetDungeonSprites()->Render(20);
+
+
 		@sprite_manager->GetDungeonSprites()->Render(3);
-		@sprite_manager->GetDungeonSprites()->Render(4);
+		@sprite_manager->GetDungeonSprites()->Render(2);
+		@sprite_manager->GetDungeonSprites()->Render(9); # 1
+		@sprite_manager->GetDungeonSprites()->Render(0);
+		
 
 		@framework->Show();
 	}

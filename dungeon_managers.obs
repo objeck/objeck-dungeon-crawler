@@ -266,12 +266,13 @@ class SpriteManager from Manager {
 	method : public : Load() ~ Bool {
 		for(i := 0; i < Clips->DUNGEON_Y_CLIPS; i += 1;) {
 			for(j := 0; j < Clips->DUNGEON_X_CLIPS; j += 1;) {
-				@dungeon_sprites->AddClip(Rect->New(j * 400, i * 300, 400, 300));
+				@dungeon_sprites->AddClip(Rect->New(j * 800, i * 600, 800, 600));
 			};
 		};
 
 		@dungeon_sprites->SetTop(35);
 		@dungeon_sprites->SetLeft(35);
+		@dungeon_sprites->SetScale(0.5);
 
 		return true;
 	}
@@ -285,8 +286,8 @@ class SpriteManager from Manager {
 	}
 
 	consts Clips {
-		DUNGEON_X_CLIPS := 5,
-		DUNGEON_Y_CLIPS := 4
+		DUNGEON_X_CLIPS := 4,
+		DUNGEON_Y_CLIPS := 6
 	}
 }
 
