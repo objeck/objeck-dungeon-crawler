@@ -8,6 +8,9 @@ class TinyDungeon {
 	@sound_manager : SoundManager;
 	@map_manager : MapManager;
 
+	@player_location : Int[];
+	@player_direction : MapManager->Direction;
+
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
@@ -15,6 +18,8 @@ class TinyDungeon {
 		@sprite_manager := SpriteManager->New("./images", @framework);
 		@sound_manager := SoundManager->New("./sounds", @framework);
 		@map_manager := MapManager->New("./maps");
+
+		@player_location := Int->New[2];
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -26,7 +31,7 @@ class TinyDungeon {
 		y := start[0]; x := start[1];
 		"start: {$y},{$x}"->PrintLine();
 
-		view := @map_manager->GetView(MapManager->Direction->WEST, y, x);
+		view := @map_manager->GetView(MapManager->Direction->WEST, start);
 		x := view[2, MapManager->Side->LEFT]; 
 		y := view[2, MapManager->Side->MIDDLE]; 
 		z := view[2, MapManager->Side->RIGHT];
@@ -53,6 +58,8 @@ class TinyDungeon {
 		if(@framework->IsOk()) {
 			# TODO: disable me
 			Debug();
+
+			StartLevel();
 
 			frame_count := 0;
 			quit := false;
@@ -88,20 +95,76 @@ class TinyDungeon {
 		};
 	}
 
+	method : StartLevel() ~ Nil {
+		@player_direction := MapManager->Direction->NORTH;
+
+		start_location := @map_manager->GetStart();
+x := start_location[0]; y := start_location[1];
+"start: {$x},{$y}"->PrintLine();
+		@player_location[0] := start_location[0];
+		@player_location[1] := start_location[1];
+	}
+
 	method : GetInput(e : Event) ~ Nil {
 		select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP
         	label Scancode->SDL_SCANCODE_W {
+        		MoveForward();
         	}
 
         	label Scancode->SDL_SCANCODE_LEFT
         	label Scancode->SDL_SCANCODE_A {
+        		MoveLeft();
         	}
 
         	label Scancode->SDL_SCANCODE_RIGHT
         	label Scancode->SDL_SCANCODE_D {
+        		MoveRight();
         	}
         };
+	}
+
+	method : MoveForward() ~ Nil {
+		player_view := @map_manager->GetView(@player_direction, @player_location, true);
+		if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->CLEAR) {
+			select(@player_direction) {
+				label MapManager->Direction->NORTH {
+					@player_location[0] -= 1;
+				}
+
+				label MapManager->Direction->SOUTH {
+					@player_location[0] += 1;
+				}
+
+				label MapManager->Direction->EAST {
+					@player_location[1] += 1;
+				}
+
+				label MapManager->Direction->WEST {
+					@player_location[1] -= 1;
+				}
+			};
+		};
+	}
+
+	method : MoveLeft() ~ Nil {
+		select(@player_direction) {
+			label MapManager->Direction->NORTH {
+			}
+
+			label MapManager->Direction->SOUTH {
+			}
+
+			label MapManager->Direction->EAST {
+			}
+
+			label MapManager->Direction->WEST {
+			}
+		};
+	}
+
+	method : MoveRight() ~ Nil {
+		
 	}
 
 	method : Render(frame_count : Int) ~ Nil {

@@ -56,7 +56,9 @@ class MapManager from Manager {
 		return @maps->Get(@map_index)->Get();
 	}
 
-	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Int[,] {
+	method : public : GetView(dir : MapManager->Direction, pos : Int[], show : Bool := false) ~ Int[,] {
+		y := pos[0]; x := pos[1];
+
 		# north
 		if(dir = MapManager->Direction->NORTH) {
 			# first
@@ -146,9 +148,24 @@ class MapManager from Manager {
 			@player_view[3,2] := GetType(y + 1, x - 3);
 		};
 
+		if(show) {
+			dims := @player_view->Size();
+			for(i := dims[0] - 1; i >= 0; i -= 1;) {
+				"{$i}| "->Print();
+				for(j := 0; j < dims[1]; j += 1;) {
+					@player_view[i,j]->Print();
+					if(j + 1 < dims[1]) {
+						','->Print();
+					};
+				};
+				'\n'->Print();
+			};
+			"--------\n"->PrintLine();
+		};
+
 		return @player_view;
 	}
-
+	
 	method : public : GetType(y : Int, x : Int) ~ Int {
 		if(x < 0 | x >= Type->SIZE | y < 0 | y >= Type->SIZE) {
 			return Type->NONE;
@@ -247,6 +264,13 @@ class MapManager from Manager {
 		LEFT,
 		MIDDLE,
 		RIGHT
+	}
+
+	enum View {
+		VIEW_0,
+		VIEW_1,
+		VIEW_2,
+		VIEW_3
 	}
 }
 
