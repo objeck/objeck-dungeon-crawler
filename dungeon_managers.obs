@@ -264,12 +264,10 @@ class SpriteManager from Manager {
 	}
 
 	method : public : Load() ~ Bool {
-		for(i := 0; i < Clips->DUNGEON_X_CLIPS; i += 1;) {
-			@dungeon_sprites->AddClip(Rect->New(i * 400, 0, 400, 300));
-		};
-
-		for(i := 0; i < Clips->DUNGEON_X_CLIPS; i += 1;) {
-			@dungeon_sprites->AddClip(Rect->New(i * 400, 300, 400, 300));
+		for(i := 0; i < Clips->DUNGEON_Y_CLIPS; i += 1;) {
+			for(j := 0; j < Clips->DUNGEON_X_CLIPS; j += 1;) {
+				@dungeon_sprites->AddClip(Rect->New(j * 400, i * 300, 400, 300));
+			};
 		};
 
 		@dungeon_sprites->SetTop(35);

@@ -107,11 +107,11 @@ class TinyDungeon {
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
 
-		@sprite_manager->GetDungeonSprites()->Render(5);
-		@sprite_manager->GetDungeonSprites()->Render(6);
-		@sprite_manager->GetDungeonSprites()->Render(7);
-		@sprite_manager->GetDungeonSprites()->Render(8);
-		@sprite_manager->GetDungeonSprites()->Render(9);
+		@sprite_manager->GetDungeonSprites()->Render(0);
+		@sprite_manager->GetDungeonSprites()->Render(1);
+		@sprite_manager->GetDungeonSprites()->Render(2);
+		@sprite_manager->GetDungeonSprites()->Render(3);
+		@sprite_manager->GetDungeonSprites()->Render(4);
 
 		@framework->Show();
 	}
