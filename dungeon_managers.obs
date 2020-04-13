@@ -365,7 +365,7 @@ class SpriteManager from Manager {
 	New(path : String, framework : GameFramework) {
 		Parent();
 		@framework := framework;
-		@dungeon_sprites := @framework->AddAnimatedImageSprite("./images/dungeon.png");
+		@dungeon_sprites := @framework->AddAnimatedImageSprite("{$path}/dungeon.png");
 	}
 
 	method : public : Load() ~ Bool {
