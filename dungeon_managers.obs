@@ -101,8 +101,51 @@ class MapManager from Manager {
 			@player_view[3,0] := GetType(y + 3, x - 1);
 			@player_view[3,1] := GetType(y + 3, x);
 			@player_view[3,2] := GetType(y + 3, x + 1);
-		};
+		}
+		# east
+		else if(dir = MapManager->Direction->EAST) {
+			# first
+			@player_view[0,0] := GetType(y - 1, x);
+			@player_view[0,1] := GetType(y, x);
+			@player_view[0,2] := GetType(y + 1, x);
 
+			# second
+			@player_view[1,0] := GetType(y - 1, x + 1);
+			@player_view[1,1] := GetType(y, x + 1);
+			@player_view[1,2] := GetType(y + 1, x + 1);
+
+			# thrid
+			@player_view[2,0] := GetType(y - 1 , x + 2);
+			@player_view[2,1] := GetType(y, x + 2);
+			@player_view[2,2] := GetType(y + 1, x + 2);
+
+			# forth
+			@player_view[3,0] := GetType(y - 1, x + 3);
+			@player_view[3,1] := GetType(y, x + 3);
+			@player_view[3,2] := GetType(y + 1, x + 3);
+		}
+		# west
+		else {
+			# first
+			@player_view[0,0] := GetType(y - 1, x);
+			@player_view[0,1] := GetType(y, x);
+			@player_view[0,2] := GetType(y + 1, x);
+
+			# second
+			@player_view[1,0] := GetType(y - 1, x - 1);
+			@player_view[1,1] := GetType(y, x - 1);
+			@player_view[1,2] := GetType(y + 1, x - 1);
+
+			# thrid
+			@player_view[2,0] := GetType(y - 1 , x - 2);
+			@player_view[2,1] := GetType(y, x - 2);
+			@player_view[2,2] := GetType(y + 1, x - 2);
+
+			# forth
+			@player_view[3,0] := GetType(y - 1, x - 3);
+			@player_view[3,1] := GetType(y, x - 3);
+			@player_view[3,2] := GetType(y + 1, x - 3);
+		};
 
 		return @player_view;
 	}
@@ -184,13 +227,13 @@ class MapManager from Manager {
 		SIZE := 18,
 		BLOCKED := 0,
 		CLEAR := 1,
-		START := 7,
-		END := 8,
-		DOOR := 2,
-		POTION := 3,
-		CHEST := 4,
-		TRAP := 5,
-		WARP := 6,
+		START := 2,
+		END := 3,
+		DOOR := 4,
+		POTION := 5,
+		CHEST := 6,
+		TRAP := 7,
+		WARP := 8,
 		NONE := 9
 	}
 
@@ -199,6 +242,12 @@ class MapManager from Manager {
 		SOUTH,
 		EAST,
 		WEST
+	}
+
+	enum Side {
+		LEFT,
+		MIDDLE,
+		RIGHT
 	}
 }
 

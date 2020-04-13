@@ -26,8 +26,10 @@ start := @map_manager->GetStart();
 y := start[0]; x := start[1];
 "start: {$y},{$x}"->PrintLine();
 
-view := @map_manager->GetView(MapManager->Direction->SOUTH, y, x);
-x := view[3,0]; y := view[3,1]; z := view[3,2];
+view := @map_manager->GetView(MapManager->Direction->WEST, y, x);
+x := view[2, MapManager->Side->LEFT]; 
+y := view[2, MapManager->Side->MIDDLE]; 
+z := view[2, MapManager->Side->RIGHT];
 "test: {$x},{$y},{$z}"->PrintLine();
 
 	}
