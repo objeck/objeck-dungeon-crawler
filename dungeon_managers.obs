@@ -56,7 +56,7 @@ class MapManager from Manager {
 		return @maps->Get(@map_index)->Get();
 	}
 
-	method : public : GetView(dir : MapManager->Direction, pos : Int[], show : Bool := false) ~ Int[,] {
+	method : public : GetView(dir : MapManager->Direction, pos : Int[], print : Bool := false) ~ Int[,] {
 		y := pos[0]; x := pos[1];
 
 		# north
@@ -148,7 +148,7 @@ class MapManager from Manager {
 			@player_view[3,2] := GetType(y + 1, x - 3);
 		};
 
-		if(show) {
+		if(print) {
 			dims := @player_view->Size();
 			for(i := dims[0] - 1; i >= 0; i -= 1;) {
 				"{$i}| "->Print();
@@ -237,6 +237,82 @@ class MapManager from Manager {
 	}
 
 	method : public : Unload() ~ Nil {
+	}
+
+	method : public : PrintMap(player_dir : Direction, player_pos : Int[]) ~ Nil {
+		map := GetMap();
+		map_dimensions := map->Size();
+
+		player_y := player_pos[0];
+		player_x := player_pos[1];
+		
+		for(i := 0; i < map_dimensions[0]; i += 1;) {
+			for(j := 0; j < map_dimensions[0]; j += 1;) {
+				
+				out : Char;
+				if(i = player_y & j = player_x) {
+					select(player_dir) {
+	        			label Direction->NORTH {
+	        				out := '↑';
+	        			}
+
+	        			label Direction->SOUTH {
+	        				out := '↓';
+	        			}
+
+	        			label Direction->EAST {
+	        				out := '→';
+	        			}
+
+	        			label Direction->WEST {
+	        				out := '←';
+	        			}
+	        		};
+				}
+				else {
+					select(map[i,j]) {
+						label Type->BLOCKED {
+							out := '+';
+						}
+
+						label Type->CLEAR {
+							out := '@';
+						}
+
+						label Type->START {
+							out := 'S';
+						}
+
+						label Type->END {
+							out := 'S';
+						}
+
+						label Type->DOOR {
+							out := 'D';
+						}
+
+						label Type->POTION {
+							out := 'P';
+						}
+
+						label Type->CHEST {
+							out := 'C';
+						}
+
+						label Type->TRAP {
+							out := 'T';
+						}
+
+						label Type->WARP {
+							out := 'W';
+						}
+					};
+				};
+				"{$out} "->Print();
+			};
+			"\n"->Print();
+		};
+		"--- {$player_x},{$player_y} ---\n"->PrintLine();
 	}
 
 	consts Type {

@@ -1388,7 +1388,7 @@ class Maps {
 			};
 			"\n"->Print();
 		};
-		"--- {$player_x},{$player_y} ---\n"->PrintLine();
+		"--- {$player_y},{$player_x} ---\n"->PrintLine();
 	}
 }
 
@@ -1408,12 +1408,7 @@ enum MapType {
 	POTION
 }
 
-enum EntityType {
-	PERSON,
-	SLIME,
-	RAT,
-	SKELETON
-}
+
 
 enum Direction {
 	NORTH,

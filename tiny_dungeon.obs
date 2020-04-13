@@ -26,18 +26,6 @@ class TinyDungeon {
 		TinyDungeon->New()->Run();
 	}
 
-	method : Debug() ~ Nil {
-		start := @map_manager->GetStart();
-		y := start[0]; x := start[1];
-		"start: {$y},{$x}"->PrintLine();
-
-		view := @map_manager->GetView(MapManager->Direction->WEST, start);
-		x := view[2, MapManager->Side->LEFT]; 
-		y := view[2, MapManager->Side->MIDDLE]; 
-		z := view[2, MapManager->Side->RIGHT];
-		"test: {$x},{$y},{$z}"->PrintLine();
-	}
-
 	method : Run() ~ Nil {
 		if(<>@map_manager->Load()) {
 			"--- Unable to load maps! ---"->ErrorLine();
@@ -56,9 +44,6 @@ class TinyDungeon {
 		};
 
 		if(@framework->IsOk()) {
-			# TODO: disable me
-			Debug();
-
 			StartLevel();
 
 			frame_count := 0;
@@ -99,10 +84,13 @@ class TinyDungeon {
 		@player_direction := MapManager->Direction->NORTH;
 
 		start_location := @map_manager->GetStart();
-x := start_location[0]; y := start_location[1];
-"start: {$x},{$y}"->PrintLine();
+		x := start_location[0]; y := start_location[1];
+		"start: {$x},{$y}"->PrintLine();
+
 		@player_location[0] := start_location[0];
 		@player_location[1] := start_location[1];
+
+@map_manager->PrintMap(@player_direction, @player_location);		
 	}
 
 	method : GetInput(e : Event) ~ Nil {
@@ -145,6 +133,8 @@ x := start_location[0]; y := start_location[1];
 				}
 			};
 		};
+		
+@map_manager->PrintMap(@player_direction, @player_location);
 	}
 
 	method : MoveLeft() ~ Nil {
