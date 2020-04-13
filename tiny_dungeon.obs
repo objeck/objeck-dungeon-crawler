@@ -10,10 +10,10 @@ class TinyDungeon {
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
-		@framework->SetClearColor(Color->New(20, 51, 6));
+		@framework->SetClearColor(Color->New(34, 32, 52));
 
-		@sprite_manager := SpriteManager->New("./images");
-		@sound_manager := SoundManager->New("./sounds");
+		@sprite_manager := SpriteManager->New("./images", @framework);
+		@sound_manager := SoundManager->New("./sounds", @framework);
 		@map_manager := MapManager->New("./maps");
 	}
 
@@ -36,6 +36,11 @@ class TinyDungeon {
 	method : Run() ~ Nil {
 		if(<>@map_manager->Load()) {
 			"--- Unable to load maps! ---"->ErrorLine();
+			return;
+		};
+
+		if(<>@sprite_manager->Load()) {
+			"--- Unable to load sprites! ---"->ErrorLine();
 			return;
 		};
 
@@ -100,7 +105,15 @@ class TinyDungeon {
 	}
 
 	method : Render(frame_count : Int) ~ Nil {
-#		view := @map_manager->GetView();
+		@framework->Clear();
+
+		@sprite_manager->GetDungeonSprites()->Render(5);
+		@sprite_manager->GetDungeonSprites()->Render(6);
+		@sprite_manager->GetDungeonSprites()->Render(7);
+		@sprite_manager->GetDungeonSprites()->Render(8);
+		@sprite_manager->GetDungeonSprites()->Render(9);
+
+		@framework->Show();
 	}
 
 	consts Game {

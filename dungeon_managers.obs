@@ -254,16 +254,41 @@ class MapManager from Manager {
 Managers sprite images
 ~#
 class SpriteManager from Manager {
-	New(path : String) {
+	@framework : GameFramework;
+	@dungeon_sprites : AnimatedImageSprite;
+
+	New(path : String, framework : GameFramework) {
 		Parent();
+		@framework := framework;
+		@dungeon_sprites := @framework->AddAnimatedImageSprite("./images/dungeon.png");
 	}
 
 	method : public : Load() ~ Bool {
-		return false;
+		for(i := 0; i < Clips->DUNGEON_X_CLIPS; i += 1;) {
+			@dungeon_sprites->AddClip(Rect->New(i * 400, 0, 400, 300));
+		};
+
+		for(i := 0; i < Clips->DUNGEON_X_CLIPS; i += 1;) {
+			@dungeon_sprites->AddClip(Rect->New(i * 400, 300, 400, 300));
+		};
+
+		@dungeon_sprites->SetTop(35);
+		@dungeon_sprites->SetLeft(35);
+
+		return true;
+	}
+
+	method : public : GetDungeonSprites() ~ AnimatedImageSprite {
+		return @dungeon_sprites;
 	}
 
 	method : public : Unload() ~ Nil {
 		
+	}
+
+	consts Clips {
+		DUNGEON_X_CLIPS := 5,
+		DUNGEON_Y_CLIPS := 4
 	}
 }
 
@@ -271,8 +296,11 @@ class SpriteManager from Manager {
 Managers sound assets
 ~#
 class SoundManager from Manager {
-	New(path : String) {
+	@dungeon_sprites : AnimatedImageSprite;
+
+	New(path : String, framework : GameFramework) {
 		Parent();
+		@framework := framework;
 	}	
 
 	method : public : Load() ~ Bool {
