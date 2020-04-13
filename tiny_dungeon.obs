@@ -84,6 +84,19 @@ class TinyDungeon {
 	}
 
 	method : GetInput(e : Event) ~ Nil {
+		select(e->GetKey()->GetKeysym()->GetScancode()) {
+        	label Scancode->SDL_SCANCODE_UP
+        	label Scancode->SDL_SCANCODE_W {
+        	}
+
+        	label Scancode->SDL_SCANCODE_LEFT
+        	label Scancode->SDL_SCANCODE_A {
+        	}
+
+        	label Scancode->SDL_SCANCODE_RIGHT
+        	label Scancode->SDL_SCANCODE_D {
+        	}
+        };
 	}
 
 	method : Render(frame_count : Int) ~ Nil {
