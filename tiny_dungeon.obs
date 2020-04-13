@@ -23,14 +23,12 @@ class TinyDungeon {
 
 	method : Debug() ~ Nil {
 start := @map_manager->GetStart();
-y := start[0]->As(Int);
-x := start[1]->As(Int);
+y := start[0]; x := start[1];
+"start: {$y},{$x}"->PrintLine();
 
-view := @map_manager->GetView(MapManager->Direction->NORTH, y, x);
-x := view[1,0]->As(Int);
-y := view[1,1]->As(Int);
-z := view[1,2]->As(Int);
-"{$x},{$y},{$z}"->PrintLine();
+view := @map_manager->GetView(MapManager->Direction->SOUTH, y, x);
+x := view[3,0]; y := view[3,1]; z := view[3,2];
+"test: {$x},{$y},{$z}"->PrintLine();
 
 	}
 

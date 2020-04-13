@@ -11,9 +11,9 @@ class Manager {
 
 class MapHolder {
 	@map : Byte[,];
-	@map_start : Byte[];
+	@map_start : Int[];
 
-	New(map : Byte[,], map_start : Byte[]) {
+	New(map : Byte[,], map_start : Int[]) {
 		@map := map;
 		@map_start := map_start;
 	}
@@ -22,7 +22,7 @@ class MapHolder {
 		return @map;
 	}
 
-	method : public : GetStart() ~ Byte[] {
+	method : public : GetStart() ~ Int[] {
 		return @map_start;
 	}
 }
@@ -34,14 +34,14 @@ class MapManager from Manager {
 	@maps : Vector<MapHolder>;
 	@map_index : Int;
 	@path : String;
-	@player_view : Byte[,];
+	@player_view : Int[,];
 
 	New(path : String) {
 		Parent();
 
 		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
-		@player_view := Byte->New[3, 4];
+		@player_view := Int->New[4, 3];
 	}	
 
 	method : public : Load() ~ Bool {
@@ -49,7 +49,7 @@ class MapManager from Manager {
 		return true;
 	}
 
-	method : public : GetStart() ~ Byte[] {
+	method : public : GetStart() ~ Int[] {
 		return @maps->Get(@map_index)->GetStart();
 	}
 
@@ -57,17 +57,15 @@ class MapManager from Manager {
 		return @maps->Get(@map_index)->Get();
 	}
 
-	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Byte[,] {
+	method : public : GetView(dir : MapManager->Direction,  y : Int, x : Int) ~ Int[,] {
+		# north
 		if(dir = MapManager->Direction->NORTH) {
-"{$x},{$y}"->PrintLine();			
 			# first
 			@player_view[0,0] := GetType(y, x - 1);
 			@player_view[0,1] := GetType(y, x);
 			@player_view[0,2] := GetType(y, x + 1);
 
 			# second
-foo := GetType(11,5)->As(Int);
-"foo: {$foo}"->PrintLine();
 			@player_view[1,0] := GetType(y - 1, x - 1);
 			@player_view[1,1] := GetType(y - 1, x);
 			@player_view[1,2] := GetType(y - 1, x + 1);
@@ -81,18 +79,41 @@ foo := GetType(11,5)->As(Int);
 			@player_view[3,0] := GetType(y - 3, x - 1);
 			@player_view[3,1] := GetType(y - 3, x);
 			@player_view[3,2] := GetType(y - 3, x + 1);
+		}
+		# south
+		else if(dir = MapManager->Direction->SOUTH) {
+			# first
+			@player_view[0,0] := GetType(y, x - 1);
+			@player_view[0,1] := GetType(y, x);
+			@player_view[0,2] := GetType(y, x + 1);
+
+			# second
+			@player_view[1,0] := GetType(y + 1, x - 1);
+			@player_view[1,1] := GetType(y + 1, x);
+			@player_view[1,2] := GetType(y + 1, x + 1);
+
+			# thrid
+			@player_view[2,0] := GetType(y + 2, x - 1);
+			@player_view[2,1] := GetType(y + 2, x);
+			@player_view[2,2] := GetType(y + 2, x + 1);
+
+			# forth
+			@player_view[3,0] := GetType(y + 3, x - 1);
+			@player_view[3,1] := GetType(y + 3, x);
+			@player_view[3,2] := GetType(y + 3, x + 1);
 		};
+
 
 		return @player_view;
 	}
 
-	method : public : GetType(y : Int, x : Int) ~ Byte {
+	method : public : GetType(y : Int, x : Int) ~ Int {
 		if(x < 0 | x >= Type->SIZE | y < 0 | y >= Type->SIZE) {
 			return Type->NONE;
 		};
 
 		map := GetMap();
-		return map[y, x];
+		return map[y, x]->As(Int);
 	}
 
 	method : LoadMaps() ~ Nil {
@@ -106,7 +127,7 @@ foo := GetType(11,5)->As(Int);
 			rows := cols := Type->SIZE;
 
 			map := Byte->New[rows, cols];
-			map_start := Byte->New[2];
+			map_start := Int->New[2];
 
 			for(i := 0; i < rows; i += 1;) {
 				line := map_file->ReadString();
@@ -119,7 +140,6 @@ foo := GetType(11,5)->As(Int);
 					select(line->Get(j)) {
 						# clear
 						label '@' {
-"clear: {$i},{$j}"->PrintLine();
 							map[i,j] := MapManager->Type->CLEAR;
 						}
 						# start
@@ -147,10 +167,6 @@ foo := GetType(11,5)->As(Int);
 						label 'W' {
 							map[i,j] := MapManager->Type->WARP;
 						}
-						# blocked
-						other: {
-							map[i,j] := MapManager->Type->BLOCKED;
-						}
 					};
 				};
 			};
@@ -166,15 +182,15 @@ foo := GetType(11,5)->As(Int);
 
 	consts Type {
 		SIZE := 18,
-		CLEAR := 0,
-		BLOCKED := 1,
+		BLOCKED := 0,
+		CLEAR := 1,
+		START := 7,
+		END := 8,
 		DOOR := 2,
 		POTION := 3,
 		CHEST := 4,
 		TRAP := 5,
 		WARP := 6,
-		START := 7,
-		END := 8,
 		NONE := 9
 	}
 
