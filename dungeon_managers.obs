@@ -203,7 +203,7 @@ class MapManager from Manager {
 					select(line->Get(j)) {
 						# clear
 						label '@' {
-							map[i,j] := MapManager->Type->CLEAR;
+							map[i,j] := MapManager->Type->OPEN;
 						}
 						# start
 						label 'S' {
@@ -280,7 +280,7 @@ class MapManager from Manager {
 							out := '+';
 						}
 
-						label Type->CLEAR {
+						label Type->OPEN {
 							out := '@';
 						}
 
@@ -317,13 +317,13 @@ class MapManager from Manager {
 			};
 			"\n"->Print();
 		};
-		"--- {$player_x},{$player_y} ---\n"->PrintLine();
+		"--- Player: y={$player_y}, x={$player_x} ---\n"->PrintLine();
 	}
 
 	consts Type {
 		SIZE := 18,
 		BLOCKED := 0,
-		CLEAR := 1,
+		OPEN := 1,
 		START := 2,
 		END := 3,
 		DOOR := 4,
