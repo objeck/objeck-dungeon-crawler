@@ -45,8 +45,7 @@ class MapManager from Manager {
 	}	
 
 	method : public : Load() ~ Bool {
-		LoadMaps();
-		return true;
+		return LoadMaps();
 	}
 
 	method : public : GetStart() ~ Int[] {
@@ -159,7 +158,7 @@ class MapManager from Manager {
 		return map[y, x]->As(Int);
 	}
 
-	method : LoadMaps() ~ Nil {
+	method : LoadMaps() ~ Bool {
 		map_file := FileReader->New(@path);
 		leaving {
 			map_file->Close();
@@ -175,8 +174,7 @@ class MapManager from Manager {
 			for(i := 0; i < rows; i += 1;) {
 				line := map_file->ReadString();
 				if(line->Size() <> cols) {
-					"--- Invalid map cols! ---"->ErrorLine();
-					Runtime->Exit(1);
+					return false;
 				};
 
 				each(j : line) {
@@ -217,10 +215,11 @@ class MapManager from Manager {
 			@maps->AddBack(MapHolder->New(map, map_start));
 			end_line := map_file->ReadString();
 		};
+
+		return true;
 	}
 
 	method : public : Unload() ~ Nil {
-
 	}
 
 	consts Type {

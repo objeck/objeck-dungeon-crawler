@@ -22,20 +22,22 @@ class TinyDungeon {
 	}
 
 	method : Debug() ~ Nil {
-start := @map_manager->GetStart();
-y := start[0]; x := start[1];
-"start: {$y},{$x}"->PrintLine();
+		start := @map_manager->GetStart();
+		y := start[0]; x := start[1];
+		"start: {$y},{$x}"->PrintLine();
 
-view := @map_manager->GetView(MapManager->Direction->WEST, y, x);
-x := view[2, MapManager->Side->LEFT]; 
-y := view[2, MapManager->Side->MIDDLE]; 
-z := view[2, MapManager->Side->RIGHT];
-"test: {$x},{$y},{$z}"->PrintLine();
-
+		view := @map_manager->GetView(MapManager->Direction->WEST, y, x);
+		x := view[2, MapManager->Side->LEFT]; 
+		y := view[2, MapManager->Side->MIDDLE]; 
+		z := view[2, MapManager->Side->RIGHT];
+		"test: {$x},{$y},{$z}"->PrintLine();
 	}
 
 	method : Run() ~ Nil {
-		@map_manager->Load();
+		if(<>@map_manager->Load()) {
+			"--- Unable to load maps! ---"->ErrorLine();
+			return;
+		};
 
 		leaving {
 			@map_manager->Unload();
@@ -89,7 +91,7 @@ z := view[2, MapManager->Side->RIGHT];
 	}
 
 	consts Game {
-		SCREEN_WIDTH := 800,
-		SCREEN_HEIGHT := 600
+		SCREEN_WIDTH := 1280,
+		SCREEN_HEIGHT := 720
 	}
 }
