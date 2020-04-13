@@ -1,3 +1,8 @@
+#~
+Tiny Dungeon Crawler
+Copyright (c) 2020 Randy Hollines
+~#
+
 use System.Concurrency;
 use Collection.Generic;
 use Game.SDL2;
