@@ -42,6 +42,8 @@ class TinyDungeon {
 			return;
 		};
 
+		# TODO: add sound manager
+
 		leaving {
 			@map_manager->Unload();
 			@sprite_manager->Unload();
