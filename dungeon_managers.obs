@@ -89,24 +89,24 @@ class MapManager from Manager {
 		# south
 		else if(dir = MapManager->Direction->SOUTH) {
 			# first
-			@player_view[0,0] := GetType(y, x - 1);
+			@player_view[0,0] := GetType(y, x + 1);
 			@player_view[0,1] := GetType(y, x);
-			@player_view[0,2] := GetType(y, x + 1);
+			@player_view[0,2] := GetType(y, x - 1);
 
 			# second
-			@player_view[1,0] := GetType(y + 1, x - 1);
+			@player_view[1,0] := GetType(y + 1, x + 1);
 			@player_view[1,1] := GetType(y + 1, x);
-			@player_view[1,2] := GetType(y + 1, x + 1);
+			@player_view[1,2] := GetType(y + 1, x - 1);
 
 			# thrid
-			@player_view[2,0] := GetType(y + 2, x - 1);
+			@player_view[2,0] := GetType(y + 2, x + 1);
 			@player_view[2,1] := GetType(y + 2, x);
-			@player_view[2,2] := GetType(y + 2, x + 1);
+			@player_view[2,2] := GetType(y + 2, x - 1);
 
 			# forth
-			@player_view[3,0] := GetType(y + 3, x - 1);
+			@player_view[3,0] := GetType(y + 3, x + 1);
 			@player_view[3,1] := GetType(y + 3, x);
-			@player_view[3,2] := GetType(y + 3, x + 1);
+			@player_view[3,2] := GetType(y + 3, x - 1);
 		}
 		# east
 		else if(dir = MapManager->Direction->EAST) {

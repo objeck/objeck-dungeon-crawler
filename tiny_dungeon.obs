@@ -146,11 +146,11 @@ class TinyDungeon {
 
 	method : native : UpdateView() ~ Nil {
 		is_blocked := false;
-		player_view := @map_manager->GetView(@player_direction, @player_location, true);
+		player_view := @map_manager->GetView(@player_direction, @player_location);
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
 		};
-		
+
 		# --- View 0 ---
 		if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) & 
 			IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->LEFT]) & 				
