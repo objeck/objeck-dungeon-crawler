@@ -133,24 +133,24 @@ class MapManager from Manager {
 		# west
 		else {
 			# first
-			@player_view[0,0] := GetType(y - 1, x);
+			@player_view[0,0] := GetType(y + 1, x);
 			@player_view[0,1] := GetType(y, x);
-			@player_view[0,2] := GetType(y + 1, x);
+			@player_view[0,2] := GetType(y - 1, x);
 
 			# second
-			@player_view[1,0] := GetType(y - 1, x - 1);
+			@player_view[1,0] := GetType(y + 1, x - 1);
 			@player_view[1,1] := GetType(y, x - 1);
-			@player_view[1,2] := GetType(y + 1, x - 1);
+			@player_view[1,2] := GetType(y - 1, x - 1);
 
 			# thrid
-			@player_view[2,0] := GetType(y - 1 , x - 2);
+			@player_view[2,0] := GetType(y + 1, x - 2);
 			@player_view[2,1] := GetType(y, x - 2);
-			@player_view[2,2] := GetType(y + 1, x - 2);
+			@player_view[2,2] := GetType(y - 1 , x - 2);
 
 			# forth
-			@player_view[3,0] := GetType(y - 1, x - 3);
+			@player_view[3,0] := GetType(y + 1, x - 3);
 			@player_view[3,1] := GetType(y, x - 3);
-			@player_view[3,2] := GetType(y + 1, x - 3);
+			@player_view[3,2] := GetType(y - 1, x - 3);
 		};
 
 		if(print) {
