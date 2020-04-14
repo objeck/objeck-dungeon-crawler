@@ -46,7 +46,7 @@ class MapManager from Manager {
 
 		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
-		@player_view := Int->New[4, 3];
+		@player_view := Int->New[5, 3];
 	}	
 
 	method : public : Load() ~ Bool {
@@ -76,7 +76,7 @@ class MapManager from Manager {
 			@player_view[1,1] := GetType(y - 1, x);
 			@player_view[1,2] := GetType(y - 1, x + 1);
 
-			# thrid
+			# third
 			@player_view[2,0] := GetType(y - 2, x - 1);
 			@player_view[2,1] := GetType(y - 2, x);
 			@player_view[2,2] := GetType(y - 2, x + 1);
@@ -85,6 +85,11 @@ class MapManager from Manager {
 			@player_view[3,0] := GetType(y - 3, x - 1);
 			@player_view[3,1] := GetType(y - 3, x);
 			@player_view[3,2] := GetType(y - 3, x + 1);
+
+			# fifth
+			@player_view[4,0] := GetType(y - 4, x - 1);
+			@player_view[4,1] := GetType(y - 4, x);
+			@player_view[4,2] := GetType(y - 4, x + 1);
 		}
 		# south
 		else if(dir = MapManager->Direction->SOUTH) {
@@ -98,7 +103,7 @@ class MapManager from Manager {
 			@player_view[1,1] := GetType(y + 1, x);
 			@player_view[1,2] := GetType(y + 1, x - 1);
 
-			# thrid
+			# third
 			@player_view[2,0] := GetType(y + 2, x + 1);
 			@player_view[2,1] := GetType(y + 2, x);
 			@player_view[2,2] := GetType(y + 2, x - 1);
@@ -107,6 +112,11 @@ class MapManager from Manager {
 			@player_view[3,0] := GetType(y + 3, x + 1);
 			@player_view[3,1] := GetType(y + 3, x);
 			@player_view[3,2] := GetType(y + 3, x - 1);
+
+			# fifth
+			@player_view[4,0] := GetType(y + 4, x + 1);
+			@player_view[4,1] := GetType(y + 4, x);
+			@player_view[4,2] := GetType(y + 4, x - 1);
 		}
 		# east
 		else if(dir = MapManager->Direction->EAST) {
@@ -120,7 +130,7 @@ class MapManager from Manager {
 			@player_view[1,1] := GetType(y, x + 1);
 			@player_view[1,2] := GetType(y + 1, x + 1);
 
-			# thrid
+			# third
 			@player_view[2,0] := GetType(y - 1 , x + 2);
 			@player_view[2,1] := GetType(y, x + 2);
 			@player_view[2,2] := GetType(y + 1, x + 2);
@@ -129,6 +139,11 @@ class MapManager from Manager {
 			@player_view[3,0] := GetType(y - 1, x + 3);
 			@player_view[3,1] := GetType(y, x + 3);
 			@player_view[3,2] := GetType(y + 1, x + 3);
+
+			# fifth
+			@player_view[4,0] := GetType(y - 1, x + 4);
+			@player_view[4,1] := GetType(y, x + 4);
+			@player_view[4,2] := GetType(y + 1, x + 4);
 		}
 		# west
 		else {
@@ -142,7 +157,7 @@ class MapManager from Manager {
 			@player_view[1,1] := GetType(y, x - 1);
 			@player_view[1,2] := GetType(y - 1, x - 1);
 
-			# thrid
+			# third
 			@player_view[2,0] := GetType(y + 1, x - 2);
 			@player_view[2,1] := GetType(y, x - 2);
 			@player_view[2,2] := GetType(y - 1 , x - 2);
@@ -151,6 +166,11 @@ class MapManager from Manager {
 			@player_view[3,0] := GetType(y + 1, x - 3);
 			@player_view[3,1] := GetType(y, x - 3);
 			@player_view[3,2] := GetType(y - 1, x - 3);
+
+			# fifth
+			@player_view[4,0] := GetType(y + 1, x - 4);
+			@player_view[4,1] := GetType(y, x - 4);
+			@player_view[4,2] := GetType(y - 1, x - 4);
 		};
 
 		if(print) {
@@ -351,7 +371,8 @@ class MapManager from Manager {
 		VIEW_0,
 		VIEW_1,
 		VIEW_2,
-		VIEW_3
+		VIEW_3,
+		VIEW_4
 	}
 }
 

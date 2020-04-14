@@ -261,6 +261,11 @@ class TinyDungeon {
 			};
 		};
 
+		if(<>is_blocked & <>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {				
+			@dungeon_views[4] := 16;
+"--- V4: Blocked"->PrintLine();
+		}; 			
+
 		#TOOD: remove me
         @map_manager->PrintMap(@player_direction, @player_location);
 	}
