@@ -144,8 +144,13 @@ class TinyDungeon {
 		};
 	}
 
-	method : UpdateView() ~ Nil {
+	method : native : UpdateView() ~ Nil {
+		done := false;
 		player_view := @map_manager->GetView(@player_direction, @player_location, true);
+
+		each(i : @dungeon_views) {
+			@dungeon_views[i] := -1;
+		};
 
 		# --- View 0 ---
 		if(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
@@ -170,97 +175,101 @@ class TinyDungeon {
 		};
 
 		# --- View 1 ---
-		done := false;
-		if(IsVisible(MapManager->View->VIEW_1, player_view)) {
-			if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
-					player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT] = MapManager->Type->OPEN & 				
-					player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
-"--- V1: Open to left and right ---"->PrintLine();
-				@dungeon_views[1] := 14;
-			}
-			else if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->OPEN &
-					player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT] = MapManager->Type->OPEN) {
-"--- V1: Open to left ---"->PrintLine();
-				@dungeon_views[1] := 10;
-			}
-			else if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
-					player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
-"--- V1: Open to right ---"->PrintLine();
-				@dungeon_views[1] := 6;
+		
+		if(<>done) {
+			if(IsVisible(MapManager->View->VIEW_1, player_view)) {
+				if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
+						player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT] = MapManager->Type->OPEN & 				
+						player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
+	"--- V1: Open to left and right ---"->PrintLine();
+					@dungeon_views[1] := 14;
+				}
+				else if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->OPEN &
+						player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT] = MapManager->Type->OPEN) {
+	"--- V1: Open to left ---"->PrintLine();
+					@dungeon_views[1] := 10;
+				}
+				else if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
+						player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
+	"--- V1: Open to right ---"->PrintLine();
+					@dungeon_views[1] := 6;
+				}
+				else {
+	"--- V1: Enclosed ---"->PrintLine();
+					@dungeon_views[1] := 2;
+				};
 			}
 			else {
-"--- V1: Enclosed ---"->PrintLine();
-				@dungeon_views[1] := 2;
+	"-- BG 0 --"->PrintLine();
+				@dungeon_views[4] := 19;
+				done := true;
 			};
-		}
-		else {
-			@dungeon_views[1] := -1;
-			@dungeon_views[2] := -1;
-			@dungeon_views[3] := -1;
-			@dungeon_views[4] := 19;
-			done := true;
 		};
 
 			# --- View 2 ---
-		if(<>done & IsVisible(MapManager->View->VIEW_2, player_view)) {
-			if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
-					player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT] = MapManager->Type->OPEN & 				
-					player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
-"--- V2: Open to left and right ---"->PrintLine();
-				@dungeon_views[2] := 13;
-			}
-			else if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->OPEN &
-					player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT] = MapManager->Type->OPEN) {
-"--- V2: Open to left ---"->PrintLine();
-				@dungeon_views[2] := 9;
-			}
-			else if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
-					player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
-"--- V2: Open to right ---"->PrintLine();
-				@dungeon_views[2] := 5;
+		if(<>done) {
+			if(IsVisible(MapManager->View->VIEW_2, player_view)) {
+				if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
+						player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT] = MapManager->Type->OPEN & 				
+						player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
+	"--- V2: Open to left and right ---"->PrintLine();
+					@dungeon_views[2] := 13;
+				}
+				else if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->OPEN &
+						player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT] = MapManager->Type->OPEN) {
+	"--- V2: Open to left ---"->PrintLine();
+					@dungeon_views[2] := 9;
+				}
+				else if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
+						player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
+	"--- V2: Open to right ---"->PrintLine();
+					@dungeon_views[2] := 5;
+				}
+				else {
+	"--- V2: Enclosed ---"->PrintLine();
+					@dungeon_views[2] := 1;
+				};
 			}
 			else {
-"--- V2: Enclosed ---"->PrintLine();
-				@dungeon_views[2] := 1;
+	"-- BG 1 --"->PrintLine();			
+				@dungeon_views[4] := 18;
+				done := true;
 			};
-		}
-		else {
-			@dungeon_views[2] := -1;
-			@dungeon_views[3] := -1;
-			@dungeon_views[4] := 18;
-			done := true;
 		};
 
 		# --- View 3 ---
-		if(<>done & IsVisible(MapManager->View->VIEW_3, player_view)) {
-			if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
-					player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT] = MapManager->Type->OPEN & 				
-					player_view[MapManager->View->VIEW_3, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
-"--- V3: Open to left and right ---"->PrintLine();
-				@dungeon_views[3] := 12;
-			}
-			else if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->OPEN &
-					player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT] = MapManager->Type->OPEN) {
-"--- V3: Open to left ---"->PrintLine();
-				@dungeon_views[3] := 8;
-			}
-			else if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
-					player_view[MapManager->View->VIEW_3, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
-"--- V3: Open to right ---"->PrintLine();
-				@dungeon_views[3] := 4;
+		if(<>done) {
+			if(IsVisible(MapManager->View->VIEW_3, player_view)) {
+				if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
+						player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT] = MapManager->Type->OPEN & 				
+						player_view[MapManager->View->VIEW_3, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
+	"--- V3: Open to left and right ---"->PrintLine();
+					@dungeon_views[3] := 12;
+				}
+				else if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->OPEN &
+						player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT] = MapManager->Type->OPEN) {
+	"--- V3: Open to left ---"->PrintLine();
+					@dungeon_views[3] := 8;
+				}
+				else if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->OPEN & 
+						player_view[MapManager->View->VIEW_3, MapManager->Side->RIGHT] = MapManager->Type->OPEN) {
+	"--- V3: Open to right ---"->PrintLine();
+					@dungeon_views[3] := 4;
+				}
+				else {
+	"--- V3: Enclosed ---"->PrintLine();
+					@dungeon_views[3] := 0;
+				};
 			}
 			else {
-"--- V3: Enclosed ---"->PrintLine();
-				@dungeon_views[3] := 0;
+	"-- BG 2 --"->PrintLine();			
+				@dungeon_views[4] := 17;
+				done := true;
 			};
-		}
-		else {
-			@dungeon_views[3] := -1;
-			@dungeon_views[4] := 17;
-			done := true;
 		};
 
 		if(<>done) {
+"-- BG 3 --"->PrintLine();			
 			@dungeon_views[4] := 16;
 		};
 
@@ -276,7 +285,7 @@ class TinyDungeon {
 				count += 1;
 			};
 		};
-		
+
 		return count <> 3;
 	}
 
@@ -324,10 +333,12 @@ class TinyDungeon {
 		@framework->Clear();
 
 		# background
-		@sprite_manager->GetDungeonSprites()->Render(18);
-
-		for(i := 0; i < 2; i += 1;) {
-			@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[i]);
+		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[4]);
+		for(i := 0; i < 4; i += 1;) {
+			index := @dungeon_views[i];
+			if(index > -1) {
+				@sprite_manager->GetDungeonSprites()->Render(index);
+			};
 		};
 		
 		@framework->Show();
