@@ -172,7 +172,7 @@ class MapManager from Manager {
 	}
 	
 	method : public : GetType(y : Int, x : Int) ~ Int {
-		if(x < 0 | x >= Type->SIZE | y < 0 | y >= Type->SIZE) {
+		if(x < 0 | x >= Type->MAP_SIZE | y < 0 | y >= Type->MAP_SIZE) {
 			return Type->NONE;
 		};
 
@@ -188,7 +188,7 @@ class MapManager from Manager {
 
 		end_line := map_file->ReadString();
 		while(<>end_line->StartsWith('-')) {
-			rows := cols := Type->SIZE;
+			rows := cols := Type->MAP_SIZE;
 
 			map := Byte->New[rows, cols];
 			map_start := Int->New[2];
@@ -321,7 +321,7 @@ class MapManager from Manager {
 	}
 
 	consts Type {
-		SIZE := 18,
+		MAP_SIZE := 18,
 		BLOCKED := 0,
 		OPEN := 1,
 		START := 2,
