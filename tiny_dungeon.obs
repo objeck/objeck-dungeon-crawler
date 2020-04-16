@@ -289,11 +289,11 @@ class TinyDungeon {
 "--- V3: Open to left and right ---"->PrintLine();
 				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 				
-						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
-					@dungeon_views[3] := 12;
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {					
+					@dungeon_views[3] := 24;
 				}
 				else {
-					@dungeon_views[3] := 24;	
+					@dungeon_views[3] := 12;	
 				};
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE]) &
@@ -337,7 +337,7 @@ class TinyDungeon {
 "--- V4: Blocked"->PrintLine();
 		}; 			
 
-#        @map_manager->PrintMap(@player_direction, @player_location);
+        @map_manager->PrintMap(@player_direction, @player_location);
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {
