@@ -146,7 +146,7 @@ class TinyDungeon {
 
 	method : native : UpdateView() ~ Nil {
 		is_blocked := false;
-		player_view := @map_manager->GetView(@player_direction, @player_location);
+		player_view := @map_manager->GetView(@player_direction, @player_location, true);
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
 		};
@@ -163,7 +163,7 @@ class TinyDungeon {
 		else if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) &
 					IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->LEFT])) {
 			@dungeon_views[0] := 11;
-# "--- V0: Open to left ---"->PrintLine();
+"--- V0: Open to left ---"->PrintLine();
 		}
 		else if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) & 
 					IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->RIGHT])) {
@@ -189,8 +189,17 @@ class TinyDungeon {
 		}
 		else if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) &
 					IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT])) {
-			@dungeon_views[1] := 10;
-# "--- V1: Open to left ---"->PrintLine();
+
+
+			if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) &
+					IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->LEFT])) {
+				@dungeon_views[0] := 23;
+				@dungeon_views[1] := 2;
+			}
+			else {
+				@dungeon_views[1] := 10;
+			};
+"--- V1: Open to left ---"->PrintLine();
 		}
 		else if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) & 
 					IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT])) {
@@ -234,7 +243,7 @@ class TinyDungeon {
 			else {
 				@dungeon_views[4] := 30;
 				is_blocked := true;
-# "--- V2: Blocked ---"->PrintLine();
+"--- V2: Blocked ---"->PrintLine();
 			};
 		};
 
