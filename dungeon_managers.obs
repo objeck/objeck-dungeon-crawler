@@ -418,7 +418,7 @@ class SpriteManager from Manager {
 
 	consts Clips {
 		DUNGEON_X_CLIPS := 4,
-		DUNGEON_Y_CLIPS := 6
+		DUNGEON_Y_CLIPS := 9
 	}
 }
 

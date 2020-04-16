@@ -151,7 +151,9 @@ class TinyDungeon {
 			@dungeon_views[i] := -1;
 		};
 
+		#
 		# --- View 0 ---
+		#
 		if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) & 
 				IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->LEFT]) & 				
 				IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->RIGHT])) {
@@ -176,7 +178,9 @@ class TinyDungeon {
 # "--- V0: Blocked ---"->PrintLine();
 		};
 
+		#
 		# --- View 1 ---
+		#
 		if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) & 
 				IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT]) & 				
 				IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT])) {
@@ -198,12 +202,14 @@ class TinyDungeon {
 # "--- V1: Enclosed ---"->PrintLine();
 		}
 		else {
-			@dungeon_views[4] := 19;
+			@dungeon_views[4] := 31;
 			is_blocked := true;
 # "--- V1: Blocked ---"->PrintLine();
 		};
 
+		#
 		# --- View 2 ---
+		#
 		if(<>is_blocked) {
 			if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
 					IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 				
@@ -226,13 +232,15 @@ class TinyDungeon {
 # "--- V2: Enclosed ---"->PrintLine();
 			}
 			else {
-				@dungeon_views[4] := 18;
+				@dungeon_views[4] := 30;
 				is_blocked := true;
 # "--- V2: Blocked ---"->PrintLine();
 			};
 		};
 
+		#
 		# --- View 3 ---
+		#		
 		if(<>is_blocked) {
 			if(IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE]) & 
 					IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT]) & 				
@@ -255,14 +263,17 @@ class TinyDungeon {
 # "--- V3: Enclosed ---"->PrintLine();
 			}
 			else {
-				@dungeon_views[4] := 17;
+				@dungeon_views[4] := 29;
 				is_blocked := true;
 # "--- V3: Blocked ---"->PrintLine();
 			};
 		};
 
+		#
+		# --- View 4 ---
+		#
 		if(<>is_blocked & <>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {				
-			@dungeon_views[4] := 16;
+			@dungeon_views[4] := 28;
 # "--- V4: Blocked"->PrintLine();
 		}; 			
 
