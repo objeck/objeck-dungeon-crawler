@@ -185,7 +185,15 @@ class TinyDungeon {
 				IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT]) & 				
 				IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT])) {
 "--- V1: Open to left and right ---"->PrintLine();
-			@dungeon_views[1] := 14;
+			if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) & 
+					IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->LEFT]) & 				
+					IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->RIGHT])) {
+				@dungeon_views[0] := 27;
+				@dungeon_views[1] := 26;
+			}
+			else {
+				@dungeon_views[1] := 14;
+			};
 		}
 		else if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) &
 					IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT])) {
@@ -227,9 +235,16 @@ class TinyDungeon {
 		if(<>is_blocked) {
 			if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
 					IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 				
-					IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
+					IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {				
 "--- V2: Open to left and right ---"->PrintLine();
-				@dungeon_views[2] := 13;
+				if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) & 
+						IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT]) & 				
+						IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT])) {
+					@dungeon_views[2] := 25;
+				}
+				else {
+					@dungeon_views[2] := 13;	
+				};
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT])) {
@@ -272,7 +287,14 @@ class TinyDungeon {
 					IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT]) & 				
 					IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->RIGHT])) {
 "--- V3: Open to left and right ---"->PrintLine();
-				@dungeon_views[3] := 12;
+				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 				
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
+					@dungeon_views[3] := 12;
+				}
+				else {
+					@dungeon_views[3] := 24;	
+				};
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT])) {
