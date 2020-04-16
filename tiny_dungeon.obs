@@ -234,12 +234,24 @@ class TinyDungeon {
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT])) {
-				@dungeon_views[2] := 9;
+				if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) &
+						IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT])) {
+					@dungeon_views[2] := 21;
+				}
+				else {
+					@dungeon_views[2] := 9;
+				};
 "--- V2: Open to left ---"->PrintLine();
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
-				@dungeon_views[2] := 5;
+				if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) & 
+						IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT])) {
+					@dungeon_views[2] := 17;
+				}
+				else {
+					@dungeon_views[2] := 5;
+				};
 "--- V2: Open to right ---"->PrintLine();
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE])) {
