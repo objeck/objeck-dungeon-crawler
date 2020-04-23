@@ -256,7 +256,13 @@ class TinyDungeon {
 				if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT])) {
 "--- (Alt) V2: Open to left: enclosed={$enclosed_level} ---"->PrintLine();
-					@dungeon_views[2] := 33;
+					if(enclosed_level = 1) {
+						@dungeon_views[1] := 37;
+						@dungeon_views[2] := 38;
+					}
+					else {
+						@dungeon_views[2] := 33;
+					};
 				}
 				else {
 "--- V2: Open to left ---"->PrintLine();
@@ -316,7 +322,13 @@ class TinyDungeon {
 				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT])) {
 "--- (Alt) V3: Open to left: enclosed={$enclosed_level} ---"->PrintLine();
-					@dungeon_views[3] := 32;
+					if(enclosed_level = 2) {
+						@dungeon_views[2] := 42;
+						@dungeon_views[3] := 41;
+					}
+					else {
+						@dungeon_views[3] := 32;
+					};
 				}
 				else {
 "--- V3: Open to left ---"->PrintLine();
