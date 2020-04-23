@@ -201,8 +201,8 @@ class TinyDungeon {
 			if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE]) &
 					IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->LEFT])) {
 "--- (Alt) V1: Open to left: v0={$enclosed_v0} ---"->PrintLine();
-				@dungeon_views[0] := 23;
-				@dungeon_views[1] := 22;
+				@dungeon_views[0] := 35;
+				@dungeon_views[1] := 34;
 			}
 			else {
 "--- V1: Open to left ---"->PrintLine();
@@ -257,7 +257,7 @@ class TinyDungeon {
 				if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT])) {
 "--- (Alt) V2: Open to left: v0={$enclosed_v0}, v1={$enclosed_v1} ---"->PrintLine();
-					@dungeon_views[2] := 21;
+					@dungeon_views[2] := 33;
 				}
 				else {
 "--- V2: Open to left ---"->PrintLine();
@@ -312,7 +312,7 @@ class TinyDungeon {
 				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT])) {
 "--- (Alt) V3: Open to left: v0={$enclosed_v0}, v1={$enclosed_v1}, v2={$enclosed_v2} ---"->PrintLine();
-					@dungeon_views[3] := 20;
+					@dungeon_views[3] := 32;
 				}
 				else {
 "--- V3: Open to left ---"->PrintLine();
