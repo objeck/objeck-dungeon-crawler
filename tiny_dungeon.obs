@@ -340,7 +340,13 @@ class TinyDungeon {
 				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
 "--- (Alt) V3: Open to right: enclosed={$enclosed_level} ---"->PrintLine();
-					@dungeon_views[3] := 16;
+					if(enclosed_level = 2) {
+						@dungeon_views[2] := 26;
+						@dungeon_views[3] := 25;
+					}
+					else {
+						@dungeon_views[3] := 16;
+					};
 				}
 				else {
 "--- V3: Open to right ---"->PrintLine();
