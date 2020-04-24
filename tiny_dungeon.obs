@@ -193,7 +193,7 @@ class TinyDungeon {
 			}
 			else {
 "--- V1: Open to left and right ---"->PrintLine();
-				@dungeon_views[1] := 14;
+				@dungeon_views[1] := 50;
 			};
 		}
 		else if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE]) &
