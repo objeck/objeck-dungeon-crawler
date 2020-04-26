@@ -414,12 +414,15 @@ class SpriteManager from Manager {
 
 		return true;
 	}
-	
+
 	method : public : RenderDungeonSprite(index : Int) ~ Nil {
-		sheet_size := Clips->DUNGEON_Y_CLIPS * Clips->DUNGEON_X_CLIPS;
-		sheet_index := index % sheet_size;
-		image_index := index - sheet_index;
-		@dungeon_sprites[sheet_index]->Render(image_index);
+		if(index > -1) {
+			sheet_size := Clips->DUNGEON_Y_CLIPS * Clips->DUNGEON_X_CLIPS;
+			sheet_index := index / sheet_size;
+			image_index := index - sheet_index;
+# "### index={$index}: sheet_size={$sheet_size}, sheet_index={$sheet_index}, image_index={$image_index} ###"->PrintLine();
+			@dungeon_sprites[sheet_index]->Render(image_index);
+		};
 	}
 
 	method : public : Unload() ~ Nil {

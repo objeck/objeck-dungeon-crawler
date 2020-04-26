@@ -443,12 +443,9 @@ class TinyDungeon {
 		# background
 		@sprite_manager->RenderDungeonSprite(@dungeon_views[4]);
 		for(i := 0; i < 4; i += 1;) {
-			index := @dungeon_views[i];
-			if(index > -1) {
-				@sprite_manager->RenderDungeonSprite(index);
-			};
+			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
 		};
-
+		
 #~		
 		@sprite_manager->RenderDungeonSprite(@dungeon_views[0]);
 		@sprite_manager->RenderDungeonSprite(@dungeon_views[1]);
