@@ -441,21 +441,21 @@ class TinyDungeon {
 		@framework->Clear();
 
 		# background
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[4]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[4]);
 		for(i := 0; i < 4; i += 1;) {
 			index := @dungeon_views[i];
 			if(index > -1) {
-				@sprite_manager->GetDungeonSprites()->Render(index);
+				@sprite_manager->RenderDungeonSprite(index);
 			};
 		};
 
 #~		
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[0]);
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[1]);
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[2]);
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[3]);
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[0]);
-		@sprite_manager->GetDungeonSprites()->Render(@dungeon_views[1]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[0]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[1]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[2]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[3]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[0]);
+		@sprite_manager->RenderDungeonSprite(@dungeon_views[1]);
 ~#
 		@framework->Show();
 	}
