@@ -374,7 +374,11 @@ class TinyDungeon {
 				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
 "--- (Alt) V3: Open to right: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
-					if(block_left_right = 2) {
+					if(block_left = 2) {
+						@dungeon_views[2] := 53;
+						@dungeon_views[3] := 16;
+					}
+					else if(block_left_right = 2) {
 						@dungeon_views[2] := 26;
 						@dungeon_views[3] := 25;
 					}
