@@ -145,12 +145,13 @@ class TinyDungeon {
 	}
 
 	method : native : UpdateView() ~ Nil {
-		is_blocked := false;
 		player_view := @map_manager->GetView(@player_direction, @player_location, true);
+		
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
 		};
 
+		is_blocked := false;
 		block_left := 0;
 		block_right := 0;
 		block_left_right := 0;
@@ -337,6 +338,9 @@ class TinyDungeon {
 					if(block_left_right = 2) {
 						@dungeon_views[3] := 80;
 					}
+					else if(block_left_right = 1) {
+						@dungeon_views[3] := 76;
+					}
 					else {
 						@dungeon_views[3] := 48;
 					};
@@ -406,10 +410,11 @@ class TinyDungeon {
 		#
 		# --- View 4 ---
 		#
-		if(<>is_blocked & <>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {				
+#		if(<>is_blocked & <>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {				
+		if(true) {
 			@dungeon_views[4] := 88;
 "--- V4: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
-		}; 			
+		};
 
         @map_manager->PrintMap(@player_direction, @player_location);
 	}
