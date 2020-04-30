@@ -434,9 +434,12 @@ l := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->LEFT]);
 r := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]);
 "--- V4: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right}, 
 	m={$m}, l={$l}, r={$r} ---"->PrintLine();
-		if(<>m) {
+		if(is_blocked) {
 			@dungeon_views[4] := 88;
-		};
+		}
+		else {
+			@dungeon_views[4] := 92;
+		};	
 
         @map_manager->PrintMap(@player_direction, @player_location);
 	}
