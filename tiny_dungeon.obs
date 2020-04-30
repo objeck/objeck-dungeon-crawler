@@ -427,10 +427,15 @@ class TinyDungeon {
 		#
 		# --- View 4 ---
 		#
-#		if(<>is_blocked & <>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {				
-		if(true) {
+#		if(is_blocked & <>) {				
+# foo := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->LEFT]) & IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]);
+m := IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE]) & IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE]);
+l := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->LEFT]);
+r := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]);
+"--- V4: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right}, 
+	m={$m}, l={$l}, r={$r} ---"->PrintLine();
+		if(<>m) {
 			@dungeon_views[4] := 88;
-"--- V4: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
 		};
 
         @map_manager->PrintMap(@player_direction, @player_location);
