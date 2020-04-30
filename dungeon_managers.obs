@@ -40,6 +40,7 @@ class MapManager from Manager {
 	@map_index : Int;
 	@path : String;
 	@player_view : Int[,];
+	@player_view_id : Int;
 
 	New(path : String) {
 		Parent();
@@ -47,6 +48,7 @@ class MapManager from Manager {
 		@path := "{$path}/debug.map";
 		@maps := Vector->New()<MapHolder>;
 		@player_view := Int->New[5, 3];
+		@player_view_id := -1;
 	}	
 
 	method : public : Load() ~ Bool {
@@ -173,35 +175,49 @@ class MapManager from Manager {
 			@player_view[4,2] := GetType(y - 1, x - 4);
 		};
 
-		if(print) {
-			hash_str := "";
-
-			dims := @player_view->Size();
-			for(i := dims[0] - 1; i >= 0; i -= 1;) {
+		
+		hash_str := "";
+		dims := @player_view->Size();
+		for(i := dims[0] - 1; i >= 0; i -= 1;) {
+			if(print) {
 				"{$i}| "->Print();
-				for(j := 0; j < dims[1]; j += 1;) {
-					value := @player_view[i,j];					
-					if(value = 0 | value = 9) {
-						hash_str += '0';
-					}
-					else {
-						hash_str += '1';
-					};
+			};
+			
+			for(j := 0; j < dims[1]; j += 1;) {
+				value := @player_view[i,j];					
+				if(value = 0 | value = 9) {
+					hash_str += '0';
+				}
+				else {
+					hash_str += '1';
+				};
 
+				if(print) {
 					value->Print();
 					if(j + 1 < dims[1]) {
 						','->Print();
 					};
 				};
+			};
+
+			if(print) {
 				'\n'->Print();
 			};
+		};
+
+		@player_view_id := hash_str->ToInt(2);
+		if(print) {
 			"--------\n"->PrintLine();
-			hash_str->ToInt(2)->PrintLine();
+			@player_view_id->PrintLine();
 		};
 
 		return @player_view;
 	}
 	
+	method : public : GetViewId() ~ Int {
+		return @player_view_id;
+	}
+
 	method : public : GetType(y : Int, x : Int) ~ Int {
 		if(x < 0 | x >= Type->MAP_SIZE | y < 0 | y >= Type->MAP_SIZE) {
 			return Type->NONE;
