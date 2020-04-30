@@ -181,7 +181,7 @@ class MapManager from Manager {
 				"{$i}| "->Print();
 				for(j := 0; j < dims[1]; j += 1;) {
 					value := @player_view[i,j];					
-					if(value = 0) {
+					if(value = 0 | value = 9) {
 						hash_str += '0';
 					}
 					else {
