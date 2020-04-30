@@ -174,11 +174,21 @@ class MapManager from Manager {
 		};
 
 		if(print) {
+			hash_str := "";
+
 			dims := @player_view->Size();
 			for(i := dims[0] - 1; i >= 0; i -= 1;) {
 				"{$i}| "->Print();
 				for(j := 0; j < dims[1]; j += 1;) {
-					@player_view[i,j]->Print();
+					value := @player_view[i,j];					
+					if(value = 0) {
+						hash_str += '0';
+					}
+					else {
+						hash_str += '1';
+					};
+
+					value->Print();
 					if(j + 1 < dims[1]) {
 						','->Print();
 					};
@@ -186,6 +196,7 @@ class MapManager from Manager {
 				'\n'->Print();
 			};
 			"--------\n"->PrintLine();
+			hash_str->ToInt(2)->PrintLine();
 		};
 
 		return @player_view;

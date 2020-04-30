@@ -151,6 +151,7 @@ class TinyDungeon {
 			@dungeon_views[i] := -1;
 		};
 
+#~
 		is_blocked := false;
 		block_left := 0;
 		block_right := 0;
@@ -440,7 +441,7 @@ r := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]);
 		else {
 			@dungeon_views[4] := 92;
 		};	
-
+~#
         @map_manager->PrintMap(@player_direction, @player_location);
 	}
 
