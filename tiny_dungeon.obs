@@ -427,7 +427,8 @@ class TinyDungeon {
 						<>IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
 					if(block_left_right = 1) {
 # "--- 0 ---"->PrintLine();
-						@dungeon_views[3] := 89;
+						@dungeon_views[2] := 89;
+						@dungeon_views[3] := 0;
 					}
 					else {
 # "--- 1 ---"->PrintLine();						
@@ -440,6 +441,7 @@ class TinyDungeon {
 					@dungeon_views[3] := 88;
 				}
 				else {
+# "--- 3 ---"->PrintLine();											
 					@dungeon_views[3] := 0;
 				};
 			}
