@@ -418,6 +418,7 @@ class SpriteManager from Manager {
 		@dungeon_sprites[1] := @framework->AddAnimatedImageSprite("{$path}/dungeon_1.png");
 		@dungeon_sprites[2] := @framework->AddAnimatedImageSprite("{$path}/dungeon_2.png");
 		@dungeon_sprites[3] := @framework->AddAnimatedImageSprite("{$path}/dungeon_3.png");
+		@dungeon_sprites[4] := @framework->AddAnimatedImageSprite("{$path}/dungeon_4.png");
 	}
 
 	method : public : Load() ~ Bool {
@@ -459,7 +460,7 @@ class SpriteManager from Manager {
 	consts Clips {
 		DUNGEON_X_CLIPS := 4,
 		DUNGEON_Y_CLIPS := 6,
-		DUNGEON_SHEETS := 4
+		DUNGEON_SHEETS := 5
 	}
 }
 
