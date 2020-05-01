@@ -175,47 +175,23 @@ class MapManager from Manager {
 			@player_view[4,2] := GetType(y - 1, x - 4);
 		};
 
-		
-		hash_str := "";
-		dims := @player_view->Size();
-		for(i := dims[0] - 1; i >= 0; i -= 1;) {
-			if(print) {
+		if(print) {
+			dims := @player_view->Size();
+			for(i := dims[0] - 1; i >= 0; i -= 1;) {
 				"{$i}| "->Print();
-			};
-			
-			for(j := 0; j < dims[1]; j += 1;) {
-				value := @player_view[i,j];					
-				if(value = 0 | value = 9) {
-					hash_str += '0';
-				}
-				else {
-					hash_str += '1';
-				};
-
-				if(print) {
-					value->Print();
+				
+				for(j := 0; j < dims[1]; j += 1;) {
+					@player_view[i,j]->Print();
 					if(j + 1 < dims[1]) {
 						','->Print();
 					};
 				};
-			};
-
-			if(print) {
 				'\n'->Print();
 			};
-		};
-
-		@player_view_id := hash_str->ToInt(2);
-		if(print) {
 			"--------\n"->PrintLine();
-			@player_view_id->PrintLine();
 		};
 
 		return @player_view;
-	}
-	
-	method : public : GetViewId() ~ Int {
-		return @player_view_id;
 	}
 
 	method : public : GetType(y : Int, x : Int) ~ Int {

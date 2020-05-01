@@ -168,7 +168,6 @@ class TinyDungeon {
 					<>IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->LEFT]) & 				
 					<>IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->RIGHT])) {
 				@dungeon_views[0] := 91;
-"###"->PrintLine();
 			}
 			else {
 				@dungeon_views[0] := 15;
@@ -427,17 +426,17 @@ class TinyDungeon {
 				if(<>IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 
 						<>IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
 					if(block_left_right = 1) {
+# "--- 0 ---"->PrintLine();
 						@dungeon_views[3] := 89;
-"## 2 ##"->PrintLine();						
 					}
 					else {
+# "--- 1 ---"->PrintLine();						
 						@dungeon_views[3] := 0;	
 					};
 				}
 				else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 
 							IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
-"## 0 ##"->PrintLine();
-					@dungeon_views[2] := 73;
+# "--- 2 ---"->PrintLine();						
 					@dungeon_views[3] := 88;
 				}
 				else {
@@ -454,18 +453,13 @@ class TinyDungeon {
 		#
 		# --- View 4 ---
 		#
-#		if(is_blocked & <>) {				
-# foo := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->LEFT]) & IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]);
-m := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE]);
-l := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->LEFT]);
-r := IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]);
-"--- V4: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right}, 
-	m={$m}, l={$l}, r={$r} ---"->PrintLine();
-		if(is_blocked #~ | <>m ~#) {
-			@dungeon_views[4] := 91;
+		if(is_blocked | (<>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE]) & 
+					<>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->LEFT]) & 				
+					<>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->RIGHT]))) {
+			@dungeon_views[4] := 99;
 		}
 		else {
-			@dungeon_views[4] := 99;
+			@dungeon_views[4] := 95;
 		};
 
         @map_manager->PrintMap(@player_direction, @player_location);
