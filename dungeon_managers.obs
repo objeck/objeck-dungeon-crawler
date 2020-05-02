@@ -237,12 +237,16 @@ class MapManager from Manager {
 						label 'E' {
 							map[i,j] := MapManager->Type->END;
 						}
+						# end
+						label 'P' {
+							map[i,j] := MapManager->Type->PILLAR;
+						}
 						# chest
 						label 'C' {
 							map[i,j] := MapManager->Type->CHEST;
 						}
 						# potion
-						label 'P' {
+						label 'H' {
 							map[i,j] := MapManager->Type->POTION;
 						}
 						# trap
@@ -315,6 +319,10 @@ class MapManager from Manager {
 							out := 'S';
 						}
 
+						label Type->PILLAR {
+							out := 'P';
+						}
+
 						label Type->DOOR {
 							out := 'D';
 						}
@@ -347,14 +355,15 @@ class MapManager from Manager {
 		MAP_SIZE := 18,
 		BLOCKED := 0,
 		OPEN := 1,
-		START := 2,
-		END := 3,
-		DOOR := 4,
-		POTION := 5,
-		CHEST := 6,
-		TRAP := 7,
-		WARP := 8,
-		NONE := 9
+		START := 2,		
+		PILLAR := 3,
+		END := 4,
+		DOOR := 5,
+		POTION := 6,
+		CHEST := 7,
+		TRAP := 8,
+		WARP := 9,
+		NONE := 10
 	}
 
 	enum Direction {
