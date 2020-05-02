@@ -266,7 +266,7 @@ class TinyDungeon {
 		}
 		else {
 "--- V1: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
-			@dungeon_views[0] := 91;
+			@dungeon_views[0] := 99;
 			is_blocked := true;
 		};
 
@@ -342,7 +342,7 @@ class TinyDungeon {
 			}
 			else {
 "--- V2: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
-				@dungeon_views[0] := 90;
+				@dungeon_views[0] := 99;
 				is_blocked := true;
 			};
 		};
@@ -447,7 +447,7 @@ class TinyDungeon {
 			}
 			else {
 "--- V3: Blocked: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
-				@dungeon_views[0] := 91;
+				@dungeon_views[0] := 99;
 				is_blocked := true;
 			};
 		};
@@ -535,7 +535,7 @@ class TinyDungeon {
 		each(i : @dungeon_views) {
 			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
 		};
-		@sprite_manager->RenderDungeonSprite(100);
+#		@sprite_manager->RenderDungeonSprite(100);
 		
 		@framework->Show();
 	}
