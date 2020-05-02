@@ -426,18 +426,22 @@ class TinyDungeon {
 				if(<>IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 
 						<>IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
 					if(block_left_right = 1) {
+# "--- 0 ---"->PrintLine();
 						@dungeon_views[3] := 89;
 						@dungeon_views[4] := 0;
 					}
 					else {
+# "--- 1 ---"->PrintLine();						
 						@dungeon_views[4] := 0;	
 					};
 				}
 				else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 
 							IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
+# "--- 2 ---"->PrintLine();						
 					@dungeon_views[4] := 88;
 				}
 				else {
+# "--- 3 ---"->PrintLine();											
 					@dungeon_views[4] := 0;
 				};
 			}
@@ -461,24 +465,6 @@ class TinyDungeon {
 		};
 
         @map_manager->PrintMap(@player_direction, @player_location);
-
-        #
-		# --- Pilar View ---
-		#
-		if(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE] = MapManager->Type->PILLAR) {
-			@dungeon_views[5] := 101;
-		}
-		else if(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE] = MapManager->Type->PILLAR) {
-			@dungeon_views[5] := 102;
-		}
-		else if(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE] = MapManager->Type->PILLAR) {
-			@dungeon_views[5] := 103;
-		};
-#~		
-		else if(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE] = MapManager->Type->PILLAR) {
-			@dungeon_views[5] := 103;
-		};
-~#		
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {
@@ -487,6 +473,19 @@ class TinyDungeon {
 		};
 
 		return false;
+	}
+
+
+	method : IsVisible(view : MapManager->View, player_view : Int[,]) ~ Bool {
+		count := 0;
+
+		for(i := 0; i < 3; i += 1;) {
+			if(player_view[view, i] = MapManager->Type->BLOCKED) {
+				count += 1;
+			};
+		};
+
+		return count <> 3;
 	}
 
 	method : MoveLeft() ~ Nil {
@@ -536,6 +535,7 @@ class TinyDungeon {
 		each(i : @dungeon_views) {
 			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
 		};
+		@sprite_manager->RenderDungeonSprite(100);
 		
 		@framework->Show();
 	}
