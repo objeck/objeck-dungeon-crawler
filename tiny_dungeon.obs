@@ -368,18 +368,39 @@ class TinyDungeon {
 						@dungeon_views[4] := 72;
 					};
 				}
+				else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT])) {
+"--- (Alt)  V3: Open to left and right: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
+"### 0 ###"->PrintLine();
+					@dungeon_views[4] := 68;
+				}
+				else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) & 
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
+"--- (Alt)  V3: Open to left and right: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
+					@dungeon_views[4] := 56;
+"### 1 ###"->PrintLine();					
+				}
 				else {
 "--- V3: Open to left and right: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
-					@dungeon_views[4] := 12;	
+"### 2 ###"->PrintLine();
+					@dungeon_views[4] := 12;
 				};
 			}
 			else if(IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->LEFT])) {
 				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) &
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT]) & 
+						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->RIGHT])) {
+"--- (Alt) V3: Open to left: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
+					@dungeon_views[3] := 65;
+					@dungeon_views[4] := 32;
+				}
+				else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE]) &
 						IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->LEFT])) {
 "--- (Alt) V3: Open to left: block_left_right={$block_left_right}, block_left={$block_left}, block_right={$block_right} ---"->PrintLine();
 					if(block_right = 2) {
-						@dungeon_views[3] := 65;
+"### 0 ###"->PrintLine();
+						@dungeon_views[3] := 33;
 						@dungeon_views[4] := 32;
 					}
 					else if(block_left_right = 2) {
