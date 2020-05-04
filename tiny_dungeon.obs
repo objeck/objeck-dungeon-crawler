@@ -205,7 +205,13 @@ class TinyDungeon {
 		}
 		else if(IsOpenLeftMiddle(View->VIEW_1, player_view)) {			
 "V1 [Open to left]"->PrintLine();
-			@dungeon_views[2] := 10;
+			if(IsOpenLeftMiddle(View->VIEW_0, player_view)) {
+				@dungeon_views[1] := 35; # TODO REMAP
+				@dungeon_views[2] := 34;
+			}
+			else {
+				@dungeon_views[2] := 10;
+			};
 		}
 		else if(IsOpenRightMiddle(MapManager->View->VIEW_1, player_view)) {
 "V1 [Open to right]"->PrintLine();
