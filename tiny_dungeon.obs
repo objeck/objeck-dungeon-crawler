@@ -209,7 +209,8 @@ class TinyDungeon {
 		}
 		else {
 "V1 [Blocked]"->PrintLine();
-			@dungeon_views[0] := 99;
+			@dungeon_views[0] := 19;
+			is_blocked := true;
 		};
 
 		#
@@ -234,7 +235,7 @@ class TinyDungeon {
 			}
 			else {
 "V2 [Blocked]"->PrintLine();
-				@dungeon_views[0] := 99;
+				@dungeon_views[0] := 18;
 				is_blocked := true;
 			};
 		};
@@ -261,7 +262,7 @@ class TinyDungeon {
 			}
 			else {
 "V3 [Blocked]"->PrintLine();
-				@dungeon_views[0] := 99;
+				@dungeon_views[0] := 17;
 				is_blocked := true;
 			};
 		};
@@ -269,13 +270,14 @@ class TinyDungeon {
 		#
 		# View 4 ---
 		#
-		if(is_blocked | <>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {
-			@dungeon_views[0] := 99;
-		}
-		else {
-			@dungeon_views[0] := 95;
+		if(<>is_blocked) {
+			if(<>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {
+				@dungeon_views[0] := 16;
+			}
+			else {
+				@dungeon_views[0] := 95;
+			};
 		};
-
         @map_manager->PrintMap(@player_direction, @player_location);
 	}
 
