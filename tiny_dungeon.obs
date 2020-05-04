@@ -199,8 +199,8 @@ class TinyDungeon {
 "\tA"->PrintLine();	
 			}
 			else {
-				@dungeon_views[2] := 14;
-"\tB"->PrintLine();					
+				@dungeon_views[2] := 14; #22
+"\t*B"->PrintLine();					
 			};
 		}
 		else if(IsOpenLeftMiddle(View->VIEW_1, player_view)) {			
