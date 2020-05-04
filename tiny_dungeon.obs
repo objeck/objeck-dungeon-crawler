@@ -144,6 +144,24 @@ class TinyDungeon {
 		};
 	}
 
+	method : IsClosedLeftOnly(view : MapManager->View, player_view : Int[,]) ~ Bool {
+		return <>IsOpen(player_view[view, MapManager->Side->LEFT]) & 
+			IsOpen(player_view[view, MapManager->Side->RIGHT]) &
+			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
+	}
+
+	method : IsClosedRightOnly(view : MapManager->View, player_view : Int[,]) ~ Bool {
+		return IsOpen(player_view[view, MapManager->Side->LEFT]) & 
+			<>IsOpen(player_view[view, MapManager->Side->RIGHT]) &
+			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
+	}
+
+	method : IsClosedLeftRight(view : MapManager->View, player_view : Int[,]) ~ Bool {
+		return <>IsOpen(player_view[view, MapManager->Side->LEFT]) & 
+			<>IsOpen(player_view[view, MapManager->Side->RIGHT]) &
+			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
+	}
+
 	method : IsOpenLeftMiddle(view : MapManager->View, player_view : Int[,]) ~ Bool {
 		return IsOpen(player_view[view, MapManager->Side->LEFT]) & 
 			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
@@ -198,9 +216,12 @@ class TinyDungeon {
 				@dungeon_views[2] := 22;
 "\tA"->PrintLine();	
 			}
+			else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
+"\tB"->PrintLine();
+			}
 			else {
 				@dungeon_views[2] := 14;
-"\tB"->PrintLine();					
+"\tC"->PrintLine();					
 			};
 		}
 		else if(IsOpenLeftMiddle(View->VIEW_1, player_view)) {			
