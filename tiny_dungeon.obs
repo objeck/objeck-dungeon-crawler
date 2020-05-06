@@ -221,7 +221,7 @@ class TinyDungeon {
 "\tB"->PrintLine();
 			}
 			else if(IsClosedLeft(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[2] := 34;
+				@dungeon_views[2] := 70;
 "\t*C"->PrintLine();
 			}
 			else {
