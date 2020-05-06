@@ -224,9 +224,13 @@ class TinyDungeon {
 				@dungeon_views[2] := 70;
 "\t*C"->PrintLine();
 			}
+			else if(IsClosedRight(MapManager->View->VIEW_0, player_view)) {
+				@dungeon_views[2] := 82;
+"\t*D"->PrintLine();
+			}
 			else {
 				@dungeon_views[2] := 14;
-"\tD"->PrintLine();
+"\tE"->PrintLine();
 			};
 		}
 		else if(IsOpenLeftMiddle(View->VIEW_1, player_view)) {			
