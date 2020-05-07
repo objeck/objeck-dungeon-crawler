@@ -296,7 +296,7 @@ class TinyDungeon {
 				}
 				else if(IsClosedLeftRight(MapManager->View->VIEW_1, player_view)) {
 						@dungeon_views[3] := 38;
-"\tD"->PrintLine();						
+"\tD"->PrintLine();
 				}
 				else {
 						@dungeon_views[3] := 13;
@@ -390,8 +390,11 @@ class TinyDungeon {
 "\tB"->PrintLine();						
 					};
 				}
+				else if(IsClosedRight(MapManager->View->VIEW_2, player_view)) {
+"\t*C"->PrintLine();
+				}
 				else {
-"\tC"->PrintLine();					
+"\tD"->PrintLine();				
 					@dungeon_views[4] := 8;
 				};
 			}
