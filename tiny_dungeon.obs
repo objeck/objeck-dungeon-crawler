@@ -390,9 +390,10 @@ class TinyDungeon {
 "\tB"->PrintLine();						
 					};
 				}
-				else if(<>IsClosedRight(MapManager->View->VIEW_2, player_view)) {
+				else if(<>(IsClosedLeft(MapManager->View->VIEW_2, player_view) |
+							IsClosedRight(MapManager->View->VIEW_2, player_view))) {
 					@dungeon_views[4] := 8;
-"\t*C"->PrintLine();
+"\tC"->PrintLine();					
 				};
 			}
 			# right
