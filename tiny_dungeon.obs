@@ -332,7 +332,7 @@ class TinyDungeon {
 					else {
 						# TODO: WIP
 						if(<>IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-							@dungeon_views[3] := 5;
+							@dungeon_views[3] := 112;
 "\t*B"->PrintLine();
 						}
 						else {						
