@@ -258,7 +258,7 @@ class TinyDungeon {
 				if(<>IsOpenRight(MapManager->View->VIEW_2, player_view)) {
 "\tA*"->PrintLine();
 					@dungeon_views[1] := 31;
-					@dungeon_views[2] := 98;
+					@dungeon_views[2] := 114;
 				}
 				else {
 "\tB"->PrintLine();					
@@ -340,7 +340,7 @@ class TinyDungeon {
 					else {
 						# TODO: WIP
 						if(<>IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-							@dungeon_views[3] := 112;
+							@dungeon_views[3] := 113;
 "\t*B"->PrintLine();
 						}
 						else {						
