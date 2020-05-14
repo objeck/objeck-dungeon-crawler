@@ -216,7 +216,7 @@ class TinyDungeon {
 					IsOpenLeftRight(MapManager->View->VIEW_1, player_view) & 
 					IsClosedLeftRight(MapManager->View->VIEW_2, player_view)) {
 				@dungeon_views[1] := 23;
-				@dungeon_views[2] := 14;
+				@dungeon_views[2] := 94;
 "\t*A"->PrintLine();
 			}
 			else if(IsOpenLeftRight(MapManager->View->VIEW_0, player_view)) {
