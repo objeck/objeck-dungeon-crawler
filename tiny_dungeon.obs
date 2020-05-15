@@ -381,14 +381,14 @@ class TinyDungeon {
 			# V3: middle, left and right
 			if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {				
 "V3 [Open to left and right]"->PrintLine();
-				if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view) & 
+				if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view) & 
 						IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
-					@dungeon_views[4] := 36;
+					@dungeon_views[4] := 32;
 "\tA"->PrintLine();
 				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
 "\tB"->PrintLine();
-					@dungeon_views[4] := 40;
+					@dungeon_views[4] := 36;
 				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view)) {
 					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
