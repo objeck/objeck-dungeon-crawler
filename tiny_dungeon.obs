@@ -224,21 +224,17 @@ class TinyDungeon {
 				@dungeon_views[2] := 22;
 "\tB"->PrintLine();
 			}
-			else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[2] := 34;
-"\tC"->PrintLine();
-			}
 			else if(IsClosedLeftOpenRight(MapManager->View->VIEW_0, player_view)) {
 				@dungeon_views[2] := 70;
-"\tD"->PrintLine();
+"\tC"->PrintLine();
 			}
 			else if(IsClosedRightOpenLeft(MapManager->View->VIEW_0, player_view)) {
 				@dungeon_views[2] := 82;
-"\tE"->PrintLine();
+"\tD"->PrintLine();
 			}
 			else {
 				@dungeon_views[2] := 14;
-"\tF"->PrintLine();
+"\tE"->PrintLine();
 			};
 		}
 		# V1: left
@@ -255,13 +251,9 @@ class TinyDungeon {
 "\tB"->PrintLine();					
 				};
 			}
-			else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[2] := 46;
-"\tC"->PrintLine();
-			}
 			else {
 				@dungeon_views[2] := 10;
-"\tD"->PrintLine();					
+"\tC"->PrintLine();					
 			};
 		}
 		# V1: right
@@ -278,13 +270,9 @@ class TinyDungeon {
 "\tB"->PrintLine();
 				};
 			}
-			else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[2] := 58;
-"\tC"->PrintLine();
-			}
 			else {
 				@dungeon_views[2] := 6;
-"\tD"->PrintLine();
+"\tC"->PrintLine();
 			};
 		}
 		# V1: middle
@@ -326,7 +314,7 @@ class TinyDungeon {
 					}
 					else {
 						@dungeon_views[3] := 13;
-"\tE"->PrintLine();						
+"\t*E"->PrintLine();						
 					};
 				};
 			}
@@ -396,7 +384,7 @@ class TinyDungeon {
 				if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view) & 
 						IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
 					@dungeon_views[4] := 36;
-"\t*A"->PrintLine();
+"\tA"->PrintLine();
 				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
 "\tB"->PrintLine();
@@ -412,13 +400,18 @@ class TinyDungeon {
 "\tD"->PrintLine();
 					};
 				}
+				else if(IsOpenLeftRight(MapManager->View->VIEW_4, player_view) & 
+							IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {
+					@dungeon_views[4] := 40;
+"\t*E"->PrintLine();					
+				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {
 					@dungeon_views[4] := 12;
-"\tE"->PrintLine();
+"\tF"->PrintLine();
 				}
 				else {
 					@dungeon_views[4] := 36;
-"\tF"->PrintLine();
+"\tG"->PrintLine();
 				};
 			}
 			# V3: left
@@ -494,7 +487,7 @@ class TinyDungeon {
 				}
 				else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 					@dungeon_views[4] := 64;
-"\tG"->PrintLine();					
+"\tG"->PrintLine();		
 				}
 				else {
 "\tH"->PrintLine();					
