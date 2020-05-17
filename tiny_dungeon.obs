@@ -299,6 +299,7 @@ class TinyDungeon {
 "\tA"->PrintLine();
 					}
 					else if(IsClosedLeftRight(MapManager->View->VIEW_3, player_view)) {
+						@dungeon_views[3] := 106;
 "\t*B"->PrintLine();
 					}
 					else {
