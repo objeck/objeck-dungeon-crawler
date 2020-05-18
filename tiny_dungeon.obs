@@ -305,7 +305,7 @@ class TinyDungeon {
 						@dungeon_views[3] := 109;
 					}
 					else {
-						@dungeon_views[3] := 25;
+						@dungeon_views[3] := 45; # 25;
 					};
 				}
 				else {
