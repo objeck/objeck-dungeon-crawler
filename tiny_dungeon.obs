@@ -392,6 +392,7 @@ class TinyDungeon {
 				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
 "\tB"->PrintLine();
+					@dungeon_views[3] := 37;
 					@dungeon_views[4] := 36;
 				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view)) {
@@ -523,7 +524,7 @@ class TinyDungeon {
 				@dungeon_views[0] := 16;
 "\tA"->PrintLine();
 			}
-			else {
+			else {				
 				@dungeon_views[0] := 116; # change me!
 "\tB"->PrintLine();
 			};
