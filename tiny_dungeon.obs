@@ -386,7 +386,7 @@ class TinyDungeon {
 						@dungeon_views[4] := 40;
 					}
 					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 52;
+						@dungeon_views[4] := 44;
 					}
 					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 						@dungeon_views[4] := 64;
