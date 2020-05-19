@@ -239,7 +239,6 @@ class TinyDungeon {
 				};
 			}
 			else {
-"--- 0 ---"->PrintLine();
 				@dungeon_views[2] := 10;
 			};
 		}
@@ -327,7 +326,6 @@ class TinyDungeon {
 					};
 				}
 				else {
-"--- 1 ---"->PrintLine();
 					@dungeon_views[3] := 5;
 				};
 			}
@@ -385,11 +383,9 @@ class TinyDungeon {
 						@dungeon_views[4] := 44;
 					}
 					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-"--- 3 ---"->PrintLine();
 						@dungeon_views[4] := 52;
 					}
 					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-"--- 4 ---"->PrintLine();
 						@dungeon_views[4] := 44;
 					}
 					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view) & 
