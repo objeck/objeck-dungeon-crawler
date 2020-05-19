@@ -179,7 +179,8 @@ class TinyDungeon {
 	}
 
 	method : native : UpdateView() ~ Nil {
-		player_view := @map_manager->GetView(@player_direction, @player_location, true);
+		# Debug output
+		player_view := @map_manager->GetView(@player_direction, @player_location #~ , true ~#);
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
 		};
@@ -472,9 +473,9 @@ class TinyDungeon {
 			};
 		};
 
-        @map_manager->PrintMap(@player_direction, @player_location);
-
-        DebugView();
+		# Debug output
+#       @map_manager->PrintMap(@player_direction, @player_location);
+#       DebugView();
 	}
 
 	method : DebugView() ~ Nil {
@@ -555,8 +556,7 @@ class TinyDungeon {
 		each(i : @dungeon_views) {
 			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
 		};
-#		@sprite_manager->RenderDungeonSprite(100);
-		
+
 		@framework->Show();
 	}
 
