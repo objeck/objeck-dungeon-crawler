@@ -239,6 +239,7 @@ class TinyDungeon {
 				};
 			}
 			else {
+"--- 0 ---"->PrintLine();
 				@dungeon_views[2] := 10;
 			};
 		}
@@ -326,6 +327,7 @@ class TinyDungeon {
 					};
 				}
 				else {
+"--- 1 ---"->PrintLine();
 					@dungeon_views[3] := 5;
 				};
 			}
