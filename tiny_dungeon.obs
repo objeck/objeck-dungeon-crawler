@@ -380,15 +380,21 @@ class TinyDungeon {
 			# V3: left
 			else if(IsOpenLeft(View->VIEW_3, player_view)) {				
 				if(IsOpenLeft(View->VIEW_1, player_view)) {
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
+					if(IsOpenLeft(MapManager->View->VIEW_2, player_view) & 
+						IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
+						@dungeon_views[4] := 44;
+					}
+					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
+"--- 3 ---"->PrintLine();
+						@dungeon_views[4] := 52;
+					}
+					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
+"--- 4 ---"->PrintLine();
 						@dungeon_views[4] := 44;
 					}
 					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view) & 
 								IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 						@dungeon_views[4] := 40;
-					}
-					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 44;
 					}
 					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 						@dungeon_views[4] := 64;
@@ -411,22 +417,23 @@ class TinyDungeon {
 			# V3: right
 			else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 				if(IsOpenRight(MapManager->View->VIEW_1, player_view)) {
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
+					if(IsOpenRight(MapManager->View->VIEW_2, player_view) & 
+							IsOpenRight(MapManager->View->VIEW_3, player_view)) {
+						@dungeon_views[4] := 56;
+					}
+					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
+						@dungeon_views[4] := 64;
+					}
+					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
 						@dungeon_views[4] := 56;
 					}
 					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view) & 
 								IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 						@dungeon_views[4] := 40;
 					}
-					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 52;
-					}
 					else if(IsOpenRight(MapManager->View->VIEW_3, player_view) & 
 							IsOpenRight(MapManager->View->VIEW_2, player_view)) {
 						@dungeon_views[4] := 56;
-					}
-					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 64;
 					}
 					else {
 						@dungeon_views[4] := 28;
