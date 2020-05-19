@@ -180,7 +180,7 @@ class TinyDungeon {
 
 	method : native : UpdateView() ~ Nil {
 		# Debug output
-		player_view := @map_manager->GetView(@player_direction, @player_location #~ , true ~#);
+		player_view := @map_manager->GetView(@player_direction, @player_location, true);
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
 		};
@@ -346,9 +346,21 @@ class TinyDungeon {
 		if(<>is_blocked) {
 			# V3: middle, left and right
 			if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {				
-				if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view) & 
-						IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
-					@dungeon_views[4] := 32;
+				if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view) & 
+						IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {					
+					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view) &
+							IsClosedLeftRight(MapManager->View->VIEW_1, player_view)) {
+						@dungeon_views[4] := 36;
+					}
+					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
+						@dungeon_views[4] := 32;
+					}
+					else if(IsClosedLeftRight(MapManager->View->VIEW_1, player_view)) {
+						@dungeon_views[4] := 36;
+					}
+					else {
+						@dungeon_views[4] := 20;
+					};
 				}
 				else if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
 					@dungeon_views[3] := 37;
@@ -396,7 +408,7 @@ class TinyDungeon {
 					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 						@dungeon_views[4] := 64;
 					}
-					else {
+					else {						
 						@dungeon_views[4] := 24;
 					};
 				}
@@ -414,10 +426,13 @@ class TinyDungeon {
 			# V3: right
 			else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 				if(IsOpenRight(MapManager->View->VIEW_1, player_view)) {
-					if(IsOpenRight(MapManager->View->VIEW_2, player_view) & 
-							IsOpenRight(MapManager->View->VIEW_3, player_view)) {
+					if(IsOpenRight(MapManager->View->VIEW_3, player_view) & 
+							IsOpenRight(MapManager->View->VIEW_4, player_view)) {
 						@dungeon_views[4] := 56;
 					}
+					else if(IsOpenRight(MapManager->View->VIEW_2, player_view) & 
+								IsOpenRight(MapManager->View->VIEW_3, player_view)) {
+						@dungeon_views[4] := 56;					}
 					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
 						@dungeon_views[4] := 64;
 					}
@@ -432,7 +447,7 @@ class TinyDungeon {
 							IsOpenRight(MapManager->View->VIEW_2, player_view)) {
 						@dungeon_views[4] := 56;
 					}
-					else {
+					else {					
 						@dungeon_views[4] := 28;
 					};
 				}
@@ -475,7 +490,7 @@ class TinyDungeon {
 
 		# Debug output
 #       @map_manager->PrintMap(@player_direction, @player_location);
-#       DebugView();
+       DebugView();
 	}
 
 	method : DebugView() ~ Nil {
@@ -483,9 +498,11 @@ class TinyDungeon {
 		each(i : @dungeon_views) {
 			image_id := @dungeon_views[i];
 			if(image_id > -1) {
-				"Level {$i}: image={$image_id}"->PrintLine();
+				v := i - 1;
+				"Level {$v}: image={$image_id}"->PrintLine();
 			};
 		};
+		"----------"->PrintLine();
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {

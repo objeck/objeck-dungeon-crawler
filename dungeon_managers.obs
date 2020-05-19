@@ -350,11 +350,12 @@ class MapManager from Manager {
 		START := 2,
 		END := 3,
 		DOOR := 4,
-		POTION := 5,
-		CHEST := 6,
-		TRAP := 7,
-		WARP := 8,
-		NONE := 9
+		PILLAR := 5,
+		POTION := 6,
+		CHEST := 7,
+		TRAP := 8,
+		WARP := 9,
+		NONE := 10
 	}
 
 	enum Direction {
