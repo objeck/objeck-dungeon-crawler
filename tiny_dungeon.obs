@@ -144,365 +144,338 @@ class TinyDungeon {
 		};
 	}
 
-	method : IsClosedLeftOpenRight(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		return <>IsOpen(player_view[view, MapManager->Side->LEFT]) & 
-			IsOpen(player_view[view, MapManager->Side->RIGHT]) &
-			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
-	}
-
-	method : IsClosedRightOpenLeft(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		return IsOpen(player_view[view, MapManager->Side->LEFT]) & 
-			<>IsOpen(player_view[view, MapManager->Side->RIGHT]) &
-			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
-	}
-
-	method : IsClosedLeftRight(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		return <>IsOpen(player_view[view, MapManager->Side->LEFT]) & 
-			<>IsOpen(player_view[view, MapManager->Side->RIGHT]) &
-			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
-	}
-
-	method : IsOpenLeft(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		return IsOpen(player_view[view, MapManager->Side->LEFT]) & 
-			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
-	}
-
-	method : IsOpenRight(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		return IsOpen(player_view[view, MapManager->Side->RIGHT]) & 
-			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
-	}
-
-	method : IsOpenLeftRight(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		return IsOpen(player_view[view, MapManager->Side->LEFT]) & 
-			IsOpen(player_view[view, MapManager->Side->RIGHT]) & 
-			IsOpen(player_view[view, MapManager->Side->MIDDLE]);				
-	}
-
 	method : native : UpdateView() ~ Nil {
-		# Debug output
-		player_view := @map_manager->GetView(@player_direction, @player_location, true);
+		player_view := @map_manager->GetView(@player_direction, @player_location);
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
 		};
 
-		is_blocked := false;
+		hash_view := @map_manager->HashView();
 
-		#
-		# View 0
-		#
-		if(IsOpenLeftRight(MapManager->View->VIEW_0, player_view)) {
-			@dungeon_views[1] := 15;
-		}
-		else if(IsOpenLeft(View->VIEW_0, player_view)) {
-			@dungeon_views[1] := 11;
-		}
-		else if(IsOpenRight(MapManager->View->VIEW_0, player_view)) {
-			@dungeon_views[1] := 7;
-		}
-		else if(IsOpen(player_view[MapManager->View->VIEW_0, MapManager->Side->MIDDLE])) {
-			@dungeon_views[1] := 3;
+"Hash view: {$hash_view}"->PrintLine();
+@map_manager->ShowDebugMap(@player_direction, @player_location);
+
+		select(hash_view) {
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,0,0
+			0| 0,1,0
+			--------
+			~#
+			label 20000 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[0] := 19;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 22000 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[0] := 18;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,1,0
+			1| 0,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 22200 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,1,0
+			2| 0,1,0
+			1| 0,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 22220 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 0;		#v3
+				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,0,0
+			0| 1,1,1
+			--------
+			~#
+			label 70000 {
+				@dungeon_views[1] := 23;	#v0
+				@dungeon_views[0] := 19;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,0,0
+			0| 0,1,1
+			--------
+			~#
+			label 31000
+			label 30000 {
+				@dungeon_views[1] := 31;	#v0
+				@dungeon_views[0] := 19;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,0,0
+			0| 1,1,0
+			--------
+			~#
+			label 64000
+			label 60000 {
+				@dungeon_views[1] := 27;	#v0
+				@dungeon_views[0] := 19;	#--
+			}
+			
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 1,1,1
+			0| 0,1,0
+			--------
+			~#
+			label 27000 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 14;	#v1
+				@dungeon_views[0] := 18;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,1,0
+			0| 0,1,1
+			--------
+			~#
+			label 32000 {
+				@dungeon_views[1] := 7;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[0] := 18;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,1,0
+			0| 1,1,0
+			--------
+			~#
+			label 62000 {
+				@dungeon_views[1] := 11;	#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[0] := 18;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,0,0
+			1| 0,1,0
+			0| 1,1,1
+			--------
+			~#
+			label 72000 {
+				@dungeon_views[1] := 15;	#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[0] := 18;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,1,0
+			1| 0,1,1
+			0| 0,1,0
+			--------
+			~#
+			label 23200 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 6;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,1,0
+			1| 1,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 26200 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 10; 	#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,1,0
+			1| 1,1,1
+			0| 0,1,0
+			--------
+			~#
+			label 27200 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 14;	#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,1,0
+			2| 0,1,0
+			1| 1,1,1
+			0| 0,1,0
+			--------
+			~#
+			label 27220 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 14;	#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 0;		#v3
+				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,1,0
+			3| 0,1,0
+			2| 0,1,0
+			1| 1,1,1
+			0| 0,1,0
+			--------
+			~#
+			label 27222 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 14;	#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 0;		#v3
+				@dungeon_views[0] := 116;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,1,0
+			2| 1,1,1
+			1| 0,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 22720 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 13;	#v2
+				@dungeon_views[4] := 0;		#v3
+				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 0,1,0
+			1| 0,1,0
+			0| 1,1,1
+			--------
+			~#
+			label 72200 {
+				@dungeon_views[1] := 15;	#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,1,0
+			2| 0,1,0
+			1| 0,1,0
+			0| 1,1,1
+			--------
+			~#
+			label 72220 {
+				@dungeon_views[1] := 15;	#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 0;		#v3
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 1,1,1
+			2| 0,1,0
+			1| 0,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 22270 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 12;	#v3
+				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,1,0
+			3| 1,1,1
+			2| 0,1,0
+			1| 0,1,0
+			0| 0,1,0
+			--------
+			~#
+			label 22272 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 12;	#v3
+				@dungeon_views[0] := 116;	#--
+			}
+
+
+
+
+			other {
+				"*** Unknown: {$hash_view} ***"->PrintLine();
+			}
+
+
 		};
-
-		#
-		# View 1
-		#
-		if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view)) {
-			# V1: middle, left and right
-			if(IsOpenLeftRight(MapManager->View->VIEW_0, player_view) &
-					IsOpenLeftRight(MapManager->View->VIEW_1, player_view) & 
-					IsClosedLeftRight(MapManager->View->VIEW_2, player_view)) {
-				@dungeon_views[1] := 23;
-				@dungeon_views[2] := 94;
-			}
-			else if(IsOpenLeftRight(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[1] := 23;
-				@dungeon_views[2] := 22;
-			}
-			else if(IsClosedLeftOpenRight(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[2] := 70;
-			}
-			else if(IsClosedRightOpenLeft(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[2] := 82;
-			}
-			else {
-				@dungeon_views[2] := 14;
-			};
-		}
-		# V1: left
-		else if(IsOpenLeft(View->VIEW_1, player_view)) {			
-			if(IsOpenLeft(View->VIEW_0, player_view)) {
-				@dungeon_views[1] := 27;
-				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE])) {
-					@dungeon_views[2] := 110;
-				}
-				else {
-					@dungeon_views[2] := 26;
-				};
-			}
-			else {
-				@dungeon_views[2] := 10;
-			};
-		}
-		# V1: right
-		else if(IsOpenRight(MapManager->View->VIEW_1, player_view)) {
-			if(IsOpenRight(MapManager->View->VIEW_0, player_view)) {
-				@dungeon_views[1] := 31;
-				if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE])) {
-					@dungeon_views[2] := 114;
-				}
-				else {
-					@dungeon_views[2] := 30;
-				};
-			}
-			else {
-				@dungeon_views[2] := 6;
-			};
-		}
-		# V1: middle
-		else if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE])) {
-			@dungeon_views[2] := 2;
-		}
-		else {
-			@dungeon_views[0] := 19;
-			is_blocked := true;
-		};
-
-		#
-		# View 2
-		#
-		if(<>is_blocked) {
-			# V2: middle, left and right
-			if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
-				if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view)) {
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[3] := 33;
-					}
-					else if(IsClosedLeftRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[3] := 106;
-					}
-					else {
-						@dungeon_views[3] := 21;
-					};
-				}
-				else {
-					if(IsOpenRight(MapManager->View->VIEW_1, player_view)) {
-						@dungeon_views[3] := 102;
-					}
-					else if(IsOpenLeft(MapManager->View->VIEW_1, player_view)) {
-						@dungeon_views[3] := 98;
-					}
-					else {
-						@dungeon_views[3] := 13;
-					};
-				};
-			}
-			# V2: left
-			else if(IsOpenLeft(View->VIEW_2, player_view)) {
-				if(IsOpenLeft(View->VIEW_1, player_view)) {
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[3] := 45;
-					}
-					else if(IsOpenLeft(View->VIEW_0, player_view)) {
-						@dungeon_views[3] := 109;
-					}
-					else {
-						@dungeon_views[3] := 45; # 25;
-					};
-				}
-				else {
-					@dungeon_views[3] := 9;
-				};
-			}
-			# V2: right
-			else if(IsOpenRight(MapManager->View->VIEW_2, player_view)) {
-				if(IsOpenRight(MapManager->View->VIEW_1, player_view)) {
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[3] := 57;
-					}
-					else if(IsOpenRight(View->VIEW_0, player_view)) {
-						@dungeon_views[3] := 113;
-					}
-					else {
-						@dungeon_views[3] := 57; #29?
-					};
-				}
-				else {
-					@dungeon_views[3] := 5;
-				};
-			}
-			# V2: middle
-			else if(IsOpen(player_view[MapManager->View->VIEW_2, MapManager->Side->MIDDLE])) {
-				@dungeon_views[3] := 1;
-			}
-			else {
-				@dungeon_views[0] := 18;
-				is_blocked := true;
-			};
-		};
-
-		#
-		# View 3
-		#
-		if(<>is_blocked) {
-			# V3: middle, left and right
-			if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {				
-				if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view) & 
-						IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {					
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view) &
-							IsClosedLeftRight(MapManager->View->VIEW_1, player_view)) {
-						@dungeon_views[4] := 36;
-					}
-					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[4] := 32;
-					}
-					else if(IsClosedLeftRight(MapManager->View->VIEW_1, player_view)) {
-						@dungeon_views[4] := 36;
-					}
-					else {
-						@dungeon_views[4] := 20;
-					};
-				}
-				else if(IsOpenLeftRight(MapManager->View->VIEW_2, player_view)) {
-					@dungeon_views[3] := 37;
-					@dungeon_views[4] := 36;
-				}
-				else if(IsOpenLeftRight(MapManager->View->VIEW_1, player_view)) {
-					if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[4] := 32;
-					}
-					else if(IsClosedLeftRight(MapManager->View->VIEW_2, player_view)) {
-						@dungeon_views[4] := 40;
-					}
-					else {
-						@dungeon_views[4] := 20;
-					};
-				}
-				else if(IsOpenLeftRight(MapManager->View->VIEW_4, player_view) & 
-							IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {
-					@dungeon_views[4] := 40;
-				}
-				else if(IsOpenLeftRight(MapManager->View->VIEW_3, player_view)) {
-					@dungeon_views[4] := 12;
-				}
-				else {
-					@dungeon_views[4] := 36;
-				};
-			}
-			# V3: left
-			else if(IsOpenLeft(View->VIEW_3, player_view)) {				
-				if(IsOpenLeft(View->VIEW_1, player_view)) {
-					if(IsOpenLeft(MapManager->View->VIEW_2, player_view) & 
-						IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 44;
-					}
-					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 52;
-					}
-					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[4] := 44;
-					}
-					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view) & 
-								IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 40;
-					}
-					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 64;
-					}
-					else {						
-						@dungeon_views[4] := 24;
-					};
-				}
-				else if(IsOpenLeft(MapManager->View->VIEW_2, player_view)) {
-					@dungeon_views[3] := 49;
-					@dungeon_views[4] := 48;
-				}
-				else if(IsOpenLeft(MapManager->View->VIEW_3, player_view)) {
-					@dungeon_views[4] := 52;
-				}
-				else {
-					@dungeon_views[4] := 8;
-				};
-			}
-			# V3: right
-			else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-				if(IsOpenRight(MapManager->View->VIEW_1, player_view)) {
-					if(IsOpenRight(MapManager->View->VIEW_3, player_view) & 
-							IsOpenRight(MapManager->View->VIEW_4, player_view)) {
-						@dungeon_views[4] := 56;
-					}
-					else if(IsOpenRight(MapManager->View->VIEW_2, player_view) & 
-								IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 56;					}
-					else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 64;
-					}
-					else if(IsClosedLeftRight(MapManager->View->VIEW_0, player_view)) {
-						@dungeon_views[4] := 56;
-					}
-					else if(IsOpenLeft(MapManager->View->VIEW_3, player_view) & 
-								IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-						@dungeon_views[4] := 40;
-					}
-					else if(IsOpenRight(MapManager->View->VIEW_3, player_view) & 
-							IsOpenRight(MapManager->View->VIEW_2, player_view)) {
-						@dungeon_views[4] := 56;
-					}
-					else {					
-						@dungeon_views[4] := 28;
-					};
-				}
-				else if(IsOpenRight(MapManager->View->VIEW_2, player_view)) {
-					@dungeon_views[3] := 61;
-					@dungeon_views[4] := 60;
-				}
-				else if(IsOpenRight(MapManager->View->VIEW_3, player_view) & 
-							IsOpenRight(MapManager->View->VIEW_2, player_view)) {
-					@dungeon_views[4] := 56;
-				}
-				else if(IsOpenRight(MapManager->View->VIEW_3, player_view)) {
-					@dungeon_views[4] := 64;
-				}
-				else {
-					@dungeon_views[4] := 4;
-				};
-			}
-			# V3: middle
-			else if(IsOpen(player_view[MapManager->View->VIEW_3, MapManager->Side->MIDDLE])) {
-				@dungeon_views[4] := 0;
-			}
-			else {
-				@dungeon_views[0] := 17;
-				is_blocked := true;
-			};
-		};
-
-		#
-		# View 4
-		#
-		if(<>is_blocked) {
-			if(<>IsOpen(player_view[MapManager->View->VIEW_4, MapManager->Side->MIDDLE])) {
-				@dungeon_views[0] := 16;
-			}
-			else {				
-				@dungeon_views[0] := 116; # change me!
-			};
-		};
-
-		# Debug output
-#       @map_manager->PrintMap(@player_direction, @player_location);
-       DebugView();
-	}
-
-	method : DebugView() ~ Nil {
-		"\nViews\n-----"->PrintLine();
-		each(i : @dungeon_views) {
-			image_id := @dungeon_views[i];
-			if(image_id > -1) {
-				v := i - 1;
-				"Level {$v}: image={$image_id}"->PrintLine();
-			};
-		};
-		"----------"->PrintLine();
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {
@@ -511,19 +484,6 @@ class TinyDungeon {
 		};
 
 		return false;
-	}
-
-
-	method : IsVisible(view : MapManager->View, player_view : Int[,]) ~ Bool {
-		count := 0;
-
-		for(i := 0; i < 3; i += 1;) {
-			if(player_view[view, i] = MapManager->Type->BLOCKED) {
-				count += 1;
-			};
-		};
-
-		return count <> 3;
 	}
 
 	method : MoveLeft() ~ Nil {
@@ -573,7 +533,7 @@ class TinyDungeon {
 		each(i : @dungeon_views) {
 			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
 		};
-
+		
 		@framework->Show();
 	}
 
