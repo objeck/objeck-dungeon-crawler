@@ -247,11 +247,6 @@ class TinyDungeon {
 				@dungeon_views[0] := 17;	#--
 			}
 
-
-
-
-			
-
 			#~
 			4| 0,0,0
 			3| 0,0,0
@@ -525,7 +520,7 @@ class TinyDungeon {
 
 
 			other {
-				"*** Unknown: {$hash_view} ***"->PrintLine();
+				"*** Unknown: {$hash_view}\a ***"->PrintLine();
 			}
 
 
