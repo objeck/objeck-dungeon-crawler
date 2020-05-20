@@ -175,39 +175,23 @@ class MapManager from Manager {
 			@player_view[4,2] := GetType(y - 1, x - 4);
 		};
 
-		
-
-		return @player_view;
-	}
-
-	method : public : HashView() ~ Int {
-		hash := row_offset := 0;
-
-		dims := @player_view->Size();
-		for(i := dims[0] - 1; i > -1; i -= 1;) {
-			hash_str := "";
-
-			for(j := 0; j < dims[1]; j += 1;) {
-				value := @player_view[i,j];
-				if(value >= Type->OPEN & value <= Type->END) {
-					hash_str += '1';
-				}
-				else {
-					hash_str += '0';
+		if(print) {
+			dims := @player_view->Size();
+			for(i := dims[0] - 1; i >= 0; i -= 1;) {
+				"{$i}| "->Print();
+				
+				for(j := 0; j < dims[1]; j += 1;) {
+					@player_view[i,j]->Print();
+					if(j + 1 < dims[1]) {
+						','->Print();
+					};
 				};
+				'\n'->Print();
 			};
-			
-			if(row_offset = 0) {
-				hash := hash_str->ToInt(2);
-				row_offset := 10;
-			}
-			else {
-				hash += hash_str->ToInt(2) * row_offset;
-				row_offset *= 10;
-			};
+			"--------\n"->PrintLine();
 		};
 
-		return hash;
+		return @player_view;
 	}
 
 	method : public : GetType(y : Int, x : Int) ~ Int {
@@ -283,7 +267,7 @@ class MapManager from Manager {
 	method : public : Unload() ~ Nil {
 	}
 
-	method : public : ShowDebugMap(player_dir : Direction, player_pos : Int[]) ~ Nil {
+	method : public : PrintMap(player_dir : Direction, player_pos : Int[]) ~ Nil {
 		map := GetMap();
 		map_dimensions := map->Size();
 
@@ -357,24 +341,6 @@ class MapManager from Manager {
 			"\n"->Print();
 		};
 		"--- Player: y={$player_y}, x={$player_x} ---\n"->PrintLine();
-
-		ShowDebugView();
-	}
-
-	method : ShowDebugView() ~ Nil {		
-		dims := @player_view->Size();
-		for(i := dims[0] - 1; i >= 0; i -= 1;) {
-			"{$i}| "->Print();
-			
-			for(j := 0; j < dims[1]; j += 1;) {
-				@player_view[i,j]->Print();
-				if(j + 1 < dims[1]) {
-					','->Print();
-				};
-			};
-			'\n'->Print();
-		};
-		"--------\n"->PrintLine();
 	}
 
 	consts Type {
