@@ -230,6 +230,26 @@ class TinyDungeon {
 				@dungeon_views[0] := 16;	#--
 			}
 
+
+
+			#~ 
+			4| 0,1,1
+			3| 0,1,0
+			2| 0,1,0
+			1| 0,1,0
+			0| 0,1,1
+			--------
+			~#
+			label 32223 {
+				@dungeon_views[1] := 7;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 0;		#v3
+				@dungeon_views[0] := 116;	#--
+			}
+
+
+
 			#~ 
 			4| 0,0,0
 			3| 0,1,0
