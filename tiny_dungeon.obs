@@ -668,6 +668,38 @@ class TinyDungeon {
 
 			#~
 			4| 0,0,0
+			3| 1,1,0
+			2| 0,1,0
+			1| 1,1,0
+			0| 0,1,1
+			~#
+			label 36260,
+					36261, 36264, 36265 {
+				@dungeon_views[1] := 7;		#v0
+				@dungeon_views[2] := 10;	#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 8;		#v2
+				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,0,0
+			3| 0,0,0
+			2| 1,1,0
+			1| 0,1,0
+			0| 1,1,0
+			~#
+			label 62600,
+					62610, 62640, 62650,
+					62601, 62604, 62605 {
+				@dungeon_views[1] := 11;	#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 9;		#v2
+				@dungeon_views[0] := 17;	#--
+			}
+
+			#~
+			4| 0,0,0
 			3| 0,1,0
 			2| 0,1,0
 			1| 1,1,0
@@ -711,7 +743,22 @@ class TinyDungeon {
 				@dungeon_views[2] := 6;		#v1
 				@dungeon_views[3] := 1;		#v2
 				@dungeon_views[4] := 0;		#v3
-				@dungeon_views[0] := 18;	#--
+				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,2,0
+			3| 1,1,0
+			2| 0,1,1
+			1| 0,1,0
+			0| 0,1,1
+			~#
+			label 32362, 32363, 32366, 32367 {
+				@dungeon_views[1] := 7;		#v0
+				@dungeon_views[2] := 2;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 4;		#v3
+				@dungeon_views[0] := 116;	#--
 			}
 
 			#########################
