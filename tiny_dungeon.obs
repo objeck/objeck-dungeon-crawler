@@ -164,6 +164,10 @@ class TinyDungeon {
 			0| 0,1,0
 			--------
 			~#
+			label 25000
+			label 20500
+			label 20050
+			label 20005
 			label 20010
 			label 20040
 			label 20000 {
