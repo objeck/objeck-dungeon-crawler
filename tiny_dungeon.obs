@@ -521,9 +521,7 @@ class TinyDungeon {
 				@dungeon_views[4] := 4;		#v3
 				@dungeon_views[0] := 16;	#--
 			}
-
-			#########################
-
+			
 			#~
 			4| 0,0,0
 			3| 0,0,0
@@ -791,8 +789,6 @@ class TinyDungeon {
 				@dungeon_views[4] := 4;		#v3
 				@dungeon_views[0] := 116;	#--
 			}
-
-			#########################
 
 			#~
 			4| 0,0,0
