@@ -536,6 +536,8 @@ class TinyDungeon {
 			0| 1,1,1
 			--------
 			~#
+			label 75113
+			label 75446
 			label 74644
 			label 70400
 			label 71311
