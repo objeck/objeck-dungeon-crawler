@@ -928,7 +928,7 @@ class TinyDungeon {
 			1| 0,1,0
 			0| 0,1,1
 			~#
-			label 32622, 32623, 32626, 32627	{
+			label 32622, 32623, 32626, 32627 {
 				@dungeon_views[1] := 7;		#v0
 				@dungeon_views[2] := 2;		#v1
 				@dungeon_views[3] := 9;		#v2
@@ -1092,9 +1092,7 @@ class TinyDungeon {
 				@dungeon_views[2] := 6;		#v1
 				@dungeon_views[0] := 18;	#--
 			}
-
 			
-
 			#~
 			4| 0,0,0
 			3| 0,0,0
@@ -1103,7 +1101,7 @@ class TinyDungeon {
 			0| 0,1,1
 			--------
 			~#
-			label 30000,
+			label 30000, # TODO progam to generate codes
 					31000, 34000, 35000,
 					30100, 30400, 30500,
 					30010, 30040, 30050,
