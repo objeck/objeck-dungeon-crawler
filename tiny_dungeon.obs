@@ -440,7 +440,8 @@ class TinyDungeon {
 					71111, 74010, 70030,
 					70107, 71170, 74447,
 					74470, 71117, 70407,
-					74400 {
+					74400, 74647, 75444,
+					75111, 70101 {
 				@dungeon_views[1] := 23;	#v0
 				@dungeon_views[0] := 19;	#--
 			}
@@ -510,6 +511,21 @@ class TinyDungeon {
 				@dungeon_views[3] := 1;		#v2
 				@dungeon_views[4] := 8;		#v3
 				@dungeon_views[0] := 16;	#--
+			}
+
+			#~
+			4| 0,1,0
+			3| 1,1,0
+			2| 0,1,0
+			1| 0,1,1
+			0| 0,1,0
+			~#
+			label 23262, 23263, 23266, 23267 {
+				@dungeon_views[1] := 3;		#v0
+				@dungeon_views[2] := 6;		#v1
+				@dungeon_views[3] := 1;		#v2
+				@dungeon_views[4] := 8;		#v3
+				@dungeon_views[0] := 116;	#--
 			}
 
 			#~
@@ -1093,7 +1109,7 @@ class TinyDungeon {
 			0| 1,1,0
 			--------
 			~#
-			label 60000,
+			label 60000, # TODO progam to generate codes
 					61000, 64000, 65000,
 					60100, 60400, 60500,
 					60010, 60040, 60050,
@@ -1103,7 +1119,7 @@ class TinyDungeon {
 					64640, 60062, 61317,
 					35444, 64447, 64300, 
 					60070, 64740, 60060,
-					65111 {
+					65111, 64711 {
 				@dungeon_views[1] := 27;	#v0
 				@dungeon_views[0] := 19;	#--
 			}
