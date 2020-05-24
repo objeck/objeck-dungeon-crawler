@@ -251,7 +251,7 @@ class TinyDungeon {
 
 					# right
 					label 3 {
-						if(v0 = 3) {
+						if(v1 = 3) {
 							@dungeon_views[3] := 29;
 						}
 						else {
@@ -261,7 +261,7 @@ class TinyDungeon {
 
 					# left
 					label 6 {
-						if(v0 = 6) {
+						if(v1 = 6) {
 							@dungeon_views[3] := 25;
 						}
 						else {
