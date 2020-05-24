@@ -259,6 +259,9 @@ class TinyDungeon {
 								@dungeon_views[3] := 29;
 							};
 						}
+						else if(v1 = 7) {
+							@dungeon_views[3] := 29;
+						}
 						else {
 							@dungeon_views[3] := 5;
 						};
@@ -274,7 +277,10 @@ class TinyDungeon {
 								@dungeon_views[3] := 25;
 							};
 						}
-						else {
+						else if(v1 = 7) {
+							@dungeon_views[3] := 25;
+						}
+						else {							
 							@dungeon_views[3] := 9;
 						};
 					}
