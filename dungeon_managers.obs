@@ -180,8 +180,8 @@ class MapManager from Manager {
 		return @player_view;
 	}
 
-	method : public : HashView() ~ Int {
-		hash := row_offset := 0;
+	method : public : HashView() ~ Int[] {
+		hashes := Int->New[5];
 
 		dims := @player_view->Size();
 		for(i := dims[0] - 1; i > -1; i -= 1;) {
@@ -197,17 +197,10 @@ class MapManager from Manager {
 				};
 			};
 			
-			if(row_offset = 0) {
-				hash := hash_str->ToInt(2);
-				row_offset := 10;
-			}
-			else {
-				hash += hash_str->ToInt(2) * row_offset;
-				row_offset *= 10;
-			};
+			hashes[i] := hash_str->ToInt(2);
 		};
 
-		return hash;
+		return hashes;
 	}
 
 	method : public : GetType(y : Int, x : Int) ~ Int {
