@@ -199,9 +199,12 @@ class TinyDungeon {
 
 				# right
 				label 3 {
-					if(v0 = 3 | v0 = 7) {
+					if(v0 = 3) {
 						@dungeon_views[1] := 31;
 						@dungeon_views[2] := 30;
+					}
+					else if(v0 = 7) {
+"--- TODO: 0 ---"->PrintLine();
 					}
 					else {
 						@dungeon_views[2] := 6;
@@ -210,9 +213,12 @@ class TinyDungeon {
 
 				# left
 				label 6 {
-					if(v0 = 6 | v0 = 7) {
+					if(v0 = 6) {
 						@dungeon_views[1] := 27;
 						@dungeon_views[2] := 26;
+					}
+					else if(v0 = 7) {
+"--- TODO: 1 ---"->PrintLine();
 					}
 					else {
 						@dungeon_views[2] := 10;
@@ -289,7 +295,13 @@ class TinyDungeon {
 
 					# left & right
 					label 7 {
-						if(v1 = 7) {
+						if(v1 = 3) {
+"--- TODO: 2 ---"->PrintLine();
+						}
+						else if(v1 = 6) {
+"--- TODO: 3 ---"->PrintLine();
+						}
+						else if(v1 = 7) {
 							@dungeon_views[3] := 33;
 						}
 						else {
@@ -299,7 +311,7 @@ class TinyDungeon {
 				};
 
 				#
-				# V3
+				# V3: TODO
 				#
 				if(v3 <> 0 & v3 <> 1 & v3 <> 4) {
 					select(v3) {
@@ -310,17 +322,44 @@ class TinyDungeon {
 
 						# right
 						label 3 {
-							@dungeon_views[4] := 4;
+							if(v2 = 3) {
+"--- TODO: 4 ---"->PrintLine();
+							}
+							else if(v2 = 7) {
+"--- TODO: 6 ---"->PrintLine();								
+							}
+							else {
+								@dungeon_views[4] := 4;
+							};
 						}
 
 						# left
 						label 6 {
-							@dungeon_views[4] := 8;
+							if(v2 = 6) {
+"--- TODO: 7 ---"->PrintLine();
+							}
+							else if(v2 = 7) {
+"--- TODO: 8 ---"->PrintLine();								
+							}
+							else {
+								@dungeon_views[4] := 8;
+							};
 						}
 
 						# left & right
 						label 7 {
-							@dungeon_views[4] := 12;
+							if(v2 = 3) {
+"--- TODO: 9 ---"->PrintLine();
+							}
+							else if(v2 = 6) {
+"--- TODO: 10 ---"->PrintLine();
+							}
+							else if(v2 = 7) {
+"--- TODO: 11 ---"->PrintLine();								
+							}
+							else {
+								@dungeon_views[4] := 12;
+							};
 						}
 					};
 				}
