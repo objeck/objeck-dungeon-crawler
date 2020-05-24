@@ -45,7 +45,7 @@ class MapManager from Manager {
 	New(path : String) {
 		Parent();
 
-		@path := "{$path}/debug.map";
+		@path := "{$path}/debug_debug.map";
 		@maps := Vector->New()<MapHolder>;
 		@player_view := Int->New[5, 3];
 		@player_view_id := -1;
@@ -174,8 +174,6 @@ class MapManager from Manager {
 			@player_view[4,1] := GetType(y, x - 4);
 			@player_view[4,2] := GetType(y - 1, x - 4);
 		};
-
-		
 
 		return @player_view;
 	}

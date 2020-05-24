@@ -157,10 +157,14 @@ class TinyDungeon {
 		v3 := hash_view[3];
 		v4 := hash_view[4];
 
-"Hash view: {$v0}, {$v1}, {$v2}, {$v3}, {$v4}"->PrintLine();
+"Hash view: v0={$v0}, v1={$v1}, v2={$v2}, v3={$v3}, v4={$v4}"->PrintLine();
 @map_manager->ShowDebugMap(@player_direction, @player_location);
 
 		blocked := false;
+
+		#
+		# V0
+		#
 		select(v0) {
 			# enclosed
 			label 2 {
@@ -183,7 +187,10 @@ class TinyDungeon {
 			}
 		};
 
-		if(v1 <> 0 & v1 <> 1 & v1 <> 4) {
+		#
+		# V1
+		#
+		if(v1 <> 0 & v1 <> 1 & v1 <> 4) {	
 			select(v1) {
 				# enclosed
 				label 2 {
@@ -192,20 +199,41 @@ class TinyDungeon {
 
 				# right
 				label 3 {
-					@dungeon_views[2] := 6;
+					if(v0 = 3 | v0 = 7) {
+						@dungeon_views[1] := 31;
+						@dungeon_views[2] := 30;
+					}
+					else {
+						@dungeon_views[2] := 6;
+					};
 				}
 
 				# left
 				label 6 {
-					@dungeon_views[2] := 10;
+					if(v0 = 6 | v0 = 7) {
+						@dungeon_views[1] := 27;
+						@dungeon_views[2] := 26;
+					}
+					else {
+						@dungeon_views[2] := 10;
+					};
 				}
 
 				# left & right
 				label 7 {
-					@dungeon_views[2] := 14;
+					if(v0 = 7) {
+						@dungeon_views[1] := 23;
+						@dungeon_views[2] := 22;
+					}
+					else {
+						@dungeon_views[2] := 14;
+					};
 				}
 			};
 			
+			#
+			# V2
+			#
 			if(v2 <> 0 & v2 <> 1 & v2 <> 4) {
 				select(v2) {
 					# enclosed
@@ -215,20 +243,38 @@ class TinyDungeon {
 
 					# right
 					label 3 {
-						@dungeon_views[3] := 5;
+						if(v0 = 3) {
+							@dungeon_views[3] := 29;
+						}
+						else {
+							@dungeon_views[3] := 5;
+						};
 					}
 
 					# left
 					label 6 {
-						@dungeon_views[3] := 9;
+						if(v0 = 6) {
+							@dungeon_views[3] := 25;
+						}
+						else {
+							@dungeon_views[3] := 9;
+						};
 					}
 
 					# left & right
 					label 7 {
-						@dungeon_views[3] := 13;
+						if(v1 = 7) {
+							@dungeon_views[3] := 33;
+						}
+						else {
+							@dungeon_views[3] := 13;
+						};
 					}
 				};
 
+				#
+				# V3
+				#
 				if(v3 <> 0 & v3 <> 1 & v3 <> 4) {
 					select(v3) {
 						# enclosed
@@ -267,7 +313,9 @@ class TinyDungeon {
 			blocked := true;
 		};
 
-		# background
+		#
+		# Background
+		#
 		if(<>blocked) {
 			select(v4) {
 				# enclosed
