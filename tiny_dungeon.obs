@@ -293,7 +293,7 @@ class TinyDungeon {
 					# left & right
 					label 7 {
 						if(v1 = 3) {
-							@dungeon_views[3] := 101; #73;
+							@dungeon_views[3] := 73;
 						}
 						else if(v1 = 6) {
 "--- TODO: 3* ---"->PrintLine();
