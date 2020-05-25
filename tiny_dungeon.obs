@@ -157,9 +157,6 @@ class TinyDungeon {
 		v3 := hash_view[3];
 		v4 := hash_view[4];
 
-"Hash view: v0={$v0}, v1={$v1}, v2={$v2}, v3={$v3}, v4={$v4}"->PrintLine();
-@map_manager->ShowDebugMap(@player_direction, @player_location);
-
 		blocked := false;
 
 		#
@@ -296,7 +293,7 @@ class TinyDungeon {
 					# left & right
 					label 7 {
 						if(v1 = 3) {
-							@dungeon_views[3] := 73;
+							@dungeon_views[3] := 101; #73;
 						}
 						else if(v1 = 6) {
 "--- TODO: 3* ---"->PrintLine();
@@ -402,6 +399,16 @@ class TinyDungeon {
 				}
 			};
 		};
+
+
+p0 := @dungeon_views[1];
+p1 := @dungeon_views[2];
+p2 := @dungeon_views[3];
+p3 := @dungeon_views[4];
+p4 := @dungeon_views[0];
+
+@map_manager->ShowDebugMap(@player_direction, @player_location);
+"Hash view:\n\tv0={$v0}->{$p0}, v1={$v1}->{$p1}, v2={$v2}->{$p2}, v3={$v3}->{$p3}, v4={$v4}->{$p4}"->PrintLine();
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {
