@@ -201,6 +201,7 @@ class TinyDungeon {
 						@dungeon_views[2] := 30;
 					}
 					else if(v0 = 7) {
+						@dungeon_views[1] := 95;
 						@dungeon_views[2] := 30;
 					}
 					else {
@@ -215,6 +216,7 @@ class TinyDungeon {
 						@dungeon_views[2] := 26;
 					}
 					else if(v0 = 7) {
+						@dungeon_views[1] := 92;
 						@dungeon_views[2] := 26;
 					}
 					else {
@@ -428,7 +430,7 @@ p3 := @dungeon_views[4];
 p4 := @dungeon_views[0];
 
 @map_manager->ShowDebugMap(@player_direction, @player_location);
-"Hash Values:\n\tp0\tp1\tp2\tp3\tp4\n\t-----------------------------------\nView\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\nImage\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}"->PrintLine();
+"Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\nView\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\nImage\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}"->PrintLine();
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {
