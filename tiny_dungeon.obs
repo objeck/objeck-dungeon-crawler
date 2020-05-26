@@ -265,7 +265,10 @@ class TinyDungeon {
 
 					# right
 					label 3 {
-						if(v1 = 3) {
+						if(v1 = 2) {
+							@dungeon_views[3] := 61;
+						}
+						else if(v1 = 3) {
 							if(v0 = 2) {
 								@dungeon_views[3] := 57;
 							}
@@ -284,7 +287,10 @@ class TinyDungeon {
 
 					# left
 					label 6 {
-						if(v1 = 6) {
+						if(v1 = 2) {
+							@dungeon_views[3] := 49;
+						}
+						else if(v1 = 6) {
 							if(v0 = 2) {
 								@dungeon_views[3] := 45;
 							}
@@ -358,7 +364,10 @@ class TinyDungeon {
 
 						# right
 						label 3 {
-							if(v2 = 3) {
+							if(v2 = 2) {
+								@dungeon_views[4] := 64;
+							}
+							else if(v2 = 3) {
 								if(v0 = 2 & v1 = 2) {
 									@dungeon_views[4] := 60;	
 								}
@@ -379,7 +388,10 @@ class TinyDungeon {
 
 						# left
 						label 6 {
-							if(v2 = 6) {
+							if(v2 = 2) {
+								@dungeon_views[4] := 52;
+							}
+							else if(v2 = 6) {
 								if(v0 = 2 & v1 = 2) {
 									@dungeon_views[4] := 48;	
 								}
