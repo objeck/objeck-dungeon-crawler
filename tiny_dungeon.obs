@@ -347,7 +347,12 @@ class TinyDungeon {
 						# right
 						label 3 {
 							if(v2 = 3) {
-								@dungeon_views[4] := 28;
+								if(v0 = 2) {
+									@dungeon_views[4] := 56;
+								}
+								else {
+									@dungeon_views[4] := 28;
+								};
 							}
 							else if(v2 = 7) {
 								@dungeon_views[4] := 28;
@@ -360,7 +365,12 @@ class TinyDungeon {
 						# left
 						label 6 {
 							if(v2 = 6) {
-								@dungeon_views[4] := 24;
+								if(v0 = 2) {
+									@dungeon_views[4] := 44;	
+								}
+								else {
+									@dungeon_views[4] := 24;
+								};
 							}
 							else if(v2 = 7) {
 								@dungeon_views[4] := 24;
