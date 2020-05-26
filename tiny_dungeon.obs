@@ -415,7 +415,7 @@ class TinyDungeon {
 				}
 
 				other {
-					@dungeon_views[0] := 16;
+					@dungeon_views[0] := 18;
 				}
 			};
 		};
