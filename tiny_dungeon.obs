@@ -374,7 +374,13 @@ class TinyDungeon {
 "--- TODO: 10 ---"->PrintLine();
 							}
 							else if(v2 = 7) {
-								@dungeon_views[4] := 20;
+								# door way
+								if(v0 = 2) {
+									@dungeon_views[4] := 32;
+								}
+								else {
+									@dungeon_views[4] := 20;
+								};
 "--- TODO: 11 ---"->PrintLine();								
 							}
 							else {
