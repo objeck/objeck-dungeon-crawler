@@ -321,7 +321,11 @@ class TinyDungeon {
 						# enclosed
 						label 2 {
 							if(v2 = 7) {
-								@dungeon_views[3] := 105;
+								if(v0 = 2) {
+								}
+								else {
+									@dungeon_views[3] := 106;
+								};
 								@dungeon_views[4] := 0;
 							}
 							else {
