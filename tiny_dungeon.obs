@@ -369,7 +369,8 @@ class TinyDungeon {
 								};
 							}
 							else if(v2 = 7) {
-								if(v0 = 2) {
+								if(v1 = 2) {
+									@dungeon_views[3] := 13;
 								}
 								else {
 									@dungeon_views[3] := 106;
