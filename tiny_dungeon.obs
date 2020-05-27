@@ -145,8 +145,6 @@ class TinyDungeon {
 	}
 
 	method : native : UpdateView() ~ Nil {
-@map_manager->ShowDebugMap(@player_direction, @player_location);
-
 		@map_manager->GetView(@player_direction, @player_location);
 		each(i : @dungeon_views) {
 			@dungeon_views[i] := -1;
@@ -426,12 +424,10 @@ class TinyDungeon {
 								@dungeon_views[4] := 40;
 							}
 							else if(v2 = 3) {
-								@dungeon_views[4] := 76;
-"--- TODO: 9 ---"->PrintLine();
+								@dungeon_views[4] := 76; # TODO: clip
 							}
 							else if(v2 = 6) {
-								@dungeon_views[4] := 88;
-"--- TODO: 10 ---"->PrintLine();
+								@dungeon_views[4] := 88; # TODO: clip
 							}
 							else if(v2 = 7) {
 								# door way
@@ -489,6 +485,7 @@ p2 := @dungeon_views[3];
 p3 := @dungeon_views[4];
 p4 := @dungeon_views[0];
 
+@map_manager->ShowDebugMap(@player_direction, @player_location);
 "Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\nView\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\nImage\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}"->PrintLine();
 	}
 
