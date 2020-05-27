@@ -342,7 +342,7 @@ class TinyDungeon {
 				};
 
 				#
-				# V3: TODO
+				# V3
 				#
 				if(v3 <> 0 & v3 <> 1 & v3 <> 4) {
 					select(v3) {
@@ -382,6 +382,9 @@ class TinyDungeon {
 								else if(v0 = 2) {
 									@dungeon_views[4] := 56;
 								}
+								else if(v1 = 2) {
+									@dungeon_views[4] := 60;
+								}
 								else {
 									@dungeon_views[4] := 28;
 								};
@@ -405,6 +408,9 @@ class TinyDungeon {
 								}
 								else if(v0 = 2) {
 									@dungeon_views[4] := 44;	
+								}
+								else if(v1 = 2) {
+									@dungeon_views[4] := 48;
 								}
 								else {
 									@dungeon_views[4] := 24;
