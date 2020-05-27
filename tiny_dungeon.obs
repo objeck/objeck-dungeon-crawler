@@ -231,11 +231,11 @@ class TinyDungeon {
 					}
 					else if(v0 = 3) {
 						@dungeon_views[1] := 31;
-						@dungeon_views[2] := 70;
+						@dungeon_views[2] := 117; # 70
 					}
 					else if(v0 = 6) {
 						@dungeon_views[1] := 27;
-						@dungeon_views[2] := 82;
+						@dungeon_views[2] := 119; # 82
 					}
 					else if(v0 = 7) {
 						@dungeon_views[1] := 23;
@@ -349,13 +349,24 @@ class TinyDungeon {
 						# enclosed
 						label 2 {
 							if(v2 = 3) {
-								@dungeon_views[3] := 113;
-								@dungeon_views[4] := 0;
+								if(v1 = 2) {
+									@dungeon_views[3] := 112;
+									@dungeon_views[4] := 0;
+								}
+								else {
+									@dungeon_views[3] := 113;
+									@dungeon_views[4] := 0;
+								};
 							}
-							
 							else if(v2 = 6) {
-								@dungeon_views[3] := 109;
-								@dungeon_views[4] := 0;
+								if(v1 = 2) {
+									@dungeon_views[3] := 108;
+									@dungeon_views[4] := 0;
+								}
+								else {
+									@dungeon_views[3] := 109;
+									@dungeon_views[4] := 0;
+								};
 							}
 							else if(v2 = 7) {
 								if(v0 = 2) {
@@ -430,10 +441,20 @@ class TinyDungeon {
 								@dungeon_views[4] := 40;
 							}
 							else if(v2 = 3) {
-								@dungeon_views[4] := 76; # TODO: clip
+								if(v0 = 2) {
+									@dungeon_views[4] := 76;
+								}
+								else {
+									@dungeon_views[4] := 99;
+								};
 							}
 							else if(v2 = 6) {
-								@dungeon_views[4] := 88; # TODO: clip
+								if(v0 = 2) {
+									@dungeon_views[4] := 88;
+								}
+								else {
+									@dungeon_views[4] := 103;
+								};
 							}
 							else if(v2 = 7) {
 								# door way
