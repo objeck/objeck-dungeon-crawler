@@ -255,11 +255,21 @@ class TinyDungeon {
 					# enclosed
 					label 2 {
 						if(v1 = 3) {
-							@dungeon_views[2] := 114;
+							if(v0 = 2) {
+								@dungeon_views[2] := 114;
+							}
+							else {
+								@dungeon_views[2] := 115;
+							};
 							@dungeon_views[3] := 1;
 						}
 						else if(v1 = 6) {
-							@dungeon_views[2] := 110;
+							if(v0 = 2) {
+								@dungeon_views[2] := 110;
+							}
+							else {
+								@dungeon_views[2] := 111;
+							};
 							@dungeon_views[3] := 1;
 						}
 						else if(v1 = 7) {
