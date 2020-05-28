@@ -582,16 +582,32 @@ p4 := @dungeon_views[0];
 	method : Render(frame_count : Int) ~ Nil {
 		@framework->Clear();
 
-		# background
-		each(i : @dungeon_views) {
-			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
-		};
+		RenderDungeon(frame_count);
+		RenderMap(frame_count);
 		
 		@framework->Show();
 	}
 
+	method : RenderDungeon(frame_count : Int) ~ Nil {
+		each(i : @dungeon_views) {
+			@sprite_manager->RenderDungeonSprite(@dungeon_views[i]);
+		};
+	}
+
+	method : RenderMap(frame_count : Int) ~ Nil {		
+		x_offset := 445;
+		for(i := 0; i < MapManager->Type->MAP_SIZE; i += 1;) {
+			y_offset := 15;
+			for(j := 0; j < MapManager->Type->MAP_SIZE; j += 1;) {
+				@sprite_manager->RenderMapSprite(0, y_offset, x_offset);
+				y_offset += 17;
+			};
+			x_offset += 17;
+		};
+	}
+
 	consts Game {
-		SCREEN_WIDTH := 1024,
+		SCREEN_WIDTH := 768,
 		SCREEN_HEIGHT := 512
 	}
 }
