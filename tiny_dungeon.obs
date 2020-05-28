@@ -608,7 +608,23 @@ p4 := @dungeon_views[0];
 			y_offset := 15;
 			for(j := 0; j < MapManager->Type->MAP_SIZE; j += 1;) {
 				if(@player_location[1] = i & @player_location[0] = j) {
-					@sprite_manager->RenderMapSprite(2, y_offset, x_offset);
+					select(@player_direction) {
+						label MapManager->Direction->NORTH {
+							@sprite_manager->RenderMapSprite(2, y_offset, x_offset);
+						}
+
+						label MapManager->Direction->SOUTH {
+							@sprite_manager->RenderMapSprite(4, y_offset, x_offset);
+						}
+
+						label MapManager->Direction->EAST {
+							@sprite_manager->RenderMapSprite(3, y_offset, x_offset);
+						}
+
+						label MapManager->Direction->WEST {
+							@sprite_manager->RenderMapSprite(5, y_offset, x_offset);
+						}
+					};
 				}
 				else {
 					if(@foo_map[j, i] = 0) {
