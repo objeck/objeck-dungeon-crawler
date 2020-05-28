@@ -14,6 +14,7 @@ class TinyDungeon {
 	@map_manager : MapManager;
 
 	@player_location : Int[];
+	@foo_map : Int[,];
 	@player_direction : MapManager->Direction;
 
 	@dungeon_views : Int[];
@@ -96,6 +97,9 @@ class TinyDungeon {
 		@player_location[0] := start_location[0];
 		@player_location[1] := start_location[1];
 
+		@foo_map := Int->New[MapManager->Type->MAP_SIZE, MapManager->Type->MAP_SIZE];
+		@foo_map[@player_location[0], @player_location[1]] := 1;
+
 		UpdateView();
 	}
 
@@ -141,11 +145,15 @@ class TinyDungeon {
 					@player_location[1] -= 1;
 				}
 			};
+
+			if(@foo_map[@player_location[0], @player_location[1]] = 0) {
+				@foo_map[@player_location[0], @player_location[1]] := 1;
+			};			
 		};
 	}
 
 	method : native : UpdateView() ~ Nil {
-@map_manager->ShowDebugMap(@player_direction, @player_location);
+# @map_manager->ShowDebugMap(@player_direction, @player_location);
 
 		@map_manager->GetView(@player_direction, @player_location);
 		each(i : @dungeon_views) {
@@ -599,7 +607,17 @@ p4 := @dungeon_views[0];
 		for(i := 0; i < MapManager->Type->MAP_SIZE; i += 1;) {
 			y_offset := 15;
 			for(j := 0; j < MapManager->Type->MAP_SIZE; j += 1;) {
-				@sprite_manager->RenderMapSprite(0, y_offset, x_offset);
+				if(@player_location[1] = i & @player_location[0] = j) {
+					@sprite_manager->RenderMapSprite(2, y_offset, x_offset);
+				}
+				else {
+					if(@foo_map[j, i] = 0) {
+						@sprite_manager->RenderMapSprite(0, y_offset, x_offset);
+					}
+					else {
+						@sprite_manager->RenderMapSprite(1, y_offset, x_offset);
+					};
+				};
 				y_offset += 17;
 			};
 			x_offset += 17;
