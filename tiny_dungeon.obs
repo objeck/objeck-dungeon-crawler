@@ -14,7 +14,7 @@ class TinyDungeon {
 	@map_manager : MapManager;
 
 	@player_location : Int[];
-	@foo_map : Int[,];
+	@player_nav_map : Int[,];
 	@player_direction : MapManager->Direction;
 
 	@dungeon_views : Int[];
@@ -97,8 +97,8 @@ class TinyDungeon {
 		@player_location[0] := start_location[0];
 		@player_location[1] := start_location[1];
 
-		@foo_map := Int->New[MapManager->Type->MAP_SIZE, MapManager->Type->MAP_SIZE];
-		@foo_map[@player_location[0], @player_location[1]] := 1;
+		@player_nav_map := Int->New[MapManager->Type->MAP_SIZE, MapManager->Type->MAP_SIZE];
+		@player_nav_map[@player_location[0], @player_location[1]] := 1;
 
 		UpdateView();
 	}
@@ -146,8 +146,8 @@ class TinyDungeon {
 				}
 			};
 
-			if(@foo_map[@player_location[0], @player_location[1]] = 0) {
-				@foo_map[@player_location[0], @player_location[1]] := 1;
+			if(@player_nav_map[@player_location[0], @player_location[1]] = 0) {
+				@player_nav_map[@player_location[0], @player_location[1]] := 1;
 			};			
 		};
 	}
@@ -627,7 +627,7 @@ p4 := @dungeon_views[0];
 					};
 				}
 				else {
-					if(@foo_map[j, i] = 0) {
+					if(@player_nav_map[j, i] = 0) {
 						@sprite_manager->RenderMapSprite(0, y_offset, x_offset);
 					}
 					else {
