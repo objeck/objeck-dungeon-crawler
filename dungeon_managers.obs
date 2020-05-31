@@ -9,27 +9,12 @@ use Game.SDL2;
 use Game.Framework;
 use System.IO.File;
 
+#~
+Manager interface
+~#
 class Manager {
 	method : virtual : public : Load() ~ Bool;
 	method : virtual : public : Unload() ~ Nil;
-}
-
-class MapHolder {
-	@map : Byte[,];
-	@map_start : Int[];
-
-	New(map : Byte[,], map_start : Int[]) {
-		@map := map;
-		@map_start := map_start;
-	}
-
-	method : public : Get() ~ Byte[,] {	
-		return @map;
-	}
-
-	method : public : GetStart() ~ Int[] {
-		return @map_start;
-	}
 }
 
 #~
@@ -405,6 +390,24 @@ class MapManager from Manager {
 	}
 }
 
+class MapHolder {
+	@map : Byte[,];
+	@map_start : Int[];
+
+	New(map : Byte[,], map_start : Int[]) {
+		@map := map;
+		@map_start := map_start;
+	}
+
+	method : public : Get() ~ Byte[,] {	
+		return @map;
+	}
+
+	method : public : GetStart() ~ Int[] {
+		return @map_start;
+	}
+}
+
 #~
 Managers sprite images
 ~#
@@ -412,6 +415,7 @@ class SpriteManager from Manager {
 	@framework : GameFramework;
 	@dungeon_sprites : AnimatedImageSprite[];
 	@map_sprites : AnimatedImageSprite;
+	@monster_sprites : AnimatedImageSprite;
 
 	New(path : String, framework : GameFramework) {
 		Parent();
@@ -424,6 +428,8 @@ class SpriteManager from Manager {
 		@dungeon_sprites[4] := @framework->AddAnimatedImageSprite("{$path}/dungeon_4.png");
 
 		@map_sprites := @framework->AddAnimatedImageSprite("{$path}/map_0.png");
+
+		@monster_sprites := @framework->AddAnimatedImageSprite("{$path}/monsters_1.png");
 	}
 
 	method : public : Load() ~ Bool {
@@ -456,6 +462,18 @@ class SpriteManager from Manager {
 			};
 		};
 
+		# monster sprites
+		if(<>@monster_sprites->IsOk()) {
+			"--- Unable to load images! ---"->ErrorLine();
+			return false;
+		};
+
+		for(j := 0; j < Clips->MONSTER_Y_CLIPS; j += 1;) {
+			for(k := 0; k < Clips->MONSTER_X_CLIPS; k += 1;) {
+				@monster_sprites->AddClip(Rect->New(k * 94, j * 112, 94, 94));
+			};
+		};
+
 		return true;
 	}
 
@@ -464,7 +482,7 @@ class SpriteManager from Manager {
 			sheet_size := Clips->DUNGEON_Y_CLIPS * Clips->DUNGEON_X_CLIPS;
 			sheet_index := raw_index / sheet_size;
 			image_index := raw_index - sheet_index * sheet_size;
-# "### raw_index={$raw_index}: sheet_size={$sheet_size}, sheet_index={$sheet_index}, image_index={$image_index} ###"->PrintLine();
+			# "### raw_index={$raw_index}: sheet_size={$sheet_size}, sheet_index={$sheet_index}, image_index={$image_index} ###"->PrintLine();
 			@dungeon_sprites[sheet_index]->Render(image_index);
 		};
 	}
@@ -477,6 +495,14 @@ class SpriteManager from Manager {
 		};
 	}
 
+	method : public : RenderMonsterSprite(image_index : Int, top : Int, left : Int) ~ Nil {
+		if(image_index > -1 & image_index < Clips->MONSTER_X_CLIPS) {
+			@monster_sprites->SetTop(top);
+			@monster_sprites->SetLeft(left);
+			@monster_sprites->Render(image_index);
+		};
+	}
+
 	method : public : Unload() ~ Nil {
 		
 	}
@@ -485,8 +511,12 @@ class SpriteManager from Manager {
 		DUNGEON_X_CLIPS := 4,
 		DUNGEON_Y_CLIPS := 6,
 		DUNGEON_SHEETS := 5,
+
 		MAP_X_CLIPS := 6,
-		MAP_Y_CLIPS := 1
+		MAP_Y_CLIPS := 1,
+		
+		MONSTER_X_CLIPS := 4,
+		MONSTER_Y_CLIPS := 1
 	}
 }
 
