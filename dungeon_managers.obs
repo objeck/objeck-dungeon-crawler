@@ -470,7 +470,7 @@ class SpriteManager from Manager {
 
 		for(j := 0; j < Clips->MONSTER_Y_CLIPS; j += 1;) {
 			for(k := 0; k < Clips->MONSTER_X_CLIPS; k += 1;) {
-				@monster_sprites->AddClip(Rect->New(k * 94, j * 112, 94, 94));
+				@monster_sprites->AddClip(Rect->New(k * 94*2 , j * 112*2, 94*2, 94*2));
 			};
 		};
 
