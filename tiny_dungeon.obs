@@ -19,7 +19,7 @@ class TinyDungeon {
 
 	@dungeon_views : Int[];
 
-	@moster_sprint_index : Int;
+	@Monster_sprint_index : Int;
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
@@ -593,20 +593,20 @@ p4 := @dungeon_views[0];
 		@framework->Clear();
 
 		RenderDungeon(frame_count);
-		RenderMoster(frame_count);
+		RenderMonster(frame_count);
 		RenderMap(frame_count);
 		
 		@framework->Show();
 	}
 
-	method : RenderMoster(frame_count : Int) ~ Nil {		
-		@sprite_manager->RenderMonsterSprite(@moster_sprint_index, 95, 120);
+	method : RenderMonster(frame_count : Int) ~ Nil {		
+		@sprite_manager->RenderMonsterSprite(@Monster_sprint_index, 95, 120);
 
 		# update
 		if(frame_count % 20 = 0) {
-			@moster_sprint_index += 1;
-			if(@moster_sprint_index >= SpriteManager->Clips->MONSTER_X_CLIPS) {
-				@moster_sprint_index := 0;
+			@Monster_sprint_index += 1;
+			if(@Monster_sprint_index >= SpriteManager->Clips->MONSTER_X_CLIPS) {
+				@Monster_sprint_index := 0;
 			};
 		};
 	}
