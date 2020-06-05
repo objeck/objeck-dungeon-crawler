@@ -455,26 +455,15 @@ class SpriteManager from Manager {
 			"--- Unable to load images! ---"->ErrorLine();
 			return false;
 		};
-
-		# TODO: move code into AnimatedImageSprite class
-		for(j := 0; j < Clips->MAP_Y_CLIPS; j += 1;) {
-			for(k := 0; k < Clips->MAP_X_CLIPS; k += 1;) {
-				@map_sprites->AddClip(Rect->New(k * 14, j * 14, 14, 14));
-			};
-		};
+		@map_sprites->AddClips(Clips->MAP_X_CLIPS, 14, Clips->MAP_Y_CLIPS, 14);
 
 		# monster sprites
 		if(<>@monster_sprites->IsOk()) {
 			"--- Unable to load images! ---"->ErrorLine();
 			return false;
-		};
-
-		for(j := 0; j < Clips->MONSTER_Y_CLIPS; j += 1;) {
-			for(k := 0; k < Clips->MONSTER_X_CLIPS; k += 1;) {
-				@monster_sprites->AddClip(Rect->New(k * 94*2 , j * 112*2, 94*2, 94*2));
-			};
-		};
-
+		};		
+		@monster_sprites->AddClips(Clips->MONSTER_X_CLIPS, 188, Clips->MONSTER_Y_CLIPS, 224);
+		
 		return true;
 	}
 
