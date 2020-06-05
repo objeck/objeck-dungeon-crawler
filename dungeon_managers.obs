@@ -456,6 +456,7 @@ class SpriteManager from Manager {
 			return false;
 		};
 
+		# TODO: move code into AnimatedImageSprite class
 		for(j := 0; j < Clips->MAP_Y_CLIPS; j += 1;) {
 			for(k := 0; k < Clips->MAP_X_CLIPS; k += 1;) {
 				@map_sprites->AddClip(Rect->New(k * 14, j * 14, 14, 14));
