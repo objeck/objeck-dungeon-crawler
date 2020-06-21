@@ -486,7 +486,7 @@ class SpriteManager from Manager {
 	}
 
 	method : public : RenderMonsterSprite(image_index : Int, top : Int, left : Int) ~ Nil {
-		if(image_index > -1 & image_index < Clips->MONSTER_X_CLIPS) {
+		if(image_index > -1) {
 			@monster_sprites->SetTop(top);
 			@monster_sprites->SetLeft(left);
 			@monster_sprites->Render(image_index);
@@ -506,7 +506,7 @@ class SpriteManager from Manager {
 		MAP_Y_CLIPS := 1,
 		
 		MONSTER_X_CLIPS := 4,
-		MONSTER_Y_CLIPS := 1
+		MONSTER_Y_CLIPS := 2
 	}
 }
 
