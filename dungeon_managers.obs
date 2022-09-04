@@ -201,7 +201,7 @@ class MapManager from Manager {
 			map_file->Close();
 		};
 
-		end_line := map_file->ReadString();
+		end_line := map_file->ReadLine();
 		while(<>end_line->StartsWith('-')) {
 			rows := cols := Type->MAP_SIZE;
 
@@ -209,7 +209,7 @@ class MapManager from Manager {
 			map_start := Int->New[2];
 
 			for(i := 0; i < rows; i += 1;) {
-				line := map_file->ReadString();
+				line := map_file->ReadLine();
 				if(line->Size() <> cols) {
 					return false;
 				};
@@ -250,7 +250,7 @@ class MapManager from Manager {
 			};
 
 			@maps->AddBack(MapHolder->New(map, map_start));
-			end_line := map_file->ReadString();
+			end_line := map_file->ReadLine();
 		};
 
 		return true;
@@ -515,7 +515,8 @@ Managers sound assets
 ~#
 class SoundManager from Manager {
 	@dungeon_sprites : AnimatedImageSprite;
-
+	@framework : GameFramework;
+	
 	New(path : String, framework : GameFramework) {
 		Parent();
 		@framework := framework;

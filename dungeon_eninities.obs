@@ -278,10 +278,10 @@ class Entity {
 	}
 
 	method : public : Attack(opponent : Entity) ~ Bool {
-		our_name := GetName();
+#		our_name := GetName();
 		attack := GetAttack();
 
-		opponent_name := opponent->GetName();
+#		opponent_name := opponent->GetName();
 		defense := opponent->GetDefense();
 
 		diff := attack - defense;
