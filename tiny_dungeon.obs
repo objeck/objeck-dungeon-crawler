@@ -32,7 +32,7 @@ class TinyDungeon {
 		@player_location := Int->New[3];
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
 
-		@monster_sprint_index := 5;
+		@monster_sprint_index := 0;
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -608,8 +608,8 @@ p4 := @dungeon_views[0];
 		# update
 		if(frame_count % 20 = 0) {
 			@monster_sprint_index += 1;
-			if(@monster_sprint_index >= SpriteManager->Clips->MONSTER_X_CLIPS * SpriteManager->Clips->MONSTER_Y_CLIPS) {
-				@monster_sprint_index := 5;
+			if(@monster_sprint_index >= SpriteManager->Clips->MONSTER_X_CLIPS #~ * SpriteManager->Clips->MONSTER_Y_CLIPS ~#) {
+				@monster_sprint_index := 0;
 			};
 		};
 	}
