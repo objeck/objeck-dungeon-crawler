@@ -21,6 +21,8 @@ class TinyDungeon {
 
 	@monster_sprint_index : Int;
 
+	@to_battle : Entity;
+
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
@@ -108,24 +110,36 @@ class TinyDungeon {
 		UpdateView();
 	}
 
-	method : GetInput(e : Event) ~ Nil {
+	method : GetInput(e : Event) ~ Nil {	
 		select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP
         	label Scancode->SDL_SCANCODE_W {
-        		MoveForward();
-        		UpdateView();
+        		if(@to_battle = Nil) {
+	        		MoveForward();
+	        		UpdateView();
+	        	};
         	}
 
         	label Scancode->SDL_SCANCODE_LEFT
         	label Scancode->SDL_SCANCODE_A {
-        		MoveLeft();
-        		UpdateView();
+        		if(@to_battle = Nil) {
+	        		MoveLeft();
+	        		UpdateView();
+	        	};
         	}
 
         	label Scancode->SDL_SCANCODE_RIGHT
         	label Scancode->SDL_SCANCODE_D {
-        		MoveRight();
-        		UpdateView();
+        		if(@to_battle = Nil) {
+	        		MoveRight();
+	        		UpdateView();
+	        	};
+        	}
+
+        	label Scancode->SDL_SCANCODE_SPACE {
+        		if(@to_battle <> Nil) {
+
+        		};
         	}
         };
 	}
@@ -153,7 +167,15 @@ class TinyDungeon {
 
 			if(@player_nav_map[@player_location[0], @player_location[1]] = 0) {
 				@player_nav_map[@player_location[0], @player_location[1]] := 1;
-			};			
+			};
+
+       		CheckBattle();		
+		};
+	}
+
+	method : CheckBattle() ~ Nil {
+		if(Int->Random(100) < 20) {
+			@to_battle := Slime->New(2);
 		};
 	}
 
@@ -596,7 +618,9 @@ p4 := @dungeon_views[0];
 		@framework->Clear();
 
 		RenderDungeon(frame_count);
-		RenderMonster(frame_count);
+		if(@to_battle = Nil) {
+			RenderMonster(frame_count);
+		};
 		RenderMap(frame_count);
 		
 		@framework->Show();
