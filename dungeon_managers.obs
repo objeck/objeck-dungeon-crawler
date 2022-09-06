@@ -467,12 +467,12 @@ class SpriteManager from Manager {
 		return true;
 	}
 
-	method : public : RenderMonsterHit() {
-# @dungeon_sprites[sheet_index]->Render(image_index);		
+	method : public : RenderMonsterHit() ~ Nil {
+		@dungeon_sprites[4]->Render(4);		
 	}
 
-	method : public : RenderPlayerHit() {
-# @dungeon_sprites[sheet_index]->Render(image_index);	
+	method : public : RenderPlayerHit() ~ Nil {
+		@dungeon_sprites[4]->Render(8);		
 	}
 
 	method : public : RenderDungeonSprite(raw_index : Int) ~ Nil {

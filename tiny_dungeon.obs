@@ -23,10 +23,10 @@ class TinyDungeon {
 	@monster_sprint_index : Int;
 
 	@monster : Entity;
-	@monster_hit : Bool;
+	@monster_hit : Int;
 
 	@player : Player;
-	@player_hit : Bool;
+	@player_hit : Int;
 	
 	@encounter_perc : Int;
 
@@ -149,16 +149,16 @@ class TinyDungeon {
 
         	label Scancode->SDL_SCANCODE_SPACE {
         		if(@monster <> Nil) {
-        			@player_hit := @monster->Attack(@player);
+        			@player_hit := @monster->Attack(@player) ? 10 : 1;
         			if(<>@monster->IsAlive()) {
 "--- He's dead Jim ---"->PrintLine();
         				@quit := true;
         			}
         			else {
-	        			@monster_hit := @player->Attack(@monster);
+	        			@monster_hit := @player->Attack(@monster) ? 10 : 1;
 	        			if(<>@monster->IsAlive()) {
 	        				@monster := Nil;
-	        				@player_hit := @monster_hit := false;
+	        				@player_hit := @monster_hit := 0;
 
 player_hp := @player->GetHp();
 "===\nFinal: {$player_hp}"->PrintLine();
@@ -643,15 +643,13 @@ p4 := @dungeon_views[0];
 		@framework->Clear();
 
 		RenderDungeon(frame_count);
-		if(@player_hit) {
-			if(frame_count % 5 = 0) {
-				@sprite_manager->RenderMonsterHit();
-			};
+		if(@player_hit > 0) {
+			@sprite_manager->RenderMonsterHit();
+			@player_hit -= 1;
 		}
-		else if(@monster_hit) {
-			if(frame_count % 5 = 0) {
-				@sprite_manager->RenderPlayerHit();
-			};
+		else if(@monster_hit > 0) {
+			@sprite_manager->RenderPlayerHit();
+			@monster_hit -= 1;
 		};
 
 		if(@monster <> Nil) {
