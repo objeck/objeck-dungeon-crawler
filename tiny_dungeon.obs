@@ -149,17 +149,16 @@ class TinyDungeon {
 
         	label Scancode->SDL_SCANCODE_SPACE {
         		if(@monster <> Nil) {
-        			@player_hit := @monster->Attack(@player) ? 10 : 1;
-        			if(<>@monster->IsAlive()) {
+        			@player_hit := @monster->Attack(@player) ? 15 : 0;
+        			if(<>@player->IsAlive()) {
 "--- He's dead Jim ---"->PrintLine();
         				@quit := true;
         			}
         			else {
-	        			@monster_hit := @player->Attack(@monster) ? 10 : 1;
+	        			@monster_hit := @player->Attack(@monster) ? 15 : 0;
 	        			if(<>@monster->IsAlive()) {
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
-
 player_hp := @player->GetHp();
 "===\nFinal: {$player_hp}"->PrintLine();
 	        			};
