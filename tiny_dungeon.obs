@@ -12,6 +12,7 @@ class TinyDungeon {
 	@sprite_manager : SpriteManager;
 	@sound_manager : SoundManager;
 	@map_manager : MapManager;
+	@quit : Bool;
 
 	@player_location : Int[];
 	@player_nav_map : Int[,];
@@ -21,7 +22,13 @@ class TinyDungeon {
 
 	@monster_sprint_index : Int;
 
-	@to_battle : Entity;
+	@monster : Entity;
+	@monster_hit : Bool;
+
+	@player : Player;
+	@player_hit : Bool;
+	
+	@encounter_perc : Int;
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
@@ -35,6 +42,10 @@ class TinyDungeon {
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
 
 		@monster_sprint_index := 0;
+
+		Entity->Init();
+		@player := Player->New();
+		@encounter_perc := 15;
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -64,17 +75,17 @@ class TinyDungeon {
 			StartLevel();
 
 			frame_count := 0;
-			quit := false;
+			@quit := false;
 
 			e := @framework->GetEvent();
-			while(<>quit) {
+			while(<>@quit) {
 				@framework->FrameStart();
 				
 				# process input
 				while(e->Poll() <> 0) {
-					# quit
+					# @quit
 					if(e->GetType() = EventType->SDL_QUIT) {
-						quit := true;
+						@quit := true;
 					}
 					# keyboard
 					else if(e->GetType() = EventType->SDL_KEYDOWN & e->GetKey()->GetRepeat() = 0) {
@@ -114,7 +125,7 @@ class TinyDungeon {
 		select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP
         	label Scancode->SDL_SCANCODE_W {
-        		if(@to_battle = Nil) {
+        		if(@monster = Nil) {
 	        		MoveForward();
 	        		UpdateView();
 	        	};
@@ -122,7 +133,7 @@ class TinyDungeon {
 
         	label Scancode->SDL_SCANCODE_LEFT
         	label Scancode->SDL_SCANCODE_A {
-        		if(@to_battle = Nil) {
+        		if(@monster = Nil) {
 	        		MoveLeft();
 	        		UpdateView();
 	        	};
@@ -130,16 +141,30 @@ class TinyDungeon {
 
         	label Scancode->SDL_SCANCODE_RIGHT
         	label Scancode->SDL_SCANCODE_D {
-        		if(@to_battle = Nil) {
+        		if(@monster = Nil) {
 	        		MoveRight();
 	        		UpdateView();
 	        	};
         	}
 
         	label Scancode->SDL_SCANCODE_SPACE {
-        		if(@to_battle <> Nil) {
+        		if(@monster <> Nil) {
+        			@player_hit := @monster->Attack(@player);
+        			if(<>@monster->IsAlive()) {
+"--- He's dead Jim ---"->PrintLine();
+        				@quit := true;
+        			}
+        			else {
+	        			@monster_hit := @player->Attack(@monster);
+	        			if(<>@monster->IsAlive()) {
+	        				@monster := Nil;
+	        				@player_hit := @monster_hit := false;
 
-        		};
+player_hp := @player->GetHp();
+"===\nFinal: {$player_hp}"->PrintLine();
+	        			};
+	        		};
+	        	};
         	}
         };
 	}
@@ -174,13 +199,13 @@ class TinyDungeon {
 	}
 
 	method : CheckBattle() ~ Nil {
-		if(Int->Random(100) < 20) {
-			@to_battle := Slime->New(2);
+		if(Int->Random(100) < @encounter_perc) {
+			@monster := Slime->New(1);
 		};
 	}
 
 	method : native : UpdateView() ~ Nil {
-# @map_manager->ShowDebugMap(@player_direction, @player_location);
+		# @map_manager->ShowDebugMap(@player_direction, @player_location);
 
 		@map_manager->GetView(@player_direction, @player_location);
 		each(i : @dungeon_views) {
@@ -618,7 +643,18 @@ p4 := @dungeon_views[0];
 		@framework->Clear();
 
 		RenderDungeon(frame_count);
-		if(@to_battle = Nil) {
+		if(@player_hit) {
+			if(frame_count % 5 = 0) {
+				@sprite_manager->RenderMonsterHit();
+			};
+		}
+		else if(@monster_hit) {
+			if(frame_count % 5 = 0) {
+				@sprite_manager->RenderPlayerHit();
+			};
+		};
+
+		if(@monster <> Nil) {
 			RenderMonster(frame_count);
 		};
 		RenderMap(frame_count);

@@ -467,6 +467,14 @@ class SpriteManager from Manager {
 		return true;
 	}
 
+	method : public : RenderMonsterHit() {
+# @dungeon_sprites[sheet_index]->Render(image_index);		
+	}
+
+	method : public : RenderPlayerHit() {
+# @dungeon_sprites[sheet_index]->Render(image_index);	
+	}
+
 	method : public : RenderDungeonSprite(raw_index : Int) ~ Nil {
 		if(raw_index > -1) {
 			sheet_size := Clips->DUNGEON_Y_CLIPS * Clips->DUNGEON_X_CLIPS;

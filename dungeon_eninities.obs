@@ -278,16 +278,16 @@ class Entity {
 	}
 
 	method : public : Attack(opponent : Entity) ~ Bool {
-#		our_name := GetName();
 		attack := GetAttack();
 
-#		opponent_name := opponent->GetName();
 		defense := opponent->GetDefense();
 
 		diff := attack - defense;
 		opponent->SetHp(diff < 0 ? Int->Random(0, 1) : diff);
 
-# "{$our_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
+		our_name := GetName();
+		opponent_name := opponent->GetName();
+"{$our_name} => {$opponent_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
 
 		return diff > 0;
 	}
