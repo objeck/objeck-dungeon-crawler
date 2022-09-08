@@ -514,7 +514,7 @@ class SpriteManager from Manager {
 		MAP_Y_CLIPS := 1,
 		
 		MONSTER_X_CLIPS := 4,
-		MONSTER_Y_CLIPS := 2
+		MONSTER_Y_CLIPS := 3
 	}
 }
 

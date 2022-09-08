@@ -32,11 +32,11 @@ class Ghost from Entity {
 	}
 
 	method : public : GetImageStart() ~ Int {
-		return 5;
+		return 8;
 	}
 
 	method : public : GetImageEnd() ~ Int {
-		return 9;
+		return 11;
 	}
 }
 
@@ -63,11 +63,11 @@ class Slime from Entity {
 	}
 
 	method : public : GetImageStart() ~ Int {
-		return 0;
+		return 4;
 	}
 
 	method : public : GetImageEnd() ~ Int {
-		return 4;
+		return 7;
 	}
 }
 
@@ -94,11 +94,11 @@ class Rat from Entity {
 	}
 
 	method : public : GetImageStart() ~ Int {
-		return 10;
+		return 0;
 	}
 
 	method : public : GetImageEnd() ~ Int {
-		return 14;
+		return 3;
 	}
 }
 

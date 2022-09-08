@@ -198,8 +198,22 @@ player_hp := @player->GetHp();
 	}
 
 	method : CheckBattle() ~ Nil {
-		if(Int->Random(100) < @encounter_perc) {
-			@monster := Slime->New(1);
+		if(@monster = Nil & Int->Random(99) < @encounter_perc) {
+			select(Int->Random(2)) {
+				label 0 {
+					@monster := Rat->New(1);
+				}
+
+				label 1 {
+					@monster := Ghost->New(1);
+				}
+
+				other {
+					@monster := Slime->New(1);
+				}
+			};
+
+			@monster_sprint_index := @monster->GetImageStart();
 		};
 	}
 
