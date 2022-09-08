@@ -14,7 +14,7 @@ Ghost
 ~#
 class Ghost from Entity {
 	New(level : Int) {
-		Parent(EntityType->GHOST,	# type
+		Parent(EntityType->GHOST,		# type
 			level,						# level
 			Int->Random(9, 13),			# max hp
 			Int->Random(17, 19),		# strength

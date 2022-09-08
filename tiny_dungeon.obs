@@ -1,6 +1,6 @@
 #~
 Tiny Dungeon Crawler
-Copyright (c) 2020 Randy Hollines
+Copyright (c) 2020, 2022 Randy Hollines
 ~#
 
 use Collection.Generic;
@@ -645,7 +645,7 @@ player_hp := @player->GetHp();
 
 		if(@monster <> Nil) {
 			RenderMonster(frame_count);
-			
+
 			if(@player_hit > 0) {
 				@sprite_manager->RenderMonsterHit();
 				@player_hit -= 1;
