@@ -30,9 +30,24 @@ class TinyDungeon {
 	
 	@encounter_perc : Int;
 
+	@text_box : Rectangle;
+	@status_box : Rectangle;
+
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
+
+		# TODO: move this
+		@text_box := @framework->AddRectangle(400, 165);
+		@text_box->SetFill(true);
+		@text_box->SetColor(Color->New(78,53,36));
+
+
+		# TODO: move this
+		@status_box := @framework->AddRectangle(305, 165);
+		@status_box->SetFill(true);
+		@status_box->SetColor(Color->New(78,53,36));
+
 
 		@sprite_manager := SpriteManager->New("./images", @framework);
 		@sound_manager := SoundManager->New("./sounds", @framework);
@@ -672,7 +687,10 @@ player_hp := @player->GetHp();
 			};
 		};
 		RenderMap(frame_count);
-		
+
+		@text_box->Render(15, 330);
+		@status_box->Render(445, 330);
+
 		@framework->Show();
 	}
 
