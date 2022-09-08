@@ -10,11 +10,11 @@ use Game.Framework;
 use System.IO.File;
 
 #~
-Skeleton
+Ghost
 ~#
-class Skeleton from Entity {
+class Ghost from Entity {
 	New(level : Int) {
-		Parent(EntityType->SKELETON,	# type
+		Parent(EntityType->GHOST,	# type
 			level,						# level
 			Int->Random(9, 13),			# max hp
 			Int->Random(17, 19),		# strength
@@ -32,11 +32,11 @@ class Skeleton from Entity {
 	}
 
 	method : public : GetImageStart() ~ Int {
-		return 9;
+		return 5;
 	}
 
 	method : public : GetImageEnd() ~ Int {
-		return 12;
+		return 9;
 	}
 }
 
@@ -71,11 +71,12 @@ class Slime from Entity {
 	}
 }
 
-# --- Rat ---
-
+#~
+Rat
+~#
 class Rat from Entity {
 	New(level : Int) {
-		Parent(EntityType->SLIME,	# type
+		Parent(EntityType->RAT,		# type
 			level,					# level
 			Int->Random(5, 10),		# max hp
 			Int->Random(15, 17),	# strength
@@ -93,11 +94,11 @@ class Rat from Entity {
 	}
 
 	method : public : GetImageStart() ~ Int {
-		return 0;
+		return 10;
 	}
 
 	method : public : GetImageEnd() ~ Int {
-		return 4;
+		return 14;
 	}
 }
 
@@ -248,7 +249,7 @@ class Entity {
 		PERSON,
 		SLIME,
 		RAT,
-		SKELETON
+		GHOST
 	}
 
 	function : Init() ~ Nil {
