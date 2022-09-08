@@ -30,6 +30,14 @@ class Skeleton from Entity {
 	method : public : GetFightExperince() ~ Int {
 		return Int->Random(9, 11);
 	}
+
+	method : public : GetImageStart() ~ Int {
+		return 9;
+	}
+
+	method : public : GetImageEnd() ~ Int {
+		return 12;
+	}
 }
 
 #~
@@ -53,6 +61,14 @@ class Slime from Entity {
 	method : public : GetFightExperince() ~ Int {
 		return Int->Random(9, 11);
 	}
+
+	method : public : GetImageStart() ~ Int {
+		return 0;
+	}
+
+	method : public : GetImageEnd() ~ Int {
+		return 4;
+	}
 }
 
 # --- Rat ---
@@ -74,6 +90,14 @@ class Rat from Entity {
 
 	method : public : GetFightExperince() ~ Int {
 		return Int->Random(12, 15);
+	}
+
+	method : public : GetImageStart() ~ Int {
+		return 0;
+	}
+
+	method : public : GetImageEnd() ~ Int {
+		return 4;
 	}
 }
 
@@ -198,6 +222,14 @@ class Player from Entity {
 	method : public : GetFightExperince() ~ Int {
 		return @experience;
 	}
+
+	method : public : GetImageEnd() ~ Int {
+		return -1;
+	}
+
+	method : public : GetImageStart() ~ Int {
+		return -1;
+	}
 }
 
 class Entity {
@@ -244,6 +276,10 @@ class Entity {
 	method : virtual : public : GetName() ~ String;
 
 	method : virtual : public : GetFightExperince() ~ Int;
+
+	method : virtual : public : GetImageEnd() ~ Int;
+
+	method : virtual : public : GetImageStart() ~ Int;
 
 	method : public : GetHpPercentage() ~ Float {
 		return @hp->As(Float) / @max_hp->As(Float);

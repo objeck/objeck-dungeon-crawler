@@ -583,10 +583,10 @@ player_hp := @player->GetHp();
 		};
 
 		#~
-p0 := @dungeon_views[1]; p1 := @dungeon_views[2];
-p2 := @dungeon_views[3]; p3 := @dungeon_views[4];
-p4 := @dungeon_views[0]; 
-"Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\nView\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\nImage\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}"->PrintLine();
+		p0 := @dungeon_views[1]; p1 := @dungeon_views[2];
+		p2 := @dungeon_views[3]; p3 := @dungeon_views[4];
+		p4 := @dungeon_views[0]; 
+		"Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\nView\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\nImage\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}"->PrintLine();
 		~#
 	}
 
@@ -642,17 +642,20 @@ p4 := @dungeon_views[0];
 		@framework->Clear();
 
 		RenderDungeon(frame_count);
-		if(@player_hit > 0) {
-			@sprite_manager->RenderMonsterHit();
-			@player_hit -= 1;
-		}
-		else if(@monster_hit > 0) {
-			@sprite_manager->RenderPlayerHit();
-			@monster_hit -= 1;
-		};
 
 		if(@monster <> Nil) {
 			RenderMonster(frame_count);
+			
+			if(@player_hit > 0) {
+				@sprite_manager->RenderMonsterHit();
+				@player_hit -= 1;
+				@monster_hit := 0;
+			}
+			else if(@monster_hit > 0) {
+				@sprite_manager->RenderPlayerHit();
+				@player_hit := 0;
+				@monster_hit -= 1;
+			};
 		};
 		RenderMap(frame_count);
 		
@@ -665,8 +668,8 @@ p4 := @dungeon_views[0];
 		# update
 		if(frame_count % 20 = 0) {
 			@monster_sprint_index += 1;
-			if(@monster_sprint_index >= SpriteManager->Clips->MONSTER_X_CLIPS #~ * SpriteManager->Clips->MONSTER_Y_CLIPS ~#) {
-				@monster_sprint_index := 0;
+			if(@monster_sprint_index >= @monster->GetImageEnd()) {
+				@monster_sprint_index := @monster->GetImageStart();
 			};
 		};
 	}
