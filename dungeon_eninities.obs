@@ -19,8 +19,7 @@ class Ghost from Entity {
 			Int->Random(9, 13),			# max hp
 			Int->Random(17, 19),		# strength
 			Int->Random(11, 13),		# agility
-			Int->Random(7, 10),			# stamina
-			6);							# image offset
+			Int->Random(7, 10));		# stamina
 	}
 
 	method : public : GetName() ~ String {
@@ -50,8 +49,7 @@ class Slime from Entity {
 			Int->Random(7, 11),		# max hp
 			Int->Random(14, 16),	# strength
 			Int->Random(10, 11),	# agility
-			Int->Random(14, 15),	# stamina
-			0);						# image offset
+			Int->Random(14, 15));	# stamina
 	}
 
 	method : public : GetName() ~ String {
@@ -81,8 +79,7 @@ class Rat from Entity {
 			Int->Random(5, 10),		# max hp
 			Int->Random(15, 17),	# strength
 			Int->Random(14, 15),	# agility
-			Int->Random(8, 10),		# stamina
-			3);						# image offset
+			Int->Random(8, 10));		# stamina
 	}
 
 	method : public : GetName() ~ String {
@@ -102,24 +99,82 @@ class Rat from Entity {
 	}
 }
 
+# --- Weapons ---
+interface Weapon {
+	method : virtual : public : GetName() ~ String;
+	method : virtual : public : GetHit() ~ Float;
+}
+
+class WoodenSword implements Weapon {
+	New() {
+	}
+
+	method : public : GetName() ~ String {
+		return "Wooden Sword";
+	}
+
+	method : public : GetHit() ~ Float {
+		return 0.2;
+	}
+}
+
+# --- Armor ---
+interface Armor {
+	method : virtual : public : GetName() ~ String;
+	method : virtual : public : GetHit() ~ Float;
+}
+
+class Leather implements Armor {
+	New() {
+	}
+
+	method : public : GetName() ~ String {
+		return "Leather";
+	}
+
+	method : public : GetHit() ~ Float {
+		return 0.15;
+	}
+}
+
 # --- Player ---
 
 class Player from Entity {
 	@experience : Int;
+	@mp : Int;
 	@gold : Int;
-	@potion_count : Int;
+	@heal_potion_count : Int;
 	@tent_count : Int;
+	@weapon : Weapon;
+	@armor : Armor;
 
 	New() {
 		Parent(EntityType->PERSON,	# type
 			1, 						# level
-			Int->Random(18, 16),	# max hp
-			Int->Random(13, 15),	# strength
+			Int->Random(21, 28),	# max hp
+			Int->Random(14, 17),	# strength
 			Int->Random(12, 14),	# agility
 			Int->Random(13, 15));	# stamina
 
-		@potion_count := 2;
-		@tent_count := 2;
+		@mp := Int->Random(4, 7);
+		@heal_potion_count := Int->Random(3, 4);
+		@tent_count := Int->Random(1, 2);
+	}
+
+	method : public : SetWeapon(weapon : Weapon) ~ Nil {
+		@weapon := weapon;
+	}
+
+	method : public : SetArmor(armor : Armor) ~ Nil {
+		@armor := armor;
+	}
+
+	method : public : GetWeapon() ~ Weapon {
+		return @weapon;
+	}
+
+	method : public : GetArmor() ~ Armor {
+		return @armor;
 	}
 
 	method : public : AddExperince(monster : Entity) ~ Nil {
@@ -136,6 +191,14 @@ class Player from Entity {
 
 	method : public : GetGold() ~ Int {
 		return @gold;
+	}
+
+	method : public : GetAc() ~ Int {
+		return -1 * (@strength * 0.45 + @agility * 0.25 + @armor_block * 0.4);
+	}
+
+	method : public : GetMp() ~ Int {
+		return @mp;
 	}
 
 	method : public : GetLevel() ~ Int {
@@ -181,9 +244,9 @@ class Player from Entity {
 		};
 	}
 
-	method : public : UsePotion() ~ Nil {
-			if(@potion_count > 0) {
-				@potion_count -= 1;
+	method : public : UseHealPotion() ~ Nil {
+			if(@heal_potion_count > 0) {
+				@heal_potion_count -= 1;
 				SetHp(Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5, true);
 				if(@hp > @max_hp) {
 					SetHp(@max_hp, true);
@@ -191,25 +254,8 @@ class Player from Entity {
 			};
 	}
 
-#~
-	method : public : TakeItem(id : Char, dungeon : Dungeon) ~ Bool {
-		if(id = 'T') {
-			@gold += Int->Random(10, 35);
-			dungeon->PlayTresure();
-			return true;
-		}
-		else if(id = 'P') {
-			@potion_count += 1;
-			dungeon->PlayPotion();
-			return true;
-		};
-
-		return false;
-	}
-~#
-
-	method : public : GetPotionCount() ~ Int {
-		return @potion_count;
+	method : public : GetHealPotionCount() ~ Int {
+		return @heal_potion_count;
 	}
 
 	method : public : GetTentCount() ~ Int {
@@ -238,11 +284,16 @@ class Entity {
 	@level : Int;
 	@max_hp : Int;
 	@hp : Int;
+	
 	@strength : Float;
 	@agility : Float;
 	@stamina : Float;
+	@weapon_hit : Float;
+	@armor_block : Float;
 	@levels : Float[];
 	@image_index : Int;
+	@debug : Bool;
+
 	@level_mutex : static : ThreadMutex;
 
 	enum EntityType {
@@ -256,7 +307,7 @@ class Entity {
 		@level_mutex := ThreadMutex->New("level_lock");
 	}
 	
-	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int, image_index : Int := -1) {
+	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int) {
 		@type := type;
 		@level := level;
 		@max_hp := @hp := max_hp;
@@ -264,7 +315,7 @@ class Entity {
 		@strength := strength;
 		@agility := agility;
 		@stamina := stamina;
-		@image_index := image_index;
+		@debug := true;
 
 		base := 0.75;
 		@levels := Float->New[30];
@@ -290,10 +341,6 @@ class Entity {
 		return @hp > 0;
 	}
 
-	method : public : GetImageIndex() ~ Int {
-		return @image_index;
-	}
-
 	method : public : GetHp() ~ Int {
 		return @hp;
 	}
@@ -307,24 +354,25 @@ class Entity {
 	}
 
 	method : public : GetAttack() ~ Int {
-		return (@strength * 0.7 + @agility * 0.3) * @levels[Int->Random(@level - 1, @level + 1)];
+		return (@strength * 0.45 + @agility * 0.25 + @weapon_hit * 0.4) * @levels[Int->Random(@level - 1, @level + 1)];
 	}
 
 	method : public : GetDefense() ~ Int {
-		return (@stamina * 0.6 + @agility * 0.4) * @levels[Int->Random(@level - 1, @level + 1)];
+		return (@stamina * 0.35 + @agility * 0.25 + @armor_block * 0.4) * @levels[Int->Random(@level - 1, @level + 1)];
 	}
 
 	method : public : Attack(opponent : Entity) ~ Bool {
 		attack := GetAttack();
-
 		defense := opponent->GetDefense();
-
+		
 		diff := attack - defense;
 		opponent->SetHp(diff < 0 ? Int->Random(0, 1) : diff);
 
-		our_name := GetName();
-		opponent_name := opponent->GetName();
-"{$our_name} => {$opponent_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
+		if(@debug) {
+			our_name := GetName();
+			opponent_name := opponent->GetName();
+			"{$our_name} => {$opponent_name}: attack={$attack}, defense={$defense} -> {$diff}\n---"->PrintLine();
+		};
 
 		return diff > 0;
 	}
