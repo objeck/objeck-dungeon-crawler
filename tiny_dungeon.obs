@@ -132,10 +132,10 @@ class TinyDungeon {
 		@stat_box_texts := TextSprite->New[5];
 		stat_box_copy := [
 			"Blueberry: HP={$player_hp}, MP=6, AC=3", 
-			"Weapon: Wooden Sword (+1)",
-			"Armor: Studded Leather (-1)",
-			"Spell 1: Magic Missile (2)",
-			"Spell 2: Light Heal (3)"];
+			"Wooden Sword, Studded Leather",
+			"1: Magic Missile x 2",
+			"2: Light Heal x 3",
+			"Condition: Healthy"];
 
 		if(stat_box_copy->Size() <> @stat_box_texts->Size()) {
 			"--- Textbox copy mismatch ---"->ErrorLine();
@@ -153,13 +153,14 @@ class TinyDungeon {
 		@item_box->SetFill(true);
 		@item_box->SetColor(Color->New(78,53,36));
 
-		@item_box_texts := TextSprite->New[5];
+		@item_box_texts := TextSprite->New[6];
 		item_box_copy := [
 			"Potions:", 
-			"  Health: 2", 
-			"  Magic: 1",
-			"  Invisibility: 0",
-			"Condition: Healthy"];
+			"   Health x 2", 
+			"   Magic x 1",
+			"   Poison x 1",
+			"   Invisibility x 0",
+			"Tents x 2"];
 
 		if(item_box_copy->Size() <> @item_box_texts->Size()) {
 			"--- Textbox copy mismatch ---"->ErrorLine();
@@ -741,12 +742,12 @@ player_hp := @player->GetHp();
 
 		@stat_box->Render(15, 330);
 		each(i : @stat_box_texts) {
-			@stat_box_texts[i]->Render(25, 340 + i * 30);
+			@stat_box_texts[i]->Render(25, 340 + i * 32);
 		};
 
 		@item_box->Render(445, 330);
 		each(i : @item_box_texts) {
-			@item_box_texts[i]->Render(460, 340 + i * 30);
+			@item_box_texts[i]->Render(460, 340 + i * 26);
 		};
 
 		@framework->Show();
