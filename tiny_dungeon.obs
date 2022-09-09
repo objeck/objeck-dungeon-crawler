@@ -31,16 +31,25 @@ class TinyDungeon {
 	@encounter_perc : Int;
 
 	@text_box : Rectangle;
+	@text_box_text : TextSprite;
+
 	@status_box : Rectangle;
+
+	@text_color : Color;
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
 
 		# TODO: move this
+		@text_color := Color->New(248, 240, 227);
+
 		@text_box := @framework->AddRectangle(400, 165);
 		@text_box->SetFill(true);
 		@text_box->SetColor(Color->New(78,53,36));
+
+		@text_box_text := @framework->AddTextSprite();
+		@text_box_text->RenderedText("Blueberry: HP=12, MP=6, AC=3", @text_color);
 
 
 		# TODO: move this
@@ -689,6 +698,7 @@ player_hp := @player->GetHp();
 		RenderMap(frame_count);
 
 		@text_box->Render(15, 330);
+		@text_box_text->Render(25, 340);
 		@status_box->Render(445, 330);
 
 		@framework->Show();
