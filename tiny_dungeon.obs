@@ -46,7 +46,8 @@ class TinyDungeon {
 
 		@player := Player->New();
 		@player->SetWeapon(WoodenSword->New());
-		@player->SetArmor(Leather->New());
+		@player->SetArmor(LeatherTunic->New());
+		@player->SetPotion1(WeakHealth->New());
 		@encounter_perc := 15;
 
 		@text_color := Color->New(248, 240, 227);
@@ -128,26 +129,26 @@ class TinyDungeon {
 	}
 
 	method : MakeStatBox(player : Player) ~ Nil {
-		player_hp := @player->GetHp();
-		player_mp := @player->GetMp();
-		player_ac := @player->GetAc();
-		player_weapon_name := @player->GetWeapon()->GetName();
-		player_armor_name := @player->GetArmor()->GetName();
-
+		player_health := @player->GetHealth();
+		player_weapon := @player->GetWeapon();
+		player_armor := @player->GetArmor();
+		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
+		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
+		
 		@stat_box := @framework->AddRectangle(400, 165);
 		@stat_box->SetFill(true);
 		@stat_box->SetColor(Color->New(78,53,36));
 
 		@stat_box_texts := TextSprite->New[5];
 		stat_box_copy := [
-			"Blueberry: HP={$player_hp}, MP={$player_mp}, AC={$player_ac}", 
-			"{$player_weapon_name}, {$player_armor_name}",
-			"1: Light Heal x 3",
-			"2: None",
-			"Condition: Healthy"];
+			"{$player}", 
+			"{$player_weapon}, {$player_armor}",
+			"1: {$player_potion1} x 3",
+			"2: {$player_potion2}",
+			"Condition: {$player_health}"];
 
 		if(stat_box_copy->Size() <> @stat_box_texts->Size()) {
-			"--- Textbox copy mismatch ---"->ErrorLine();
+			"--- Stat box copy mismatch ---"->ErrorLine();
 			Runtime->Exit(1);
 		};
 
@@ -172,7 +173,7 @@ class TinyDungeon {
 			"Tents x {$tents}"];
 
 		if(item_box_copy->Size() <> @item_box_texts->Size()) {
-			"--- Textbox copy mismatch ---"->ErrorLine();
+			"--- Item box copy mismatch ---"->ErrorLine();
 			Runtime->Exit(1);
 		};
 

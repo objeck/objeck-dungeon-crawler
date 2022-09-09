@@ -9,144 +9,115 @@ use Game.SDL2;
 use Game.Framework;
 use System.IO.File;
 
-#~
-Ghost
-~#
-class Ghost from Entity {
-	New(level : Int) {
-		Parent(EntityType->GHOST,		# type
-			level,						# level
-			Int->Random(9, 13),			# max hp
-			Int->Random(17, 19),		# strength
-			Int->Random(11, 13),		# agility
-			Int->Random(7, 10));		# stamina
+# --- Potions ---
+class WeakHealth from Potion {
+	New() {
+		Parent(Int->Random(5, 7), 0, 0);
 	}
 
-	method : public : GetName() ~ String {
-		return "Slime";
-	}
-
-	method : public : GetFightExperince() ~ Int {
-		return Int->Random(9, 11);
-	}
-
-	method : public : GetImageStart() ~ Int {
-		return 8;
-	}
-
-	method : public : GetImageEnd() ~ Int {
-		return 11;
+	method : public : ToString() ~ String {
+		return "Weak Health";
 	}
 }
 
-#~
-Slime
-~#
-class Slime from Entity {
-	New(level : Int) {
-		Parent(EntityType->SLIME,	# type
-			level,					# level
-			Int->Random(7, 11),		# max hp
-			Int->Random(14, 16),	# strength
-			Int->Random(10, 11),	# agility
-			Int->Random(14, 15));	# stamina
+class WeakMagic from Potion {
+	New() {
+		Parent(0, Int->Random(2, 4), 0);
 	}
 
-	method : public : GetName() ~ String {
-		return "Slime";
-	}
-
-	method : public : GetFightExperince() ~ Int {
-		return Int->Random(9, 11);
-	}
-
-	method : public : GetImageStart() ~ Int {
-		return 4;
-	}
-
-	method : public : GetImageEnd() ~ Int {
-		return 7;
+	method : public : ToString() ~ String {
+		return "Weak Magic";
 	}
 }
 
-#~
-Rat
-~#
-class Rat from Entity {
-	New(level : Int) {
-		Parent(EntityType->RAT,		# type
-			level,					# level
-			Int->Random(5, 10),		# max hp
-			Int->Random(15, 17),	# strength
-			Int->Random(14, 15),	# agility
-			Int->Random(8, 10));		# stamina
+class WeakInvisibility from Potion {
+	New() {
+		Parent(0, 0, Int->Random(10, 12));
 	}
 
-	method : public : GetName() ~ String {
-		return "Rat";
+	method : public : ToString() ~ String {
+		return "Weak Invisibility";
+	}
+}
+
+class Potion {
+	@hp : Int;
+	@mp : Int;
+	@enc : Int;
+
+	New(hp : Int, mp : Int, enc : Int) {
+		@hp := hp;
+		@mp := mp;
+		@enc := enc;
 	}
 
-	method : public : GetFightExperince() ~ Int {
-		return Int->Random(12, 15);
+	method : public : GetHp() ~ Int {
+		return @hp;
 	}
 
-	method : public : GetImageStart() ~ Int {
-		return 0;
+	method : public : GetMp() ~ Int {
+		return @mp;
 	}
 
-	method : public : GetImageEnd() ~ Int {
-		return 3;
+	method : public : GetEnc() ~ Int {
+		return @enc;
 	}
+
+	method : virtual : public : ToString() ~ String;
 }
 
 # --- Weapons ---
 interface Weapon {
-	method : virtual : public : GetName() ~ String;
 	method : virtual : public : GetHit() ~ Float;
+	method : virtual : public : ToString() ~ String;	
 }
 
 class WoodenSword implements Weapon {
 	New() {
 	}
 
-	method : public : GetName() ~ String {
-		return "Wooden Sword";
-	}
-
 	method : public : GetHit() ~ Float {
 		return 0.2;
+	}
+
+	method : public : ToString() ~ String {
+		return "Wooden Sword";
 	}
 }
 
 # --- Armor ---
 interface Armor {
-	method : virtual : public : GetName() ~ String;
 	method : virtual : public : GetHit() ~ Float;
+	method : virtual : public : ToString() ~ String;
 }
 
-class Leather implements Armor {
+class LeatherTunic implements Armor {
 	New() {
-	}
-
-	method : public : GetName() ~ String {
-		return "Leather";
 	}
 
 	method : public : GetHit() ~ Float {
 		return 0.15;
+	}
+
+	method : public : ToString() ~ String {
+		return "Leather Tunic";
 	}
 }
 
 # --- Player ---
 
 class Player from Entity {
+	@name : String;
 	@experience : Int;
 	@mp : Int;
 	@gold : Int;
 	@heal_potion_count : Int;
 	@tent_count : Int;
+
 	@weapon : Weapon;
 	@armor : Armor;
+	@potion1 : Potion;
+	@potion2 : Potion;
 
 	New() {
 		Parent(EntityType->PERSON,	# type
@@ -156,9 +127,26 @@ class Player from Entity {
 			Int->Random(12, 14),	# agility
 			Int->Random(13, 15));	# stamina
 
+		@name := "Blueberry";
 		@mp := Int->Random(4, 7);
 		@heal_potion_count := Int->Random(3, 4);
 		@tent_count := Int->Random(1, 2);
+	}
+
+	method : public : SetPotion1(potion1 : Potion) ~ Nil {
+		@potion1 := potion1;
+	}
+
+	method : public : SetPotion2(potion2 : Potion) ~ Nil {
+		@potion2 := potion2;
+	}
+
+	method : public : GetPotion1() ~ Potion {
+		return @potion1;
+	}
+
+	method : public : GetPotion2() ~ Potion {
+		return @potion1;
 	}
 
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
@@ -263,7 +251,7 @@ class Player from Entity {
 	}
 
 	method : public : GetName() ~ String {
-		return "Player";
+		return @name;
 	}
 
 	method : public : GetFightExperince() ~ Int {
@@ -276,6 +264,15 @@ class Player from Entity {
 
 	method : public : GetImageStart() ~ Int {
 		return -1;
+	}
+
+	method : public : GetHealth() ~ String {
+		return "Healthy";
+	}
+	
+	method : public : ToString() ~ String {
+		ac := GetAc();
+		return "{$@name}: HP={$@hp}, MP={$@mp}, AC={$ac}";
 	}
 }
 
@@ -400,5 +397,97 @@ class Entity {
 		};
 
 		return false;
+	}
+}
+
+# --- Monsters ---
+
+#~
+Ghost
+~#
+class Ghost from Entity {
+	New(level : Int) {
+		Parent(EntityType->GHOST,		# type
+			level,						# level
+			Int->Random(9, 13),			# max hp
+			Int->Random(17, 19),		# strength
+			Int->Random(11, 13),		# agility
+			Int->Random(7, 10));		# stamina
+	}
+
+	method : public : GetName() ~ String {
+		return "Slime";
+	}
+
+	method : public : GetFightExperince() ~ Int {
+		return Int->Random(9, 11);
+	}
+
+	method : public : GetImageStart() ~ Int {
+		return 8;
+	}
+
+	method : public : GetImageEnd() ~ Int {
+		return 11;
+	}
+}
+
+#~
+Slime
+~#
+class Slime from Entity {
+	New(level : Int) {
+		Parent(EntityType->SLIME,	# type
+			level,					# level
+			Int->Random(7, 11),		# max hp
+			Int->Random(14, 16),	# strength
+			Int->Random(10, 11),	# agility
+			Int->Random(14, 15));	# stamina
+	}
+
+	method : public : GetName() ~ String {
+		return "Slime";
+	}
+
+	method : public : GetFightExperince() ~ Int {
+		return Int->Random(9, 11);
+	}
+
+	method : public : GetImageStart() ~ Int {
+		return 4;
+	}
+
+	method : public : GetImageEnd() ~ Int {
+		return 7;
+	}
+}
+
+#~
+Rat
+~#
+class Rat from Entity {
+	New(level : Int) {
+		Parent(EntityType->RAT,		# type
+			level,					# level
+			Int->Random(5, 10),		# max hp
+			Int->Random(15, 17),	# strength
+			Int->Random(14, 15),	# agility
+			Int->Random(8, 10));		# stamina
+	}
+
+	method : public : GetName() ~ String {
+		return "Rat";
+	}
+
+	method : public : GetFightExperince() ~ Int {
+		return Int->Random(12, 15);
+	}
+
+	method : public : GetImageStart() ~ Int {
+		return 0;
+	}
+
+	method : public : GetImageEnd() ~ Int {
+		return 3;
 	}
 }
