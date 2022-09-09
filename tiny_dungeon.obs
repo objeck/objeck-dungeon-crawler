@@ -31,7 +31,7 @@ class TinyDungeon {
 	@encounter_perc : Int;
 
 	@text_box : Rectangle;
-	@text_box_text : TextSprite;
+	@text_box_texts : TextSprite[];
 
 	@status_box : Rectangle;
 
@@ -41,6 +41,10 @@ class TinyDungeon {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
 
+		Entity->Init();
+		@player := Player->New();
+		@encounter_perc := 15;
+
 		# TODO: move this
 		@text_color := Color->New(248, 240, 227);
 
@@ -48,8 +52,24 @@ class TinyDungeon {
 		@text_box->SetFill(true);
 		@text_box->SetColor(Color->New(78,53,36));
 
-		@text_box_text := @framework->AddTextSprite();
-		@text_box_text->RenderedText("Blueberry: HP=12, MP=6, AC=3", @text_color);
+		@text_box_texts := TextSprite->New[5];
+
+		@text_box_texts[0] := @framework->AddTextSprite();
+		player_hp := @player->GetHp();
+		@text_box_texts[0]->RenderedText("Blueberry: HP={$player_hp}, MP=6, AC=3", @text_color);
+
+		@text_box_texts[1] := @framework->AddTextSprite();
+		@text_box_texts[1]->RenderedText("Weapon: Wooden Sword (+1)", @text_color);
+
+		@text_box_texts[2] := @framework->AddTextSprite();
+		@text_box_texts[2]->RenderedText("Armor: Studded Leather (-1)", @text_color);
+
+
+		@text_box_texts[3] := @framework->AddTextSprite();
+		@text_box_texts[3]->RenderedText("Spell 1: Magic Missile (2)", @text_color);
+
+		@text_box_texts[4] := @framework->AddTextSprite();
+		@text_box_texts[4]->RenderedText("Spell 2: Light Heal (3)", @text_color);
 
 
 		# TODO: move this
@@ -66,10 +86,6 @@ class TinyDungeon {
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
 
 		@monster_sprint_index := 0;
-
-		Entity->Init();
-		@player := Player->New();
-		@encounter_perc := 15;
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -187,6 +203,9 @@ player_hp := @player->GetHp();
 "===\nFinal: {$player_hp}"->PrintLine();
 	        			};
 	        		};
+
+	        		player_hp := @player->GetHp();
+					@text_box_texts[0]->RenderedText("Blueberry: HP={$player_hp}, MP=6, AC=3", @text_color);
 	        	};
         	}
         };
@@ -698,7 +717,11 @@ player_hp := @player->GetHp();
 		RenderMap(frame_count);
 
 		@text_box->Render(15, 330);
-		@text_box_text->Render(25, 340);
+
+		each(i : @text_box_texts) {
+			@text_box_texts[i]->Render(25, 340 + i * 30);
+		};
+
 		@status_box->Render(445, 330);
 
 		@framework->Show();
