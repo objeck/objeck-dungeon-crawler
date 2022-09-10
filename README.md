@@ -2,4 +2,4 @@
 
 Retro 80's style maze dungeon crawler with auto generated mazes.
 
-<img src="https://a.fsdn.com/con/app/proj/objeck-lang/screenshots/Screenshot%202022-09-10%20082308.png/245/183/1.5" title="Tiny Dungeon" width="480"/>
+<img src="https://a.fsdn.com/con/app/proj/objeck-lang/screenshots/Dungeon_Crawler.png/max/max/1" title="Tiny Dungeon" width="480"/>
