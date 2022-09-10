@@ -53,7 +53,7 @@ class TinyDungeon {
 		@text_color := Color->New(248, 240, 227);
 		MakeManagers();
 		MakeStatBox(@player);
-		MakeItemBox(@player->GetHealPotionCount(), 1, 1, 0, 1);
+		MakeItemBox(@player);
 
 		@player_location := Int->New[3];
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
@@ -132,8 +132,6 @@ class TinyDungeon {
 		player_health := @player->GetHealth();
 		player_weapon := @player->GetWeapon();
 		player_armor := @player->GetArmor();
-		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
-		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
 		
 		@stat_box := @framework->AddRectangle(400, 165);
 		@stat_box->SetFill(true);
@@ -143,8 +141,8 @@ class TinyDungeon {
 		stat_box_copy := [
 			"{$player}", 
 			"{$player_weapon}, {$player_armor}",
-			"1: {$player_potion1} x 3",
-			"2: {$player_potion2}",
+			"1: Missile x 3",
+			"2: Light Heal",
 			"Condition: {$player_health}"];
 
 		if(stat_box_copy->Size() <> @stat_box_texts->Size()) {
@@ -158,19 +156,21 @@ class TinyDungeon {
 		};
 	}
 
-	method : MakeItemBox(heal_potions : Int, magic_potions : Int, poison_potions : Int, invisibility_potions : Int, tents : Int) ~ Nil {
+	method : MakeItemBox(player : Player) ~ Nil {
+		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
+		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
+
 		@item_box := @framework->AddRectangle(305, 165);
 		@item_box->SetFill(true);
 		@item_box->SetColor(Color->New(78,53,36));
 
-		@item_box_texts := TextSprite->New[6];
+		@item_box_texts := TextSprite->New[5];
 		item_box_copy := [
 			"Potions:", 
-			"   Health x {$heal_potions}", 
-			"   Magic x {$magic_potions}",
-			"   Poison x {$poison_potions}",
-			"   Invisibility x {$invisibility_potions}",
-			"Tents x {$tents}"];
+			"A: {$player_potion1} x 3",
+			"B: {$player_potion2}",
+			"C: ---",
+			"Tents x 1"];
 
 		if(item_box_copy->Size() <> @item_box_texts->Size()) {
 			"--- Item box copy mismatch ---"->ErrorLine();

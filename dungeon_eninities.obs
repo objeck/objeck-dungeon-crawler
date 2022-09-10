@@ -146,7 +146,7 @@ class Player from Entity {
 	}
 
 	method : public : GetPotion2() ~ Potion {
-		return @potion1;
+		return @potion2;
 	}
 
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
