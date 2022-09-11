@@ -48,12 +48,13 @@ class TinyDungeon {
 		@player->SetWeapon(WoodenSword->New());
 		@player->SetArmor(LeatherTunic->New());
 		@player->SetPotion1(WeakHealth->New());
+		@player->SetMagic1(LightHeal->New());
 		@encounter_perc := 15;
 
 		@text_color := Color->New(248, 240, 227);
 		MakeManagers();
-		MakeStatBox(@player);
-		MakeItemBox(@player);
+		MakeStatBox();
+		MakeItemBox();
 
 		@player_location := Int->New[3];
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
@@ -128,7 +129,7 @@ class TinyDungeon {
 		@map_manager := MapManager->New("./maps");
 	}
 
-	method : MakeStatBox(player : Player) ~ Nil {
+	method : MakeStatBox() ~ Nil {
 		player_health := @player->GetHealth();
 		player_weapon := @player->GetWeapon();
 		player_armor := @player->GetArmor();
@@ -137,12 +138,15 @@ class TinyDungeon {
 		@stat_box->SetFill(true);
 		@stat_box->SetColor(Color->New(78,53,36));
 
+		player_spell1 := @player->GetMagic1() = Nil ? "None" : @player->GetMagic1()->ToString();
+		player_spell2 := @player->GetMagic2() = Nil ? "None" : @player->GetMagic2()->ToString();
+		
 		@stat_box_texts := TextSprite->New[5];
 		stat_box_copy := [
-			"{$player}", 
+			"{$@player}", 
 			"{$player_weapon}, {$player_armor}",
-			"1: Missile x 3",
-			"2: Light Heal",
+			"1: {$player_spell1}",
+			"2: {$player_spell2}",
 			"Condition: {$player_health}"];
 
 		if(stat_box_copy->Size() <> @stat_box_texts->Size()) {
@@ -156,12 +160,13 @@ class TinyDungeon {
 		};
 	}
 
-	method : MakeItemBox(player : Player) ~ Nil {
+	method : MakeItemBox() ~ Nil {
 		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
 		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
+		player_potion3 := @player->GetPotion3() = Nil ? "None" : @player->GetPotion3()->ToString();
+"{$player_potion1},{$player_potion2},{$player_potion3}"->PrintLine();
 
-		player_spell := @player->GetMagic1() = Nil ? "None" : 
-		
+
 		@item_box := @framework->AddRectangle(305, 165);
 		@item_box->SetFill(true);
 		@item_box->SetColor(Color->New(78,53,36));
@@ -169,9 +174,9 @@ class TinyDungeon {
 		@item_box_texts := TextSprite->New[5];
 		item_box_copy := [
 			"Potions:", 
-			"A: {$player_potion1} x 3",
+			"A: {$player_potion1}",
 			"B: {$player_potion2}",
-			"C: ---",
+			"C: {$player_potion3}",
 			"Tents x 1"];
 
 		if(item_box_copy->Size() <> @item_box_texts->Size()) {

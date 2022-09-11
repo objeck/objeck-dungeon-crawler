@@ -165,6 +165,7 @@ class Player from Entity {
 
 	@weapon : Weapon;
 	@armor : Armor;
+
 	@potion1 : Potion;
 	@potion2 : Potion;
 	@potion3 : Potion;
