@@ -479,7 +479,7 @@ class Ghost from Entity {
 	}
 
 	method : public : GetName() ~ String {
-		return "Slime";
+		return "Ghost";
 	}
 
 	method : public : GetFightExperince() ~ Int {

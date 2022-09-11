@@ -256,7 +256,9 @@ player_hp := @player->GetHp();
 
 	method : MoveForward() ~ Nil {
 		player_view := @map_manager->GetView(@player_direction, @player_location);
-		if(IsOpen(player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE])) {
+		view := player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE];
+		if(IsOpen(view)) {
+view->PrintLine();
 			select(@player_direction) {
 				label MapManager->Direction->NORTH {
 					@player_location[0] -= 1;
@@ -277,6 +279,10 @@ player_hp := @player->GetHp();
 
 			if(@player_nav_map[@player_location[0], @player_location[1]] = 0) {
 				@player_nav_map[@player_location[0], @player_location[1]] := 1;
+			};
+
+			if(view = MapManager->Type->POTION) {
+				"--- Potion ---"->PrintLine();
 			};
 
        		CheckBattle();		
