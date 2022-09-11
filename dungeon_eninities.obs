@@ -9,6 +9,42 @@ use Game.SDL2;
 use Game.Framework;
 use System.IO.File;
 
+# --- Magic ---
+class LightHeal from Magic {
+	New() {
+		Parent(Int->Random(4, 6), 0, 0, 0);
+	}
+
+	method : public : ToString() ~ String {
+		return "Light Heal";
+	}
+}
+
+class SmallMissle from Magic {
+	New() {
+		Parent(0, 0, 0, Int->Random(4, 6));
+	}
+
+	method : public : ToString() ~ String {
+		return "Small Missle";
+	}
+}
+
+class Magic from Potion {
+	@dam : Int;
+
+	New(hp : Int, mp : Int, enc : Int, dam : Int) {
+		Parent(hp, mp, enc);
+		@dam := dam;
+	}
+
+	method : public : GetDamage() ~ Int {
+		return @dam;
+	}
+
+	method : virtual : public : ToString() ~ String;
+}
+
 # --- Potions ---
 class WeakHealth from Potion {
 	New() {
@@ -41,6 +77,7 @@ class WeakInvisibility from Potion {
 }
 
 class Potion {
+	@count : Int;
 	@hp : Int;
 	@mp : Int;
 	@enc : Int;
@@ -49,6 +86,7 @@ class Potion {
 		@hp := hp;
 		@mp := mp;
 		@enc := enc;
+		@count := 1;
 	}
 
 	method : public : GetHp() ~ Int {
@@ -61,6 +99,18 @@ class Potion {
 
 	method : public : GetEnc() ~ Int {
 		return @enc;
+	}
+
+	method : SetCount(count : Int) ~ Nil {
+		@count := count;
+	}
+
+	method : Add() ~ Nil {
+		@count += 1;
+	}
+
+	method : GetCount() ~ Int {
+		return @count;
 	}
 
 	method : virtual : public : ToString() ~ String;
@@ -111,13 +161,16 @@ class Player from Entity {
 	@experience : Int;
 	@mp : Int;
 	@gold : Int;
-	@heal_potion_count : Int;
 	@tent_count : Int;
 
 	@weapon : Weapon;
 	@armor : Armor;
 	@potion1 : Potion;
 	@potion2 : Potion;
+	@potion3 : Potion;
+
+	@magic1 : Magic;
+	@magic2 : Magic;
 
 	New() {
 		Parent(EntityType->PERSON,	# type
@@ -129,24 +182,47 @@ class Player from Entity {
 
 		@name := "Blueberry";
 		@mp := Int->Random(4, 7);
-		@heal_potion_count := Int->Random(3, 4);
 		@tent_count := Int->Random(1, 2);
-	}
-
-	method : public : SetPotion1(potion1 : Potion) ~ Nil {
-		@potion1 := potion1;
-	}
-
-	method : public : SetPotion2(potion2 : Potion) ~ Nil {
-		@potion2 := potion2;
 	}
 
 	method : public : GetPotion1() ~ Potion {
 		return @potion1;
 	}
 
+	method : public : SetPotion1(potion1 : Potion) ~ Nil {
+		@potion1 := potion1;
+	}
+
 	method : public : GetPotion2() ~ Potion {
 		return @potion2;
+	}
+
+	method : public : SetPotion2(potion2 : Potion) ~ Nil {
+		@potion2 := potion2;
+	}
+
+	method : public : GetPotion3() ~ Potion {
+		return @potion3;
+	}
+
+	method : public : SetPotion3(potion3 : Potion) ~ Nil {
+		@potion3 := potion3;
+	}
+
+	method : public : GetMagic1() ~ Magic {
+		return @magic1;
+	}
+
+	method : public : SetMagic1(magic1 : Magic) ~ Nil {
+		@magic1 := magic1;
+	}
+
+	method : public : GetMagic2() ~ Magic {
+		return @magic2;
+	}
+
+	method : public : SetMagic2(magic2 : Magic) ~ Nil {
+		@magic2 := magic2;
 	}
 
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
@@ -230,20 +306,6 @@ class Player from Entity {
 				SetHp(@max_hp, true);
 			};
 		};
-	}
-
-	method : public : UseHealPotion() ~ Nil {
-			if(@heal_potion_count > 0) {
-				@heal_potion_count -= 1;
-				SetHp(Int->Random(0, 1) = 0 ? @max_hp * 0.25 : @max_hp * 0.5, true);
-				if(@hp > @max_hp) {
-					SetHp(@max_hp, true);
-				};
-			};
-	}
-
-	method : public : GetHealPotionCount() ~ Int {
-		return @heal_potion_count;
 	}
 
 	method : public : GetTentCount() ~ Int {

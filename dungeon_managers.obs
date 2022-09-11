@@ -35,7 +35,7 @@ class MapManager from Manager {
 		@player_view := Int->New[5, 3];
 		@player_view_id := -1;
 	}	
-
+	
 	method : public : Load() ~ Bool {
 		return LoadMaps();
 	}

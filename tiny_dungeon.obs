@@ -160,6 +160,8 @@ class TinyDungeon {
 		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
 		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
 
+		player_spell := @player->GetMagic1() = Nil ? "None" : 
+		
 		@item_box := @framework->AddRectangle(305, 165);
 		@item_box->SetFill(true);
 		@item_box->SetColor(Color->New(78,53,36));
