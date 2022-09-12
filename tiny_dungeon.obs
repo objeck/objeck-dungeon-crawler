@@ -79,7 +79,9 @@ class TinyDungeon {
 			return;
 		};
 
+		#
 		# TODO: add sound manager
+		#
 
 		leaving {
 			@map_manager->Unload();
@@ -241,8 +243,6 @@ class TinyDungeon {
 	        			if(<>@monster->IsAlive()) {
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
-player_hp := @player->GetHp();
-"===\nFinal: {$player_hp}"->PrintLine();
 	        			};
 	        		};
 
@@ -250,6 +250,14 @@ player_hp := @player->GetHp();
 	        		player_mp := @player->GetMp();
 	        		player_ac := @player->GetAc();
 					@stat_box_texts[0]->RenderedText("Blueberry: HP={$player_hp}, MP={$player_mp}, AC={$player_ac}", @text_color);
+	        	}
+	        	else if(OnItem()) {
+	        		if(@view_type = MapManager->Type->POTION) {
+"Take Potion!"->PrintLine();
+	        		}
+	        		else if(@view_type = MapManager->Type->LOOT) {
+"Take Loot!"->PrintLine();
+	        		};
 	        	};
         	}
         };
@@ -286,7 +294,7 @@ player_hp := @player->GetHp();
 	}
 
 	method : CheckBattle() ~ Nil {
-		if(<>AtItem() & @monster = Nil & Int->Random(99) < @encounter_perc) {
+		if(<>OnItem() & @monster = Nil & Int->Random(99) < @encounter_perc) {
 			select(Int->Random(2)) {
 				label 0 {
 					@monster := Rat->New(1);
@@ -691,10 +699,10 @@ player_hp := @player->GetHp();
 		"Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\nView\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\nImage\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}\n==="->PrintLine();
 		~#
 
-		@can_show_item := <>(AtItem() & <>(v0 = 2 & v1 = 0 & v2 = 0));
+		@can_show_item := <>(OnItem() & <>(v0 = 2 & v1 = 0 & v2 = 0));
 	}
 
-	method : AtItem() ~ Bool {
+	method : OnItem() ~ Bool {
 		return @view_type = MapManager->Type->POTION | @view_type = MapManager->Type->LOOT;
 	}
 

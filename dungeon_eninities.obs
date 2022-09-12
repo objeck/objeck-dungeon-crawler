@@ -166,12 +166,8 @@ class Player from Entity {
 	@weapon : Weapon;
 	@armor : Armor;
 
-	@potion1 : Potion;
-	@potion2 : Potion;
-	@potion3 : Potion;
-
-	@magic1 : Magic;
-	@magic2 : Magic;
+	@potions : Potion[];
+	@magics : Magic[];
 
 	New() {
 		Parent(EntityType->PERSON,	# type
@@ -184,46 +180,57 @@ class Player from Entity {
 		@name := "Blueberry";
 		@mp := Int->Random(4, 7);
 		@tent_count := Int->Random(1, 2);
+
+		@potions := Potion->New[3];
+		@magics := Magic->New[2];
+	}
+
+	method : public : TakePotion(amount : Int) ~ Nil {	
+"Take Potion!"->PrintLine();
 	}
 
 	method : public : GetPotion1() ~ Potion {
-		return @potion1;
+		return @potions[0];
 	}
 
 	method : public : SetPotion1(potion1 : Potion) ~ Nil {
-		@potion1 := potion1;
+		@potions[0] := potion1;
 	}
 
 	method : public : GetPotion2() ~ Potion {
-		return @potion2;
+		return @potions[1];
 	}
 
 	method : public : SetPotion2(potion2 : Potion) ~ Nil {
-		@potion2 := potion2;
+		@potions[1] := potion2;
 	}
 
 	method : public : GetPotion3() ~ Potion {
-		return @potion3;
+		return @potions[2];
 	}
 
 	method : public : SetPotion3(potion3 : Potion) ~ Nil {
-		@potion3 := potion3;
+		@potions[2] := potion3;
 	}
 
 	method : public : GetMagic1() ~ Magic {
-		return @magic1;
+		return @magics[0];
 	}
 
 	method : public : SetMagic1(magic1 : Magic) ~ Nil {
-		@magic1 := magic1;
+		@magics[0] := magic1;
 	}
 
 	method : public : GetMagic2() ~ Magic {
-		return @magic2;
+		return @magics[1];
 	}
 
 	method : public : SetMagic2(magic2 : Magic) ~ Nil {
-		@magic2 := magic2;
+		@magics[1] := magic2;
+	}
+
+	method : public : TakeLoot(amount : Int) ~ Nil {	
+"Take Loot!"->PrintLine();
 	}
 
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
