@@ -144,12 +144,13 @@ class TinyDungeon {
 		player_spell1 := @player->GetMagic1() = Nil ? "None" : @player->GetMagic1()->ToString();
 		player_spell2 := @player->GetMagic2() = Nil ? "None" : @player->GetMagic2()->ToString();
 		
-		@stat_box_texts := TextSprite->New[5];
+		@stat_box_texts := TextSprite->New[6];
 		stat_box_copy := [
 			"{$@player}", 
 			"{$player_weapon}, {$player_armor}",
-			"1: {$player_spell1}",
-			"2: {$player_spell2}",
+			"Potions",
+			"  1: {$player_spell1}",
+			"  2: {$player_spell2}",
 			"Condition: {$player_health}"];
 
 		if(stat_box_copy->Size() <> @stat_box_texts->Size()) {
@@ -177,7 +178,7 @@ class TinyDungeon {
 		@item_box_texts := TextSprite->New[5];
 		item_box_copy := [
 			"Gold={$player_gold}, Tents={$player_tents}",
-			"Spells:",
+			"Spells",
 			"  A: {$player_potion1}",
 			"  B: {$player_potion2}",
 			"  C: {$player_potion3}"];
@@ -318,7 +319,7 @@ class TinyDungeon {
 	method : AddGold(amount : Int) ~ Nil {
 		if(@map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
 			@player->AddGold(amount);
-			
+
 			player_gold := @player->GetGold(); player_tents := @player->GetTents();
 			@item_box_texts[0]->RenderedText("Gold={$player_gold}, Tents={$player_tents}", @text_color);
 
@@ -790,12 +791,12 @@ class TinyDungeon {
 
 		@stat_box->Render(15, 330);
 		each(i : @stat_box_texts) {
-			@stat_box_texts[i]->Render(25, 340 + i * 32);
+			@stat_box_texts[i]->Render(25, 340 + i * 25);
 		};
 
 		@item_box->Render(445, 330);
 		each(i : @item_box_texts) {
-			@item_box_texts[i]->Render(460, 340 + i * 26);
+			@item_box_texts[i]->Render(460, 340 + i * 30);
 		};
 
 		@framework->Show();
