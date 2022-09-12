@@ -44,11 +44,12 @@ class TinyDungeon {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
 		
-		@player := Player->New();
+		@player := Player->New("Blueberry");
 		@player->SetWeapon(WoodenSword->New());
 		@player->SetArmor(LeatherTunic->New());
-		@player->SetPotion1(WeakHealth->New());
+		@player->AddPotion(Potion->Type->WEAK_HEALTH, 1);
 		@player->SetMagic1(LightHeal->New());
+		@player->AddTent();
 		@encounter_perc := 15;
 
 		@text_color := Color->New(248, 240, 227);
@@ -166,6 +167,8 @@ class TinyDungeon {
 		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
 		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
 		player_potion3 := @player->GetPotion3() = Nil ? "None" : @player->GetPotion3()->ToString();
+		player_gold := @player->GetGold();
+		player_tents := @player->GetTents();
 
 		@item_box := @framework->AddRectangle(305, 165);
 		@item_box->SetFill(true);
@@ -173,11 +176,11 @@ class TinyDungeon {
 
 		@item_box_texts := TextSprite->New[5];
 		item_box_copy := [
-			"Potions:", 
-			"A: {$player_potion1}",
-			"B: {$player_potion2}",
-			"C: {$player_potion3}",
-			"Tents x 1"];
+			"Gold={$player_gold}, Tents={$player_tents}",
+			"Spells:",
+			"  A: {$player_potion1}",
+			"  B: {$player_potion2}",
+			"  C: {$player_potion3}"];
 
 		if(item_box_copy->Size() <> @item_box_texts->Size()) {
 			"--- Item box copy mismatch ---"->ErrorLine();
@@ -251,10 +254,11 @@ class TinyDungeon {
 	        	}
 	        	else if(OnItem()) {
 	        		if(@view_type = MapManager->Type->POTION) {
-"Take Potion!"->PrintLine();
+"-- Potion: TODO --"->PrintLine();
+	        			@player->AddPotion(Potion->Type->WEAK_HEALTH, 1);
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
-"Take Loot!"->PrintLine();
+	        			AddGold(10);
 	        		};
 	        	};
         	}
@@ -308,6 +312,17 @@ class TinyDungeon {
 			};
 
 			@monster_sprint_index := @monster->GetImageStart();
+		};
+	}
+
+	method : AddGold(amount : Int) ~ Nil {
+		if(@map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
+			@player->AddGold(amount);
+			
+			player_gold := @player->GetGold(); player_tents := @player->GetTents();
+			@item_box_texts[0]->RenderedText("Gold={$player_gold}, Tents={$player_tents}", @text_color);
+
+			@can_show_item := false;
 		};
 	}
 

@@ -186,6 +186,18 @@ class MapManager from Manager {
 		return hashes;
 	}
 
+	method : public : SetType(pos : Int[], type : MapManager->Type) ~ Bool {
+		y := pos[0]; x := pos[1];
+		if(x > -1 & x < Type->MAP_SIZE & y > -1 & y < Type->MAP_SIZE) {
+			map := GetMap();
+			map[y, x] := type;
+
+			return true;
+		};
+
+		return false;
+	}
+
 	method : public : GetType(y : Int, x : Int) ~ Int {
 		if(x < 0 | x >= Type->MAP_SIZE | y < 0 | y >= Type->MAP_SIZE) {
 			return Type->NONE;

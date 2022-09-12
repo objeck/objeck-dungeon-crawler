@@ -30,16 +30,9 @@ class SmallMissle from Magic {
 	}
 }
 
-class Magic from Potion {
-	@dam : Int;
-
+class Magic {
 	New(hp : Int, mp : Int, enc : Int, dam : Int) {
-		Parent(hp, mp, enc);
-		@dam := dam;
-	}
-
-	method : public : GetDamage() ~ Int {
-		return @dam;
+		
 	}
 
 	method : virtual : public : ToString() ~ String;
@@ -48,7 +41,7 @@ class Magic from Potion {
 # --- Potions ---
 class WeakHealth from Potion {
 	New() {
-		Parent(Int->Random(5, 7), 0, 0);
+		Parent(Potion->Type->WEAK_HEALTH);
 	}
 
 	method : public : ToString() ~ String {
@@ -58,7 +51,7 @@ class WeakHealth from Potion {
 
 class WeakMagic from Potion {
 	New() {
-		Parent(0, Int->Random(2, 4), 0);
+		Parent(Potion->Type->WEAK_MAGIC);
 	}
 
 	method : public : ToString() ~ String {
@@ -68,7 +61,7 @@ class WeakMagic from Potion {
 
 class WeakInvisibility from Potion {
 	New() {
-		Parent(0, 0, Int->Random(10, 12));
+		Parent(Potion->Type->WEAK_INVISIBILITY);
 	}
 
 	method : public : ToString() ~ String {
@@ -77,15 +70,38 @@ class WeakInvisibility from Potion {
 }
 
 class Potion {
+	@type : Potion->Type;
 	@count : Int;
 	@hp : Int;
 	@mp : Int;
 	@enc : Int;
+	
+	enum Type {
+		WEAK_HEALTH,
+		WEAK_MAGIC,
+		WEAK_INVISIBILITY
+	}
 
-	New(hp : Int, mp : Int, enc : Int) {
-		@hp := hp;
-		@mp := mp;
-		@enc := enc;
+	New(type : Potion->Type) {
+		@type := type;
+		select(type) {
+			label Type->WEAK_HEALTH {
+				@hp := Int->Random(5, 7);
+				@mp := @enc := 0;
+			}
+
+			label Type->WEAK_MAGIC {
+				@mp := Int->Random(6, 9);
+				@hp := @enc := 0;
+
+			}
+
+			label Type->WEAK_INVISIBILITY {
+				@hp := @mp := 0;
+				@enc := Int->Random(10, 12);
+			}
+		};
+
 		@count := 1;
 	}
 
@@ -101,12 +117,12 @@ class Potion {
 		return @enc;
 	}
 
-	method : SetCount(count : Int) ~ Nil {
-		@count := count;
+	method : public : Add(count : Int) ~ Nil {
+		@count += count;
 	}
 
-	method : Add() ~ Nil {
-		@count += 1;
+	method : public : GetType() ~ Potion->Type {
+		return @type;
 	}
 
 	method : GetCount() ~ Int {
@@ -161,7 +177,7 @@ class Player from Entity {
 	@experience : Int;
 	@mp : Int;
 	@gold : Int;
-	@tent_count : Int;
+	@tents : Int;
 
 	@weapon : Weapon;
 	@armor : Armor;
@@ -169,48 +185,51 @@ class Player from Entity {
 	@potions : Potion[];
 	@magics : Magic[];
 
-	New() {
+	New(name : String) {
 		Parent(EntityType->PERSON,	# type
 			1, 						# level
 			Int->Random(21, 28),	# max hp
 			Int->Random(14, 17),	# strength
 			Int->Random(12, 14),	# agility
 			Int->Random(13, 15));	# stamina
-
-		@name := "Blueberry";
+		
+		@name := name;
 		@mp := Int->Random(4, 7);
-		@tent_count := Int->Random(1, 2);
-
 		@potions := Potion->New[3];
 		@magics := Magic->New[2];
 	}
 
-	method : public : TakePotion(amount : Int) ~ Nil {	
-"Take Potion!"->PrintLine();
+	#
+	# --- Potions ---
+	#
+	method : public : AddPotion(type : Potion->Type, amount : Int) ~ Nil {
+		each(i : @potions) {
+			potion := @potions[i];
+			if(potion <> Nil & potion->GetType() = type) {
+
+			};
+		};
+	}
+
+	method : public : UsePotion(index : Int) ~ Nil {
 	}
 
 	method : public : GetPotion1() ~ Potion {
 		return @potions[0];
 	}
 
-	method : public : SetPotion1(potion1 : Potion) ~ Nil {
-		@potions[0] := potion1;
-	}
-
 	method : public : GetPotion2() ~ Potion {
 		return @potions[1];
-	}
-
-	method : public : SetPotion2(potion2 : Potion) ~ Nil {
-		@potions[1] := potion2;
 	}
 
 	method : public : GetPotion3() ~ Potion {
 		return @potions[2];
 	}
 
-	method : public : SetPotion3(potion3 : Potion) ~ Nil {
-		@potions[2] := potion3;
+	#
+	# --- Magic ---
+	#
+	method : public : UseMagic(index : Int) ~ Nil {
 	}
 
 	method : public : GetMagic1() ~ Magic {
@@ -229,10 +248,24 @@ class Player from Entity {
 		@magics[1] := magic2;
 	}
 
-	method : public : TakeLoot(amount : Int) ~ Nil {	
-"Take Loot!"->PrintLine();
+	#
+	# --- Tents ---
+	#
+	method : public : AddTent() ~ Nil {
+		@tents += 1;
 	}
 
+	method : public : GetTents() ~ Int {
+		return @tents;
+	}
+
+	#
+	# --- Loot ---
+	#
+	
+	#
+	# --- Weapons and Armor ---
+	#
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
 		@weapon := weapon;
 	}
@@ -249,6 +282,9 @@ class Player from Entity {
 		return @armor;
 	}
 
+	#
+	# --- Gold and Exp ---
+	#
 	method : public : AddExperince(monster : Entity) ~ Nil {
 		@experience += monster->GetFightExperince();
 	}
@@ -265,6 +301,9 @@ class Player from Entity {
 		return @gold;
 	}
 
+	#
+	# --- Attributes ---
+	#
 	method : public : GetAc() ~ Int {
 		return -1 * (@strength * 0.45 + @agility * 0.25 + @armor_block * 0.4);
 	}
@@ -300,24 +339,6 @@ class Player from Entity {
 
 		return @level;
 		
-	}
-
-	method : public : HasTent() ~ Bool {
-		return @tent_count > 0;
-	}
-
-	method : public : UseTent() ~ Nil {
-		if(@tent_count > 0) {
-			@tent_count -= 1;
-			@hp += Int->Random(0, 1) = 0 ? @max_hp * 0.33 : @max_hp * 0.66;
-			if(@hp > @max_hp) {
-				SetHp(@max_hp, true);
-			};
-		};
-	}
-
-	method : public : GetTentCount() ~ Int {
-		return @tent_count;
 	}
 
 	method : public : GetName() ~ String {
