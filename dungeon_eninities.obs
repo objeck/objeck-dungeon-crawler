@@ -361,17 +361,11 @@ class Entity {
 	@image_index : Int;
 	@debug : Bool;
 
-	@level_mutex : static : ThreadMutex;
-
 	enum EntityType {
 		PERSON,
 		SLIME,
 		RAT,
 		GHOST
-	}
-
-	function : Init() ~ Nil {
-		@level_mutex := ThreadMutex->New("level_lock");
 	}
 	
 	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int) {
@@ -445,25 +439,23 @@ class Entity {
 	}
 
 	method : public : SetHp(adjustment : Int, is_potion : Bool := false) ~ Bool {
-		critical(@level_mutex) {
-			if(<>is_potion) {
-				if(adjustment <= 0) {
-					return false;
-				};
-				@hp -= adjustment;
-			}
-			else {
-				@hp += adjustment;
+		if(<>is_potion) {
+			if(adjustment <= 0) {
+				return false;
 			};
+			@hp -= adjustment;
+		}
+		else {
+			@hp += adjustment;
+		};
 
-			if(@hp < 1) {
-				@hp := 0;
-				return true;
-			};
+		if(@hp < 1) {
+			@hp := 0;
+			return true;
+		};
 
-			if(@hp > @max_hp) {
-				@hp := @max_hp;
-			};
+		if(@hp > @max_hp) {
+			@hp := @max_hp;
 		};
 
 		return false;

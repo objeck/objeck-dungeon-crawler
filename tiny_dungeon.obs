@@ -43,9 +43,7 @@ class TinyDungeon {
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
 		@framework->SetClearColor(Color->New(50, 60, 57));
-
-		Entity->Init();
-
+		
 		@player := Player->New();
 		@player->SetWeapon(WoodenSword->New());
 		@player->SetArmor(LeatherTunic->New());
@@ -235,7 +233,7 @@ class TinyDungeon {
         		if(@monster <> Nil) {
         			@player_hit := @monster->Attack(@player) ? 15 : 0;
         			if(<>@player->IsAlive()) {
-"--- He's dead Jim ---"->PrintLine();
+						"--- He's dead Jim ---"->PrintLine();
         				@quit := true;
         			}
         			else {
