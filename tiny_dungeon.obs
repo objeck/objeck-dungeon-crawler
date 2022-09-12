@@ -47,7 +47,6 @@ class TinyDungeon {
 		@player := Player->New("Blueberry");
 		@player->SetWeapon(WoodenSword->New());
 		@player->SetArmor(LeatherTunic->New());
-		@player->AddPotion(Potion->Type->WEAK_HEALTH, 1);
 		@player->SetMagic1(LightHeal->New());
 		@player->AddTent();
 		@encounter_perc := 15;
@@ -141,6 +140,7 @@ class TinyDungeon {
 		@stat_box->SetFill(true);
 		@stat_box->SetColor(Color->New(78,53,36));
 
+
 		player_spell1 := @player->GetMagic1() = Nil ? "None" : @player->GetMagic1()->ToString();
 		player_spell2 := @player->GetMagic2() = Nil ? "None" : @player->GetMagic2()->ToString();
 		
@@ -148,7 +148,7 @@ class TinyDungeon {
 		stat_box_copy := [
 			"{$@player}", 
 			"{$player_weapon}, {$player_armor}",
-			"Potions",
+			"Spells",
 			"  1: {$player_spell1}",
 			"  2: {$player_spell2}",
 			"Condition: {$player_health}"];
@@ -165,11 +165,41 @@ class TinyDungeon {
 	}
 
 	method : MakeItemBox() ~ Nil {
-		player_potion1 := @player->GetPotion1() = Nil ? "None" : @player->GetPotion1()->ToString();
-		player_potion2 := @player->GetPotion2() = Nil ? "None" : @player->GetPotion2()->ToString();
-		player_potion3 := @player->GetPotion3() = Nil ? "None" : @player->GetPotion3()->ToString();
-		player_gold := @player->GetGold();
-		player_tents := @player->GetTents();
+		potion1_text : String;
+		player_potion1 := @player->GetPotion1();
+		if(player_potion1 <> Nil) {
+			 potion_desc := @player->GetPotion1()->ToString();
+			 potion_count := @player->GetPotion1()->GetCount();
+			 potion1_text := "{$potion_desc} x {$potion_count}";
+		}
+		else {
+			potion1_text := "None";
+		};
+
+		potion2_text : String;
+		player_potion2 := @player->GetPotion2();
+		if(player_potion2 <> Nil) {
+			 potion_desc := @player->GetPotion2()->ToString();
+			 potion_count := @player->GetPotion2()->GetCount();
+			 potion2_text := "{$potion_desc} x {$potion_count}";
+		}
+		else {
+			potion2_text := "None";
+		};
+
+		potion3_text : String;
+		player_potion3 := @player->GetPotion3();
+		if(player_potion3 <> Nil) {
+			 potion_desc := @player->GetPotion3()->ToString();
+			 potion_count := @player->GetPotion3()->GetCount();
+			 potion3_text := "{$potion_desc} x {$potion_count}";
+		}
+		else {
+			potion3_text := "None";
+		};
+		
+		player_gold_text := @player->GetGold();
+		player_tent_text := @player->GetTents();
 
 		@item_box := @framework->AddRectangle(305, 165);
 		@item_box->SetFill(true);
@@ -177,11 +207,11 @@ class TinyDungeon {
 
 		@item_box_texts := TextSprite->New[5];
 		item_box_copy := [
-			"Gold={$player_gold}, Tents={$player_tents}",
-			"Spells",
-			"  A: {$player_potion1}",
-			"  B: {$player_potion2}",
-			"  C: {$player_potion3}"];
+			"Gold={$player_gold_text}, Tents={$player_tent_text}",
+			"Potions",
+			"  A: {$potion1_text}",
+			"  B: {$potion2_text}",
+			"  C: {$potion3_text}"];
 
 		if(item_box_copy->Size() <> @item_box_texts->Size()) {
 			"--- Item box copy mismatch ---"->ErrorLine();
@@ -255,8 +285,7 @@ class TinyDungeon {
 	        	}
 	        	else if(OnItem()) {
 	        		if(@view_type = MapManager->Type->POTION) {
-"-- Potion: TODO --"->PrintLine();
-	        			@player->AddPotion(Potion->Type->WEAK_HEALTH, 1);
+       					AddPotion(Potion->Type->WEAK_HEALTH);
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
 	        			AddGold(10);
@@ -316,12 +345,57 @@ class TinyDungeon {
 		};
 	}
 
+	method : AddPotion(type : Potion->Type) ~ Nil {
+		if(@player->AddPotion(type, 1) & @map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
+			# --- Potion 1 ---
+			potion1_text : String;
+			player_potion1 := @player->GetPotion1();
+			if(player_potion1 <> Nil) {
+				 potion_desc := @player->GetPotion1()->ToString();
+				 potion_count := @player->GetPotion1()->GetCount();
+				 potion1_text := "  A: {$potion_desc} x {$potion_count}";
+			}
+			else {
+				potion1_text := "None";
+			};		
+			@item_box_texts[2]->RenderedText(potion1_text, @text_color);
+
+			# --- Potion 2 ---
+			potion2_text : String;
+			player_potion2 := @player->GetPotion2();
+			if(player_potion2 <> Nil) {
+				 potion_desc := @player->GetPotion2()->ToString();
+				 potion_count := @player->GetPotion2()->GetCount();
+				 potion2_text := "  A: {$potion_desc} x {$potion_count}";
+			}
+			else {
+				potion2_text := "  B: None";
+			};		
+			@item_box_texts[3]->RenderedText(potion2_text, @text_color);
+
+			# --- Potion 3 ---
+			potion3_text : String;
+			player_potion3 := @player->GetPotion3();
+			if(player_potion3 <> Nil) {
+				 potion_desc := @player->GetPotion3()->ToString();
+				 potion_count := @player->GetPotion3()->GetCount();
+				 potion3_text := "  A: {$potion_desc} x {$potion_count}";
+			}
+			else {
+				potion3_text := "  B: None";
+			};		
+			@item_box_texts[3]->RenderedText(potion3_text, @text_color);
+
+			@can_show_item := false;
+		};
+	}
+
 	method : AddGold(amount : Int) ~ Nil {
 		if(@map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
 			@player->AddGold(amount);
 
-			player_gold := @player->GetGold(); player_tents := @player->GetTents();
-			@item_box_texts[0]->RenderedText("Gold={$player_gold}, Tents={$player_tents}", @text_color);
+			player_gold_text := @player->GetGold(); player_tent_text := @player->GetTents();
+			@item_box_texts[0]->RenderedText("Gold={$player_gold_text}, Tents={$player_tent_text}", @text_color);
 
 			@can_show_item := false;
 		};

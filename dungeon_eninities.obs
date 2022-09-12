@@ -39,36 +39,6 @@ class Magic {
 }
 
 # --- Potions ---
-class WeakHealth from Potion {
-	New() {
-		Parent(Potion->Type->WEAK_HEALTH);
-	}
-
-	method : public : ToString() ~ String {
-		return "Weak Health";
-	}
-}
-
-class WeakMagic from Potion {
-	New() {
-		Parent(Potion->Type->WEAK_MAGIC);
-	}
-
-	method : public : ToString() ~ String {
-		return "Weak Magic";
-	}
-}
-
-class WeakInvisibility from Potion {
-	New() {
-		Parent(Potion->Type->WEAK_INVISIBILITY);
-	}
-
-	method : public : ToString() ~ String {
-		return "Weak Invisibility";
-	}
-}
-
 class Potion {
 	@type : Potion->Type;
 	@count : Int;
@@ -101,8 +71,6 @@ class Potion {
 				@enc := Int->Random(10, 12);
 			}
 		};
-
-		@count := 1;
 	}
 
 	method : public : GetHp() ~ Int {
@@ -125,11 +93,27 @@ class Potion {
 		return @type;
 	}
 
-	method : GetCount() ~ Int {
+	method : public : GetCount() ~ Int {
 		return @count;
 	}
 
-	method : virtual : public : ToString() ~ String;
+	method : public : ToString() ~ String {
+		select(@type) {
+			label Type->WEAK_HEALTH {
+				return "Weak Health";
+			}
+
+			label Type->WEAK_MAGIC {
+				return "Weak Magic";
+			}
+
+			label Type->WEAK_INVISIBILITY {
+				return "Weak Invisibility";
+			}
+		};
+
+		return "Unknown";
+	}
 }
 
 # --- Weapons ---
@@ -192,7 +176,7 @@ class Player from Entity {
 			Int->Random(14, 17),	# strength
 			Int->Random(12, 14),	# agility
 			Int->Random(13, 15));	# stamina
-		
+
 		@name := name;
 		@mp := Int->Random(4, 7);
 		@potions := Potion->New[3];
@@ -202,13 +186,30 @@ class Player from Entity {
 	#
 	# --- Potions ---
 	#
-	method : public : AddPotion(type : Potion->Type, amount : Int) ~ Nil {
-		each(i : @potions) {
+	method : public : AddPotion(type : Potion->Type, count : Int) ~ Bool {
+		found := false;
+
+		for(i := 0; <>found & i < @potions->Size(); i += 1;) {
 			potion := @potions[i];
 			if(potion <> Nil & potion->GetType() = type) {
-
+				potion->Add(count);
+				found := true;
+"--- ADDED POTION ---"->PrintLine();				
 			};
 		};
+
+		if(<>found) {
+			for(i := 0; <>found & i < @potions->Size(); i += 1;) {
+				potion := @potions[i];
+				if(potion = Nil) {
+					@potions[i] := Potion->New(type);
+					@potions[i]->Add(count);
+					found := true;
+				};
+			};
+		};
+
+		return found;
 	}
 
 	method : public : UsePotion(index : Int) ~ Nil {
