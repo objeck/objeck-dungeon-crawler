@@ -230,8 +230,8 @@ class MapManager from Manager {
 							map[i,j] := MapManager->Type->END;
 						}
 						# chest
-						label 'C' {
-							map[i,j] := MapManager->Type->CHEST;
+						label 'L' {
+							map[i,j] := MapManager->Type->LOOT;
 						}
 						# potion
 						label 'P' {
@@ -240,10 +240,6 @@ class MapManager from Manager {
 						# trap
 						label 'T' {
 							map[i,j] := MapManager->Type->TRAP;
-						}
-						# warp
-						label 'W' {
-							map[i,j] := MapManager->Type->WARP;
 						}
 					};
 				};
@@ -315,16 +311,12 @@ class MapManager from Manager {
 							out := 'P';
 						}
 
-						label Type->CHEST {
-							out := 'C';
+						label Type->LOOT {
+							out := 'L';
 						}
 
 						label Type->TRAP {
 							out := 'T';
-						}
-
-						label Type->WARP {
-							out := 'W';
 						}
 					};
 				};
@@ -359,12 +351,10 @@ class MapManager from Manager {
 		OPEN := 1,
 		START := 2,
 		POTION := 3,
-		CHEST := 4,
+		LOOT := 4,
 		END := 5,
 		DOOR := 6,
-		PILLAR := 7,		
 		TRAP := 8,
-		WARP := 9,
 		NONE := 10
 	}
 
@@ -483,7 +473,7 @@ class SpriteManager from Manager {
 	}
 
 	method : public : RenderLoot() ~ Nil {
-		@dungeon_sprites[5]->Render(5);
+		@dungeon_sprites[5]->Render(7);
 	}
 
 	# -------------
