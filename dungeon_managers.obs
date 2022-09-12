@@ -358,11 +358,11 @@ class MapManager from Manager {
 		BLOCKED := 0,
 		OPEN := 1,
 		START := 2,
-		END := 3,
-		DOOR := 4,
-		PILLAR := 5,
-		POTION := 6,
-		CHEST := 7,
+		POTION := 3,
+		CHEST := 4,
+		END := 5,
+		DOOR := 6,
+		PILLAR := 7,		
 		TRAP := 8,
 		WARP := 9,
 		NONE := 10
@@ -426,6 +426,7 @@ class SpriteManager from Manager {
 		@dungeon_sprites[2] := @framework->AddAnimatedImageSprite("{$path}/dungeon_2.png");
 		@dungeon_sprites[3] := @framework->AddAnimatedImageSprite("{$path}/dungeon_3.png");
 		@dungeon_sprites[4] := @framework->AddAnimatedImageSprite("{$path}/dungeon_4.png");
+		@dungeon_sprites[5] := @framework->AddAnimatedImageSprite("{$path}/dungeon_5.png");
 
 		@map_sprites := @framework->AddAnimatedImageSprite("{$path}/map_0.png");
 
@@ -467,12 +468,28 @@ class SpriteManager from Manager {
 		return true;
 	}
 
+	# -------------
+
 	method : public : RenderMonsterHit() ~ Nil {
 		@dungeon_sprites[4]->Render(4);		
 	}
 
 	method : public : RenderPlayerHit() ~ Nil {
 		@dungeon_sprites[4]->Render(8);		
+	}
+
+	method : public : RenderPotion() ~ Nil {
+		@dungeon_sprites[5]->Render(3);
+	}
+
+	method : public : RenderLoot() ~ Nil {
+		@dungeon_sprites[5]->Render(5);
+	}
+
+	# -------------
+
+	method : public : Render() ~ Nil {
+		@dungeon_sprites[5]->Render(0);
 	}
 
 	method : public : RenderDungeonSprite(raw_index : Int) ~ Nil {
@@ -508,7 +525,7 @@ class SpriteManager from Manager {
 	consts Clips {
 		DUNGEON_X_CLIPS := 4,
 		DUNGEON_Y_CLIPS := 6,
-		DUNGEON_SHEETS := 5,
+		DUNGEON_SHEETS := 6,
 
 		MAP_X_CLIPS := 6,
 		MAP_Y_CLIPS := 1,
