@@ -97,6 +97,15 @@ class Potion {
 		return @count;
 	}
 
+	method : public : ReduceCount() ~ Bool {
+		if(@count > 0) {
+			@count -= 1;
+			return true;
+		};
+
+		return false;
+	}
+
 	method : public : ToString() ~ String {
 		select(@type) {
 			label Type->WEAK_HEALTH {
@@ -160,6 +169,7 @@ class Player from Entity {
 	@name : String;
 	@experience : Int;
 	@mp : Int;
+	@enc : Int;
 	@gold : Int;
 	@tents : Int;
 
@@ -194,7 +204,6 @@ class Player from Entity {
 			if(potion <> Nil & potion->GetType() = type) {
 				potion->Add(count);
 				found := true;
-"--- ADDED POTION ---"->PrintLine();				
 			};
 		};
 
@@ -212,7 +221,19 @@ class Player from Entity {
 		return found;
 	}
 
-	method : public : UsePotion(index : Int) ~ Nil {
+	method : public : UsePotion(index : Int) ~ Bool {
+		if(index > -1 & index < @potions->Size()) {
+			potion := @potions[index];
+			if(potion->ReduceCount()) {
+				@hp += potion->GetHp();
+				@mp += potion->GetMp();
+				@enc += potion->GetEnc();
+
+				return true;
+			};
+		};
+
+		return false;
 	}
 
 	method : public : GetPotion1() ~ Potion {
@@ -311,6 +332,10 @@ class Player from Entity {
 
 	method : public : GetMp() ~ Int {
 		return @mp;
+	}
+
+	method : public : GetEnc() ~ Int {
+		return @enc;
 	}
 
 	method : public : GetLevel() ~ Int {

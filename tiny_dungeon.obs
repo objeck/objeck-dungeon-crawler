@@ -292,6 +292,23 @@ class TinyDungeon {
 	        		};
 	        	};
         	}
+
+        	# Potion 1
+        	label Scancode->SDL_SCANCODE_F5 {
+        		if(@player->UsePotion(0)) {
+        			# TODO: update stats text
+
+        			# TODO: update potion text
+        		};
+        	}
+
+        	# Potion 2
+        	label Scancode->SDL_SCANCODE_F6 {
+        	}
+
+        	# Potion 3
+        	label Scancode->SDL_SCANCODE_F7 {
+        	}
         };
 	}
 
