@@ -168,8 +168,13 @@ class LeatherTunic implements Armor {
 class Player from Entity {
 	@name : String;
 	@experience : Int;
+	
+	@max_mp : Int;
 	@mp : Int;
+
+	@max_enc : Int;
 	@enc : Int;
+
 	@gold : Int;
 	@tents : Int;
 
@@ -188,7 +193,8 @@ class Player from Entity {
 			Int->Random(13, 15));	# stamina
 
 		@name := name;
-		@mp := Int->Random(4, 7);
+		@mp := @max_mp := @max_hp := Int->Random(4, 7);
+		
 		@potions := Potion->New[3];
 		@magics := Magic->New[2];
 	}
@@ -282,10 +288,6 @@ class Player from Entity {
 	}
 
 	#
-	# --- Loot ---
-	#
-	
-	#
 	# --- Weapons and Armor ---
 	#
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
@@ -338,35 +340,6 @@ class Player from Entity {
 		return @enc;
 	}
 
-	method : public : GetLevel() ~ Int {
-		if(@experience > 300 & @level < 5) {
-			SetMaxHp(GetMaxHp() * 1.10);
-			SetHp(@max_hp, true);
-			@level := 5;
-		}
-		else if(@experience <= 300 & @experience > 200 & @level < 4) {
-			SetMaxHp(GetMaxHp() * 1.15);
-			SetHp(@max_hp, true);
-			@level := 4;
-		}
-		else if(@experience <= 200 & @experience > 130 & @level < 3) {
-			SetMaxHp(GetMaxHp() * 1.20);
-			SetHp(@max_hp, true);
-			@level := 3;
-		}
-		else if(@experience <= 130 & @experience > 50 & @level < 2) {
-			SetMaxHp(GetMaxHp() * 1.25);
-			SetHp(@max_hp, true);
-			@level := 2;
-		}
-		else if(@level = 1) {
-			@level := 1;
-		};
-
-		return @level;
-		
-	}
-
 	method : public : GetName() ~ String {
 		return @name;
 	}
@@ -395,6 +368,7 @@ class Player from Entity {
 
 class Entity {
 	@type : EntityType;
+
 	@level : Int;
 	@max_hp : Int;
 	@hp : Int;
@@ -418,9 +392,7 @@ class Entity {
 	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int) {
 		@type := type;
 		@level := level;
-		@max_hp := @hp := max_hp;
-		@max_hp := max_hp;
-		@strength := strength;
+		@hp := @max_hp := max_hp;
 		@agility := agility;
 		@stamina := stamina;
 		@debug := true;
@@ -453,12 +425,8 @@ class Entity {
 		return @hp;
 	}
 
-	method : public : GetMaxHp() ~ Int {
-		return @max_hp;
-	}
-
-	method : public : SetMaxHp(max_hp : Int) ~ Nil {
-		@max_hp := max_hp;
+	method : public : UpdateHp(update : Int) ~ Nil {
+		@hp -= update;
 	}
 
 	method : public : GetAttack() ~ Int {
@@ -474,7 +442,7 @@ class Entity {
 		defense := opponent->GetDefense();
 		
 		diff := attack - defense;
-		opponent->SetHp(diff < 0 ? Int->Random(0, 1) : diff);
+		opponent->UpdateHp(diff < 0 ? Int->Random(0, 1) : diff);
 
 		if(@debug) {
 			our_name := GetName();
@@ -483,29 +451,6 @@ class Entity {
 		};
 
 		return diff > 0;
-	}
-
-	method : public : SetHp(adjustment : Int, is_potion : Bool := false) ~ Bool {
-		if(<>is_potion) {
-			if(adjustment <= 0) {
-				return false;
-			};
-			@hp -= adjustment;
-		}
-		else {
-			@hp += adjustment;
-		};
-
-		if(@hp < 1) {
-			@hp := 0;
-			return true;
-		};
-
-		if(@hp > @max_hp) {
-			@hp := @max_hp;
-		};
-
-		return false;
 	}
 }
 
@@ -516,12 +461,12 @@ Ghost
 ~#
 class Ghost from Entity {
 	New(level : Int) {
-		Parent(EntityType->GHOST,		# type
-			level,						# level
-			Int->Random(9, 13),			# max hp
-			Int->Random(17, 19),		# strength
-			Int->Random(11, 13),		# agility
-			Int->Random(7, 10));		# stamina
+		Parent(EntityType->GHOST,	# type
+			level,					# level
+			Int->Random(7, 13),		# max hp
+			Int->Random(7, 9),		# strength
+			Int->Random(6, 7),		# agility
+			Int->Random(3, 5));		# stamina
 	}
 
 	method : public : GetName() ~ String {
@@ -548,10 +493,10 @@ class Slime from Entity {
 	New(level : Int) {
 		Parent(EntityType->SLIME,	# type
 			level,					# level
-			Int->Random(7, 11),		# max hp
-			Int->Random(14, 16),	# strength
-			Int->Random(10, 11),	# agility
-			Int->Random(14, 15));	# stamina
+			Int->Random(5, 7),		# max hp
+			Int->Random(7, 8),		# strength
+			Int->Random(6, 8),		# agility
+			Int->Random(7, 9));		# stamina
 	}
 
 	method : public : GetName() ~ String {
@@ -578,10 +523,10 @@ class Rat from Entity {
 	New(level : Int) {
 		Parent(EntityType->RAT,		# type
 			level,					# level
-			Int->Random(5, 10),		# max hp
-			Int->Random(15, 17),	# strength
-			Int->Random(14, 15),	# agility
-			Int->Random(8, 10));		# stamina
+			Int->Random(6, 9),		# max hp
+			Int->Random(11, 13),	# strength
+			Int->Random(9, 11),		# agility
+			Int->Random(5, 9));		# stamina
 	}
 
 	method : public : GetName() ~ String {
