@@ -26,7 +26,7 @@ class SmallMissle from Magic {
 	}
 
 	method : public : ToString() ~ String {
-		return "Small Missle";
+		return "Small Missile";
 	}
 }
 
@@ -131,7 +131,7 @@ class WoodenSword implements Weapon {
 	}
 
 	method : public : GetHit() ~ Float {
-		return 0.2;
+		return 4.5;
 	}
 
 	method : public : ToString() ~ String {
@@ -149,8 +149,8 @@ class LeatherTunic implements Armor {
 	New() {
 	}
 
-	method : public : GetHit() ~ Float {
-		return 0.15;
+	method : public : GetBlock() ~ Float {
+		return 3.5;
 	}
 
 	method : public : ToString() ~ String {
@@ -159,7 +159,7 @@ class LeatherTunic implements Armor {
 }
 
 interface Armor {
-	method : virtual : public : GetHit() ~ Float;
+	method : virtual : public : GetBlock() ~ Float;
 	method : virtual : public : ToString() ~ String;
 }
 
@@ -188,9 +188,9 @@ class Player from Entity {
 		Parent(EntityType->PERSON,	# type
 			1, 						# level
 			Int->Random(21, 28),	# max hp
-			Int->Random(14, 17),	# strength
-			Int->Random(12, 14),	# agility
-			Int->Random(13, 15));	# stamina
+			Int->Random(11, 18),	# strength
+			Int->Random(9, 13),		# agility
+			Int->Random(9, 15));	# stamina
 
 		@name := name;
 		@mp := @max_mp := @max_hp := Int->Random(4, 7);
@@ -292,10 +292,12 @@ class Player from Entity {
 	#
 	method : public : SetWeapon(weapon : Weapon) ~ Nil {
 		@weapon := weapon;
+		SetWeaponHit(@weapon->GetHit());
 	}
 
 	method : public : SetArmor(armor : Armor) ~ Nil {
 		@armor := armor;
+		SetArmorBlock(@armor->GetBlock());
 	}
 
 	method : public : GetWeapon() ~ Weapon {
@@ -426,6 +428,14 @@ class Entity {
 		return @hp;
 	}
 
+	method : public : SetWeaponHit(weapon_hit : Float) ~ Nil {
+		@weapon_hit := weapon_hit;
+	}
+
+	method : public : SetArmorBlock(armor_block : Float) ~ Nil {
+		@armor_block := armor_block;
+	}
+
 	method : public : UpdateHp(update : Int) ~ Nil {
 		@hp -= update;
 	}
@@ -495,9 +505,11 @@ class Slime from Entity {
 		Parent(EntityType->SLIME,	# type
 			level,					# level
 			Int->Random(5, 7),		# max hp
-			Int->Random(7, 8),		# strength
-			Int->Random(6, 8),		# agility
+			Int->Random(9, 11),		# strength
+			Int->Random(2, 3),		# agility
 			Int->Random(7, 9));		# stamina
+		SetWeaponHit(1.5);
+		SetArmorBlock(0.5);
 	}
 
 	method : public : GetName() ~ String {
