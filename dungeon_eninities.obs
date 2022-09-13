@@ -509,7 +509,7 @@ class Slime from Entity {
 			Int->Random(6, 8),		# agility
 			Int->Random(7, 9));		# stamina
 		SetWeaponHit(32.1);
-		SetArmorBlock(16.5);
+		SetArmorBlock(15.4);
 	}
 
 	method : public : GetName() ~ String {
