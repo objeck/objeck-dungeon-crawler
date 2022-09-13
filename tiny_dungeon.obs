@@ -24,7 +24,7 @@ class TinyDungeon {
 
 	@monster_sprint_index : Int;
 
-	@monster : Entity;
+	@monster : Monster;
 	@monster_hit : Int;
 
 	@player : Player;
@@ -356,13 +356,11 @@ class TinyDungeon {
 		if(<>OnItem() & @monster = Nil & Int->Random(99) < @encounter_perc) {
 			select(Int->Random(2)) {
 				label 0 {
-#					@monster := Rat->New(1);
-@monster := Slime->New(1);
+					@monster := Rat->New(1);
 				}
 
 				label 1 {
-#					@monster := Ghost->New(1);
-@monster := Slime->New(1);
+					@monster := Ghost->New(1);
 				}
 
 				other {

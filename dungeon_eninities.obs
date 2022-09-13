@@ -312,7 +312,7 @@ class Player from Entity {
 	# --- Gold and Exp ---
 	#
 	method : public : AddExperince(monster : Entity) ~ Nil {
-		@experience += monster->GetFightExperince();
+		@experience += monster->GetWinExp();
 	}
 
 	method : public : GetExperince() ~ Int {
@@ -346,16 +346,8 @@ class Player from Entity {
 		return @name;
 	}
 
-	method : public : GetFightExperince() ~ Int {
+	method : public : GetWinExp() ~ Int {
 		return @experience;
-	}
-
-	method : public : GetImageEnd() ~ Int {
-		return -1;
-	}
-
-	method : public : GetImageStart() ~ Int {
-		return -1;
 	}
 
 	method : public : GetHealth() ~ String {
@@ -409,12 +401,7 @@ class Entity {
 
 	method : virtual : public : GetName() ~ String;
 
-	method : virtual : public : GetFightExperince() ~ Int;
-
-	method : virtual : public : GetImageStart() ~ Int;
-
-	method : virtual : public : GetImageEnd() ~ Int;
-
+	method : virtual : public : GetWinExp() ~ Int;
 
 	method : public : GetHpPercentage() ~ Float {
 		return @hp->As(Float) / @max_hp->As(Float);
@@ -466,48 +453,63 @@ class Entity {
 }
 
 # --- Monsters ---
+class Monster from Entity {
+	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int) {
+		Parent(type, level, max_hp, strength, agility, stamina);
+	}
+
+	method : virtual : public : GetImageStart() ~ Int;
+
+	method : public : GetImageEnd() ~ Int {
+		return GetImageStart() + 4; 
+	}
+
+	method : virtual : public : GetName() ~ String;
+
+	method : virtual : public : GetWinExp() ~ Int;
+}
 
 #~
 Ghost
 ~#
-class Ghost from Entity {
+class Ghost from Monster {
 	New(level : Int) {
 		Parent(EntityType->GHOST,	# type
 			level,					# level
-			Int->Random(7, 13),		# max hp
-			Int->Random(7, 9),		# strength
-			Int->Random(6, 7),		# agility
-			Int->Random(3, 5));		# stamina
+			Int->Random(10, 12),	# max hp
+			Int->Random(10, 11),	# strength
+			Int->Random(7, 8),		# agility
+			Int->Random(6, 8));		# stamina
+
+		SetWeaponHit(36.6);
+		SetArmorBlock(13.3);
 	}
 
 	method : public : GetName() ~ String {
 		return "Ghost";
 	}
 
-	method : public : GetFightExperince() ~ Int {
+	method : public : GetWinExp() ~ Int {
 		return Int->Random(9, 11);
 	}
 
 	method : public : GetImageStart() ~ Int {
 		return 8;
 	}
-
-	method : public : GetImageEnd() ~ Int {
-		return 11;
-	}
 }
 
 #~
 Slime
 ~#
-class Slime from Entity {
+class Slime from Monster {
 	New(level : Int) {
 		Parent(EntityType->SLIME,	# type
 			level,					# level
-			Int->Random(7, 11),		# max hp
+			Int->Random(11, 13),	# max hp
 			Int->Random(7, 9),		# strength
 			Int->Random(6, 8),		# agility
 			Int->Random(7, 9));		# stamina
+
 		SetWeaponHit(32.1);
 		SetArmorBlock(15.4);
 	}
@@ -516,45 +518,40 @@ class Slime from Entity {
 		return "Slime";
 	}
 
-	method : public : GetFightExperince() ~ Int {
+	method : public : GetWinExp() ~ Int {
 		return Int->Random(9, 11);
 	}
 
 	method : public : GetImageStart() ~ Int {
 		return 4;
 	}
-
-	method : public : GetImageEnd() ~ Int {
-		return 7;
-	}
 }
 
 #~
 Rat
 ~#
-class Rat from Entity {
+class Rat from Monster {
 	New(level : Int) {
 		Parent(EntityType->RAT,		# type
 			level,					# level
 			Int->Random(6, 9),		# max hp
 			Int->Random(11, 13),	# strength
 			Int->Random(9, 11),		# agility
-			Int->Random(5, 9));		# stamina
+			Int->Random(5, 6));		# stamina
+		
+		SetWeaponHit(45.5);
+		SetArmorBlock(10.9);
 	}
 
 	method : public : GetName() ~ String {
 		return "Rat";
 	}
 
-	method : public : GetFightExperince() ~ Int {
+	method : public : GetWinExp() ~ Int {
 		return Int->Random(12, 15);
 	}
 
 	method : public : GetImageStart() ~ Int {
 		return 0;
-	}
-
-	method : public : GetImageEnd() ~ Int {
-		return 3;
 	}
 }
