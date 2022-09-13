@@ -529,7 +529,7 @@ class SpriteManager from Manager {
 		DUNGEON_Y_CLIPS := 6,
 		DUNGEON_SHEETS := 6,
 
-		MAP_X_CLIPS := 6,
+		MAP_X_CLIPS := 8,
 		MAP_Y_CLIPS := 1,
 		
 		MONSTER_X_CLIPS := 4,

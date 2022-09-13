@@ -12,7 +12,7 @@ use System.IO.File;
 # --- Magic ---
 class LightHeal from Magic {
 	New() {
-		Parent(Int->Random(4, 6), 0, 0, 0);
+		Parent(Int->Random(9, 12), 0, 0, 0);
 	}
 
 	method : public : ToString() ~ String {
@@ -193,7 +193,7 @@ class Player from Entity {
 			Int->Random(9, 15));	# stamina
 
 		@name := name;
-		@mp := @max_mp := @max_hp := Int->Random(4, 7);
+		@mp := @max_mp := Int->Random(7, 13);
 		
 		@potions := Potion->New[3];
 		@magics := Magic->New[2];
@@ -232,7 +232,15 @@ class Player from Entity {
 			potion := @potions[index];
 			if(potion <> Nil & potion->ReduceCount()) {
 				@hp += potion->GetHp();
+				if(@hp > @max_hp) {
+					@hp := @max_hp;
+				};
+
 				@mp += potion->GetMp();
+				if(@mp > @max_mp) {
+					@mp := @max_mp;
+				};
+				
 				@enc += potion->GetEnc();
 
 				return true;
@@ -403,7 +411,7 @@ class Entity {
 
 	method : virtual : public : GetWinExp() ~ Int;
 
-	method : public : GetHpPercentage() ~ Float {
+	method : public : GetHpPerc() ~ Float {
 		return @hp->As(Float) / @max_hp->As(Float);
 	}
 
@@ -481,7 +489,7 @@ class Ghost from Monster {
 			Int->Random(7, 8),		# agility
 			Int->Random(6, 8));		# stamina
 
-		SetWeaponHit(36.6);
+		SetWeaponHit(35.3);
 		SetArmorBlock(13.3);
 	}
 
@@ -538,8 +546,8 @@ class Rat from Monster {
 			Int->Random(11, 13),	# strength
 			Int->Random(9, 11),		# agility
 			Int->Random(5, 6));		# stamina
-		
-		SetWeaponHit(45.5);
+
+		SetWeaponHit(39.5);
 		SetArmorBlock(10.9);
 	}
 

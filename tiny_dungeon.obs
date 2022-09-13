@@ -839,11 +839,9 @@ class TinyDungeon {
 			if(@player_hit > 0) {
 				@sprite_manager->RenderMonsterHit();
 				@player_hit -= 1;
-				@monster_hit := 0;
 			}
 			else if(@monster_hit > 0) {
 				@sprite_manager->RenderPlayerHit();
-				@player_hit := 0;
 				@monster_hit -= 1;
 			};
 		};
@@ -871,6 +869,21 @@ class TinyDungeon {
 			if(@monster_sprint_index >= @monster->GetImageEnd()) {
 				@monster_sprint_index := @monster->GetImageStart();
 			};
+		};
+
+		x_offset := 260;
+		graph_perc := 0;
+		monster_perc := (@monster->GetHpPerc() * 100.0)->ToInt();
+		each(i : 5) {
+			if(graph_perc < monster_perc) {
+				@sprite_manager->RenderMapSprite(6, 300, x_offset);
+			}
+			else {
+				@sprite_manager->RenderMapSprite(7, 300, x_offset);
+			};
+			# update
+			x_offset -= 16;
+			graph_perc += 20;
 		};
 	}
 
