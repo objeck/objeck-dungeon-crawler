@@ -131,7 +131,7 @@ class WoodenSword implements Weapon {
 	}
 
 	method : public : GetHit() ~ Float {
-		return 4.5;
+		return 27.5;
 	}
 
 	method : public : ToString() ~ String {
@@ -150,7 +150,7 @@ class LeatherTunic implements Armor {
 	}
 
 	method : public : GetBlock() ~ Float {
-		return 3.5;
+		return 15.5;
 	}
 
 	method : public : ToString() ~ String {
@@ -188,7 +188,7 @@ class Player from Entity {
 		Parent(EntityType->PERSON,	# type
 			1, 						# level
 			Int->Random(21, 28),	# max hp
-			Int->Random(11, 18),	# strength
+			Int->Random(12, 18),	# strength
 			Int->Random(9, 13),		# agility
 			Int->Random(9, 15));	# stamina
 
@@ -230,7 +230,7 @@ class Player from Entity {
 	method : public : UsePotion(index : Int) ~ Bool {
 		if(index > -1 & index < @potions->Size()) {
 			potion := @potions[index];
-			if(potion->ReduceCount()) {
+			if(potion <> Nil & potion->ReduceCount()) {
 				@hp += potion->GetHp();
 				@mp += potion->GetMp();
 				@enc += potion->GetEnc();
@@ -399,7 +399,7 @@ class Entity {
 		@stamina := stamina;
 		@debug := true;
 
-		base := 0.75;
+		base := 0.65;
 		@levels := Float->New[30];
 		each(i : @levels) {
 			@levels[i] := base;
@@ -441,11 +441,11 @@ class Entity {
 	}
 
 	method : public : GetAttack() ~ Int {
-		return (@strength * 0.45 + @agility * 0.25 + @weapon_hit * 0.4) * @levels[Int->Random(@level - 1, @level + 1)];
+		return (@strength * 0.40 + @agility * 0.15 + @weapon_hit * 0.45) * @levels[Int->Random(@level - 1, @level + 1)];
 	}
 
 	method : public : GetDefense() ~ Int {
-		return (@stamina * 0.35 + @agility * 0.25 + @armor_block * 0.4) * @levels[Int->Random(@level - 1, @level + 1)];
+		return (@stamina * 0.35 + @agility * 0.25 + @armor_block * 0.40) * @levels[Int->Random(@level - 1, @level + 1)];
 	}
 
 	method : public : Attack(opponent : Entity) ~ Bool {
@@ -504,12 +504,12 @@ class Slime from Entity {
 	New(level : Int) {
 		Parent(EntityType->SLIME,	# type
 			level,					# level
-			Int->Random(5, 7),		# max hp
-			Int->Random(9, 11),		# strength
-			Int->Random(2, 3),		# agility
+			Int->Random(7, 11),		# max hp
+			Int->Random(7, 9),		# strength
+			Int->Random(6, 8),		# agility
 			Int->Random(7, 9));		# stamina
-		SetWeaponHit(1.5);
-		SetArmorBlock(0.5);
+		SetWeaponHit(32.1);
+		SetArmorBlock(16.5);
 	}
 
 	method : public : GetName() ~ String {
