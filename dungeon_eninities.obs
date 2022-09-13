@@ -1,6 +1,6 @@
 #~
 Tiny Dungeon Crawler
-Copyright (c) 2020 Randy Hollines
+Copyright (c) 2020, 2022 Randy Hollines
 ~#
 
 use System.Concurrency;
@@ -56,19 +56,19 @@ class Potion {
 		@type := type;
 		select(type) {
 			label Type->WEAK_HEALTH {
-				@hp := Int->Random(5, 7);
+				@hp := Int->Random(4, 8);
 				@mp := @enc := 0;
 			}
 
 			label Type->WEAK_MAGIC {
-				@mp := Int->Random(6, 9);
+				@mp := Int->Random(3, 5);
 				@hp := @enc := 0;
 
 			}
 
 			label Type->WEAK_INVISIBILITY {
 				@hp := @mp := 0;
-				@enc := Int->Random(10, 12);
+				@enc := Int->Random(5, 9);
 			}
 		};
 	}
@@ -126,11 +126,6 @@ class Potion {
 }
 
 # --- Weapons ---
-interface Weapon {
-	method : virtual : public : GetHit() ~ Float;
-	method : virtual : public : ToString() ~ String;	
-}
-
 class WoodenSword implements Weapon {
 	New() {
 	}
@@ -144,12 +139,12 @@ class WoodenSword implements Weapon {
 	}
 }
 
-# --- Armor ---
-interface Armor {
+interface Weapon {
 	method : virtual : public : GetHit() ~ Float;
-	method : virtual : public : ToString() ~ String;
+	method : virtual : public : ToString() ~ String;	
 }
 
+# --- Armor ---
 class LeatherTunic implements Armor {
 	New() {
 	}
@@ -161,6 +156,11 @@ class LeatherTunic implements Armor {
 	method : public : ToString() ~ String {
 		return "Leather Tunic";
 	}
+}
+
+interface Armor {
+	method : virtual : public : GetHit() ~ Float;
+	method : virtual : public : ToString() ~ String;
 }
 
 # --- Player ---
@@ -409,9 +409,10 @@ class Entity {
 
 	method : virtual : public : GetFightExperince() ~ Int;
 
+	method : virtual : public : GetImageStart() ~ Int;
+
 	method : virtual : public : GetImageEnd() ~ Int;
 
-	method : virtual : public : GetImageStart() ~ Int;
 
 	method : public : GetHpPercentage() ~ Float {
 		return @hp->As(Float) / @max_hp->As(Float);
