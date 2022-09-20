@@ -776,7 +776,7 @@ class TinyDungeon {
 			msg := "Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\n";
 			msg += "View\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\n";
 			msg += "Image\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}\n";
-			msg += "can_preview_item={$@can_preview_item}, can_show_item={$@can_show_item} ===";
+			msg += "can_preview_item={$@can_preview_item}, can_show_item={$@can_show_item}\n===";
 			msg->PrintLine();
 		};
 	}
