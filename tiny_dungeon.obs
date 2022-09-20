@@ -765,8 +765,7 @@ class TinyDungeon {
 				}
 			};
 		};
-
-		
+				
 		@can_show_item := <>(OnItem() & <>(v0 = 2 & v1 = 0 & v2 = 0));
 		@can_preview_item := v1=2 & v2=0 & v4 = 0;
 
