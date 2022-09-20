@@ -20,6 +20,8 @@ class TinyDungeon {
 
 	@dungeon_views : Int[];
 	@view_type : MapManager->Type;
+
+	@can_preview_item : Bool;
 	@can_show_item : Bool;
 
 	@monster_sprint_index : Int;
@@ -518,10 +520,7 @@ class TinyDungeon {
 							@dungeon_views[3] := 1;
 						}
 						else if(v1 = 7) {
-							if(v0 = 2) {
-								@dungeon_views[2] := 107;
-							}
-							else {
+							if(v0 <> 2) {
 								@dungeon_views[2] := 118;
 							};
 							@dungeon_views[3] := 1;
@@ -774,10 +773,7 @@ class TinyDungeon {
 		
 
 		@can_show_item := <>(OnItem() & <>(v0 = 2 & v1 = 0 & v2 = 0));
-
-		if(v1=2 & v2=0 & v4 = 0) {
-			"distance view"->PrintLine();
-		};
+		@can_preview_item := v1=2 & v2=0 & v4 = 0;
 	}
 
 	method : OnItem() ~ Bool {
