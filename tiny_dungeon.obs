@@ -13,6 +13,7 @@ class TinyDungeon {
 	@sound_manager : SoundManager;
 	@map_manager : MapManager;
 	@quit : Bool;
+	@debug : Bool;
 
 	@player_location : Int[];
 	@player_nav_map : Int[,];
@@ -61,6 +62,8 @@ class TinyDungeon {
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
 
 		@monster_sprint_index := 0;
+
+		@debug := true;
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -766,14 +769,16 @@ class TinyDungeon {
 		@can_show_item := <>(OnItem() & <>(v0 = 2 & v1 = 0 & v2 = 0));
 		@can_preview_item := v1=2 & v2=0 & v4 = 0;
 
-		p0 := @dungeon_views[1]; p1 := @dungeon_views[2];
-		p2 := @dungeon_views[3]; p3 := @dungeon_views[4];
-		p4 := @dungeon_views[0]; 
-		msg := "Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\n";
-		msg += "View\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\n";
-		msg += "Image\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}\n";
-		msg += "can_preview_item={$@can_preview_item}, can_show_item={$@can_show_item} ===";
-		msg->PrintLine();		
+		if(@debug) {
+			p0 := @dungeon_views[1]; p1 := @dungeon_views[2];
+			p2 := @dungeon_views[3]; p3 := @dungeon_views[4];
+			p4 := @dungeon_views[0]; 
+			msg := "Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\n";
+			msg += "View\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\n";
+			msg += "Image\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}\n";
+			msg += "can_preview_item={$@can_preview_item}, can_show_item={$@can_show_item} ===";
+			msg->PrintLine();
+		};
 	}
 
 	method : OnItem() ~ Bool {
