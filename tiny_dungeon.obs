@@ -520,7 +520,6 @@ class TinyDungeon {
 							@dungeon_views[3] := 1;
 						}
 						else if(v1 = 7) {
-							if(v0 <> 2) {
 							@dungeon_views[3] := 1;
 						}
 						else {
