@@ -773,7 +773,7 @@ class TinyDungeon {
 		};
 				
 		@can_show_item := OnItem() & v0 = 2 & v1 = 0 & v2 = 0;
-		@can_preview_item := IsLadderForward() & v1=2 & v2=0 & v4 = 0;
+		@can_preview_item := v1=2 & v2=0 & v4 = 0;
 
 		if(@debug) {
 			p0 := @dungeon_views[1]; p1 := @dungeon_views[2];
@@ -920,8 +920,8 @@ class TinyDungeon {
 			@sprite_manager->RenderStairs();
 		};
 
-		if(@view_type = MapManager->Type->LATTER_DOWN & @can_preview_item) {
-			@sprite_manager->RenderStairs();
+		if(@view_forward_type = MapManager->Type->LATTER_DOWN & @can_preview_item) {
+			@sprite_manager->RenderDistantStairs();
 		};
 	}
 

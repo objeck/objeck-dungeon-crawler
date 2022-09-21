@@ -323,10 +323,6 @@ class MapManager from Manager {
 							out := 'S';
 						}
 
-						label Type->DOOR {
-							out := 'D';
-						}
-
 						label Type->POTION {
 							out := 'P';
 						}
@@ -382,7 +378,6 @@ class MapManager from Manager {
 		LATTER_UP := 5,
 		LATTER_DOWN := 6,
 		END := 7,
-		DOOR := 8,
 		TRAP := 9,
 		NONE := 10
 	}
