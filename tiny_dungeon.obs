@@ -917,7 +917,7 @@ class TinyDungeon {
 		};
 
 		if(@view_forward_type = MapManager->Type->LATTER_UP & @can_preview_item) {
-			@sprite_manager->RenderStairs();
+			@sprite_manager->RenderDistantStairs();
 		};
 
 		if(@view_forward_type = MapManager->Type->LATTER_DOWN & @can_preview_item) {
