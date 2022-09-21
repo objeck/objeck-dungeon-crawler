@@ -21,6 +21,7 @@ class TinyDungeon {
 
 	@dungeon_views : Int[];
 	@view_type : MapManager->Type;
+	@view_forward_type : MapManager->Type;
 
 	@can_preview_item : Bool;
 	@can_show_item : Bool;
@@ -336,18 +337,23 @@ class TinyDungeon {
 			select(@player_direction) {
 				label MapManager->Direction->NORTH {
 					@player_location[0] -= 1;
+					@view_forward_type := @map_manager->GetType(@player_location[0] - 1, @player_location[1]);
 				}
 
 				label MapManager->Direction->SOUTH {
 					@player_location[0] += 1;
+					@view_forward_type := @map_manager->GetType(@player_location[0] + 1, @player_location[1]);
+
 				}
 
 				label MapManager->Direction->EAST {
 					@player_location[1] += 1;
+					@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 + 1]);
 				}
 
 				label MapManager->Direction->WEST {
 					@player_location[1] -= 1;
+					@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 - 1]);
 				}
 			};
 
@@ -776,7 +782,7 @@ class TinyDungeon {
 			msg := "Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n\t-----------------------------------\n";
 			msg += "View\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\n";
 			msg += "Image\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}\n";
-			msg += "blocked={$blocked},can_preview_item={$@can_preview_item}, can_show_item={$@can_show_item}\n===";
+			msg += "view_forward_type={$@view_forward_type},can_preview_item={$@can_preview_item}, can_show_item={$@can_show_item}\n===";
 			msg->PrintLine();
 		};
 	}
@@ -903,6 +909,10 @@ class TinyDungeon {
 
 		if(@view_type = MapManager->Type->LOOT & @can_show_item) {
 			@sprite_manager->RenderLoot();
+		};
+
+		if(@can_preview_item) {
+			@sprite_manager->RenderDistantStairs();
 		};
 	}
 

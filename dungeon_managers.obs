@@ -490,6 +490,14 @@ class SpriteManager from Manager {
 		@dungeon_sprites[5]->Render(7);
 	}
 
+	method : public : RenderDistantStairs() ~ Nil {
+		@dungeon_sprites[5]->Render(11);
+	}
+
+	method : public : RenderStairs() ~ Nil {
+		@dungeon_sprites[5]->Render(15);
+	}
+
 	# -------------
 
 	method : public : Render() ~ Nil {
