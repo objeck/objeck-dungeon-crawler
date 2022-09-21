@@ -249,6 +249,14 @@ class MapManager from Manager {
 						label 'P' {
 							map[i,j] := MapManager->Type->POTION;
 						}
+						# up latter
+						label 'U' {
+							map[i,j] := MapManager->Type->LATTER_UP;
+						}
+						# up down
+						label 'D' {
+							map[i,j] := MapManager->Type->LATTER_DOWN;
+						}
 						# trap
 						label 'T' {
 							map[i,j] := MapManager->Type->TRAP;
@@ -321,6 +329,13 @@ class MapManager from Manager {
 
 						label Type->POTION {
 							out := 'P';
+						}
+						label Type->LATTER_UP {
+							out := 'U';
+						}
+						# up down
+						label Type->LATTER_DOWN {
+							out := 'D';
 						}
 
 						label Type->LOOT {
