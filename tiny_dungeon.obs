@@ -789,7 +789,8 @@ class TinyDungeon {
 	}
 
 	method : OnItem() ~ Bool {
-		return @view_type = MapManager->Type->POTION | @view_type = MapManager->Type->LOOT;
+		return @view_type = MapManager->Type->POTION | @view_type = MapManager->Type->LOOT | 
+			@view_type = MapManager->Type->LATTER_UP | @view_type = MapManager->Type->LATTER_DOWN;
 	}
 
 	method : IsLadderForward() ~ Bool {
@@ -916,12 +917,20 @@ class TinyDungeon {
 			@sprite_manager->RenderLoot();
 		};
 
+		if(@view_type = MapManager->Type->LATTER_UP & @can_show_item) {
+			"--- LATTER_UP ---"->PrintLine();
+		};
+
+		if(@view_type = MapManager->Type->LATTER_DOWN & @can_show_item) {
+			"--- LATTER_DOWN ---"->PrintLine();
+		};
+
 		if(@view_forward_type = MapManager->Type->LATTER_UP & @can_preview_item) {
-			@sprite_manager->RenderDistantStairs();
+			@sprite_manager->RenderDistantUp();
 		};
 
 		if(@view_forward_type = MapManager->Type->LATTER_DOWN & @can_preview_item) {
-			@sprite_manager->RenderDistantStairs();
+			@sprite_manager->RenderDistantDown();
 		};
 	}
 
