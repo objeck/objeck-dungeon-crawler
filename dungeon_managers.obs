@@ -40,7 +40,17 @@ class MapManager from Manager {
 		return LoadMaps();
 	}
 
-	method : public : GetStart() ~ Int[] {
+	method : public : GetStart(inc_level : Int) ~ Int[] {
+@maps->Size()->PrintLine();		
+		if(inc_level < 0 & @map_index - inc_level > -1) {
+			@map_index -= inc_level;
+		}
+		else if(inc_level > 0 & @map_index + inc_level < @maps->Size()) {
+			@map_index += inc_level;
+		};
+
+"map_index={$@map_index}"->PrintLine();
+
 		return @maps->Get(@map_index)->GetStart();
 	}
 
@@ -212,16 +222,15 @@ class MapManager from Manager {
 		leaving {
 			map_file->Close();
 		};
-
-		end_line := map_file->ReadLine();
-		while(<>end_line->StartsWith('-')) {
-			rows := cols := Type->MAP_SIZE;
-
+		
+		rows := cols := Type->MAP_SIZE;
+		line := map_file->ReadLine();
+		while(line <> Nil ) {
 			map := Byte->New[rows, cols];
 			map_start := Int->New[2];
 
 			for(i := 0; i < rows; i += 1;) {
-				line := map_file->ReadLine();
+				
 				if(line->Size() <> cols) {
 					return false;
 				};
@@ -241,7 +250,7 @@ class MapManager from Manager {
 						label 'E' {
 							map[i,j] := MapManager->Type->END;
 						}
-						# chest
+						# loot
 						label 'L' {
 							map[i,j] := MapManager->Type->LOOT;
 						}
@@ -263,12 +272,17 @@ class MapManager from Manager {
 						}
 					};
 				};
+
+				line := map_file->ReadLine();
 			};
 
-			@maps->AddBack(MapHolder->New(map, map_start));
-			end_line := map_file->ReadLine();
-		};
+			if(line->StartsWith('-')) {
+				@maps->AddBack(MapHolder->New(map, map_start));
+				line := map_file->ReadLine();
+			};
 
+		};
+		
 		return true;
 	}
 
