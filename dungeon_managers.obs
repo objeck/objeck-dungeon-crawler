@@ -510,13 +510,11 @@ class SpriteManager from Manager {
 
 
 	method : public : RenderDistantUp() ~ Nil {
-"--- RenderDistantUp ---"->PrintLine();
-#		@dungeon_sprites[5]->Render(3);
+		@dungeon_sprites[5]->Render(11);
 	}
 
 	method : public : RenderUp() ~ Nil {
-"--- RenderUp ---"->PrintLine();		
-#		@dungeon_sprites[5]->Render(11);
+		@dungeon_sprites[5]->Render(23);
 	}
 
 	# -------------

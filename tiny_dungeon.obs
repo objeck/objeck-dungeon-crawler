@@ -372,11 +372,11 @@ class TinyDungeon {
 			}
 
 			label MapManager->Direction->EAST {
-				@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 + 1]);
+				@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1] + 1);
 			}
 
 			label MapManager->Direction->WEST {
-				@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 - 1]);
+				@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1] - 1);
 			}
 		};
 	}
