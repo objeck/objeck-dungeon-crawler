@@ -500,12 +500,27 @@ class SpriteManager from Manager {
 		@dungeon_sprites[5]->Render(7);
 	}
 
+
+
 	method : public : RenderDistantDown() ~ Nil {
+"--- RenderDistantDown: 19 ---"->PrintLine();
+		@dungeon_sprites[5]->Render(19);
+	}
+
+	method : public : RenderDown() ~ Nil {
+"--- RenderDown ---"->PrintLine();		
 		@dungeon_sprites[5]->Render(15);
 	}
 
+
 	method : public : RenderDistantUp() ~ Nil {
-		@dungeon_sprites[5]->Render(11);
+"--- RenderDistantUp ---"->PrintLine();		
+		@dungeon_sprites[5]->Render(21);
+	}
+
+	method : public : RenderUp() ~ Nil {
+"--- RenderUp ---"->PrintLine();				
+		@dungeon_sprites[5]->Render(25);
 	}
 
 	# -------------

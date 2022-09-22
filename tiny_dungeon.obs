@@ -326,6 +326,8 @@ class TinyDungeon {
         	label Scancode->SDL_SCANCODE_F7 {
         	}
         };
+
+        DistantView();
 	}
 
 	method : MoveForward() ~ Nil {
@@ -337,29 +339,47 @@ class TinyDungeon {
 			select(@player_direction) {
 				label MapManager->Direction->NORTH {
 					@player_location[0] -= 1;
-					@view_forward_type := @map_manager->GetType(@player_location[0] - 1, @player_location[1]);
 				}
 
 				label MapManager->Direction->SOUTH {
 					@player_location[0] += 1;
-					@view_forward_type := @map_manager->GetType(@player_location[0] + 1, @player_location[1]);
 
 				}
 
 				label MapManager->Direction->EAST {
 					@player_location[1] += 1;
-					@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 + 1]);
 				}
 
 				label MapManager->Direction->WEST {
 					@player_location[1] -= 1;
-					@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 - 1]);
 				}
 			};
+			DistantView();
 
 			if(@player_nav_map[@player_location[0], @player_location[1]] = 0) {
 				@player_nav_map[@player_location[0], @player_location[1]] := 1;
 			};
+		};
+	}
+
+	method : DistantView() ~ Nil {
+		select(@player_direction) {
+			label MapManager->Direction->NORTH {
+				@view_forward_type := @map_manager->GetType(@player_location[0] - 1, @player_location[1]);
+			}
+
+			label MapManager->Direction->SOUTH {
+				@view_forward_type := @map_manager->GetType(@player_location[0] + 1, @player_location[1]);
+
+			}
+
+			label MapManager->Direction->EAST {
+				@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 + 1]);
+			}
+
+			label MapManager->Direction->WEST {
+				@view_forward_type := @map_manager->GetType(@player_location[0], @player_location[1 - 1]);
+			}
 		};
 	}
 
@@ -917,20 +937,20 @@ class TinyDungeon {
 			@sprite_manager->RenderLoot();
 		};
 
-		if(@view_type = MapManager->Type->LATTER_UP & @can_show_item) {
-			"--- LATTER_UP ---"->PrintLine();
-		};
-
-		if(@view_type = MapManager->Type->LATTER_DOWN & @can_show_item) {
-			"--- LATTER_DOWN ---"->PrintLine();
-		};
-
-		if(@view_forward_type = MapManager->Type->LATTER_UP & @can_preview_item) {
+		if(@view_forward_type = MapManager->Type->LATTER_UP) {
 			@sprite_manager->RenderDistantUp();
 		};
 
-		if(@view_forward_type = MapManager->Type->LATTER_DOWN & @can_preview_item) {
+		if(@view_type = MapManager->Type->LATTER_UP & @can_show_item) {
+			@sprite_manager->RenderUp();
+		};
+
+		if(@view_forward_type = MapManager->Type->LATTER_DOWN) {
 			@sprite_manager->RenderDistantDown();
+		};
+
+		if(@view_type = MapManager->Type->LATTER_DOWN & @can_show_item) {
+			@sprite_manager->RenderDown();
 		};
 	}
 
