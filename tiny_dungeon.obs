@@ -327,7 +327,6 @@ class TinyDungeon {
         	}
         };
 
-        DistantView();
 	}
 
 	method : MoveForward() ~ Nil {
@@ -354,7 +353,6 @@ class TinyDungeon {
 					@player_location[1] -= 1;
 				}
 			};
-			DistantView();
 
 			if(@player_nav_map[@player_location[0], @player_location[1]] = 0) {
 				@player_nav_map[@player_location[0], @player_location[1]] := 1;
@@ -419,6 +417,8 @@ class TinyDungeon {
 	}
 
 	method : native : UpdateView() ~ Nil {
+        DistantView();
+
 		# @map_manager->ShowDebugMap(@player_direction, @player_location);
 
 		@map_manager->GetView(@player_direction, @player_location);
@@ -937,7 +937,7 @@ class TinyDungeon {
 			@sprite_manager->RenderLoot();
 		};
 
-		if(@view_forward_type = MapManager->Type->LATTER_UP) {
+		if(@view_forward_type = MapManager->Type->LATTER_UP & @can_preview_item) {
 			@sprite_manager->RenderDistantUp();
 		};
 
@@ -945,7 +945,7 @@ class TinyDungeon {
 			@sprite_manager->RenderUp();
 		};
 
-		if(@view_forward_type = MapManager->Type->LATTER_DOWN) {
+		if(@view_forward_type = MapManager->Type->LATTER_DOWN & @can_preview_item) {
 			@sprite_manager->RenderDistantDown();
 		};
 
