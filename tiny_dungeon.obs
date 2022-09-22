@@ -253,10 +253,11 @@ class TinyDungeon {
 		@player_nav_map := Int->New[MapManager->Type->MAP_SIZE, MapManager->Type->MAP_SIZE];
 		@player_nav_map[@player_location[0], @player_location[1]] := 1;
 
-		if(inc_level > 0) {		
+		
 			@map_manager->SetType(@player_location, MapManager->Type->LATTER_DOWN);
-		};
+		
 
+		MoveForward();
 		UpdateView();
 	}
 

@@ -41,16 +41,13 @@ class MapManager from Manager {
 	}
 
 	method : public : GetStart(inc_level : Int) ~ Int[] {
-@maps->Size()->PrintLine();		
 		if(inc_level < 0 & @map_index - inc_level > -1) {
 			@map_index -= inc_level;
 		}
 		else if(inc_level > 0 & @map_index + inc_level < @maps->Size()) {
 			@map_index += inc_level;
 		};
-
-"map_index={$@map_index}"->PrintLine();
-
+		
 		return @maps->Get(@map_index)->GetStart();
 	}
 
