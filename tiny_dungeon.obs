@@ -254,6 +254,7 @@ class TinyDungeon {
 		@player_nav_map[@player_location[0], @player_location[1]] := 1;
 
 		
+		@can_show_item := false;
 			@map_manager->SetType(@player_location, MapManager->Type->LATTER_DOWN);
 		
 
@@ -339,9 +340,10 @@ class TinyDungeon {
 
 	method : MoveForward() ~ Nil {
 		player_view := @map_manager->GetView(@player_direction, @player_location);
-		@view_type := player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE];
-
-		if(IsOpen(@view_type)) {
+		view_type := player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE];
+		if(IsOpen(view_type)) {
+			@view_type := view_type;
+			
 			select(@player_direction) {
 				label MapManager->Direction->NORTH {
 					@player_location[0] -= 1;
