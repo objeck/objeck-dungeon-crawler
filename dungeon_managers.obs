@@ -528,7 +528,7 @@ class SpriteManager from Manager {
 			sheet_size := Clips->DUNGEON_Y_CLIPS * Clips->DUNGEON_X_CLIPS;
 			sheet_index := raw_index / sheet_size;
 			image_index := raw_index - sheet_index * sheet_size;
-			# "### raw_index={$raw_index}: sheet_size={$sheet_size}, sheet_index={$sheet_index}, image_index={$image_index} ###"->PrintLine();
+# "### raw_index={$raw_index}: sheet_size={$sheet_size}, sheet_index={$sheet_index}, image_index={$image_index} ###"->PrintLine();
 			@dungeon_sprites[sheet_index]->Render(image_index);
 		};
 	}

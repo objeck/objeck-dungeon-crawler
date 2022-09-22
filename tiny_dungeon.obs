@@ -427,12 +427,10 @@ class TinyDungeon {
 		};
 
 		hash_view := @map_manager->HashView();
-		v0 := hash_view[0];
-		v1 := hash_view[1];
-		v2 := hash_view[2];
-		v3 := hash_view[3];
+		v0 := hash_view[0]; v1 := hash_view[1];
+		v2 := hash_view[2];	v3 := hash_view[3];
 		v4 := hash_view[4];
-
+		
 		blocked := false;
 
 		#
