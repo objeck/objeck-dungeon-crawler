@@ -253,10 +253,14 @@ class TinyDungeon {
 		@player_nav_map := Int->New[MapManager->Type->MAP_SIZE, MapManager->Type->MAP_SIZE];
 		@player_nav_map[@player_location[0], @player_location[1]] := 1;
 
-		
 		@can_show_item := false;
+
+		if(inc_level > 0) {
 			@map_manager->SetType(@player_location, MapManager->Type->LATTER_DOWN);
-		
+		}
+		else if(inc_level < 0) {
+			@map_manager->SetType(@player_location, MapManager->Type->LATTER_UP);
+		};
 
 		MoveForward();
 		UpdateView();
@@ -315,6 +319,9 @@ class TinyDungeon {
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_UP) {
 	        			StartLevel(1);
+	        		}
+	        		else if(@view_type = MapManager->Type->LATTER_DOWN) {
+	        			StartLevel(-1);
 	        		};
 	        	};
         	}
