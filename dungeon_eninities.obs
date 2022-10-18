@@ -7,7 +7,7 @@ use System.Concurrency;
 use Collection.Generic;
 use Game.SDL2;
 use Game.Framework;
-use System.IO.File;
+use System.IO.Filesystem;
 
 # --- Magic ---
 class LightHeal from Magic {
