@@ -4,7 +4,7 @@ Copyright (c) 2020, 2022 Randy Hollines
 ~#
 
 use System.Concurrency;
-use Collection.Generic;
+use Collection;
 use Game.SDL2;
 use Game.Framework;
 use System.IO.Filesystem;
@@ -580,17 +580,30 @@ Managers sound assets
 class SoundManager from Manager {
 	@dungeon_sprites : AnimatedImageSprite;
 	@framework : GameFramework;
-	
+	@step_chunk : MixChunk;
+
 	New(path : String, framework : GameFramework) {
 		Parent();
 		@framework := framework;
-	}	
+		Load();
+	}
+
+	method : public : Step() ~ Nil {
+		@step_chunk->PlayChannel(1, 0);
+	}
 
 	method : public : Load() ~ Bool {
+		step_path := "./sounds/step.wav";
+		@step_chunk := MixChunk->New(step_path);
+		if(@step_chunk->IsNull()) {
+			"--- Cannot load music: '{$step_path}'! ---"->ErrorLine();
+			return false;
+		};
+
 		return true;
 	}
 
 	method : public : Unload() ~ Nil {
-		
+		@step_chunk->Free();
 	}
 }
