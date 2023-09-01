@@ -318,6 +318,12 @@ class TinyDungeon {
 	        			if(<>@monster->IsAlive()) {
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
+
+	        				if(Int->Random(0, 2) = 0) {
+	        					AddPotion(Potion->Type->WEAK_HEALTH);
+	        				};
+
+	        				AddGold(Int->Random(0, 2) * 10);
 	        			};
 	        		};
 
@@ -330,7 +336,7 @@ class TinyDungeon {
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
    						@sound_manager->TakeLoot();
-	        			AddGold(10);
+	        			AddGold(60);
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_UP) {
 	        			StartLevel(1);
@@ -433,7 +439,7 @@ class TinyDungeon {
 	}
 
 	method : AddPotion(type : Potion->Type) ~ Nil {
-		if(@player->AddPotion(type, 1) & @map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
+		if(@player->AddPotion(type, Int->Random(1, 3)) & @map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
 			RefreshItems();
 			@can_show_item := false;
 		};
