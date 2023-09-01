@@ -325,11 +325,11 @@ class TinyDungeon {
 	        	}
 	        	else if(OnItem()) {
 	        		if(@view_type = MapManager->Type->POTION) {
-   						@sound_manager->Grab();
+   						@sound_manager->TakePotion();
        					AddPotion(Potion->Type->WEAK_HEALTH);
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
-   						@sound_manager->Grab();
+   						@sound_manager->TakeLoot();
 	        			AddGold(10);
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_UP) {

@@ -580,11 +580,12 @@ Managers sound assets
 class SoundManager from Manager {
 	@dungeon_sprites : AnimatedImageSprite;
 	@framework : GameFramework;
-
 	@music : MixMusic;
+
 	@step_chunk : MixChunk;
 	@strike_chunk : MixChunk;
 	@grab_chunk : MixChunk;
+	@coins_chunk : MixChunk;
 
 	New(path : String, framework : GameFramework) {
 		Parent();
@@ -599,8 +600,12 @@ class SoundManager from Manager {
 		@strike_chunk->PlayChannel(-1, 0);
 	}
 
-	method : public : Grab() ~ Nil {
+	method : public : TakePotion() ~ Nil {
 		@grab_chunk->PlayChannel(-1, 0);
+	}
+
+	method : public : TakeLoot() ~ Nil {
+		@coins_chunk->PlayChannel(-1, 0);
 	}
 
 	method : public : Load() ~ Bool {
@@ -625,6 +630,13 @@ class SoundManager from Manager {
 			return false;
 		};
 
+		coins_path := "./sounds/coins.wav";
+		@coins_chunk := MixChunk->New(coins_path);
+		if(@coins_chunk->IsNull()) {
+			"--- Cannot load music: '{$coins_path}'! ---"->ErrorLine();
+			return false;
+		};
+
 		music_path := "./sounds/music.wav";
 		@music := MixMusic->New(music_path);
 		if(@music->IsNull()) {
@@ -641,5 +653,6 @@ class SoundManager from Manager {
 		@step_chunk->Free();
 		@strike_chunk->Free();
 		@grab_chunk->Free();
+		@coins_chunk->Free();
 	}
 }
