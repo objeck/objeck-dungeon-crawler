@@ -12,6 +12,7 @@ class TinyDungeon {
 	@sprite_manager : SpriteManager;
 	@sound_manager : SoundManager;
 	@map_manager : MapManager;
+	
 	@quit : Bool;
 	@debug : Bool;
 
@@ -79,6 +80,11 @@ class TinyDungeon {
 
 		if(<>@sprite_manager->Load()) {
 			"--- Unable to load sprites! ---"->ErrorLine();
+			return;
+		};
+
+		if(<>@sound_manager->Load()) {
+			"--- Unable to load sounds! ---"->ErrorLine();
 			return;
 		};
 
@@ -297,12 +303,18 @@ class TinyDungeon {
         	label Scancode->SDL_SCANCODE_SPACE {
         		if(@monster <> Nil) {
         			@player_hit := @monster->Attack(@player) ? 15 : 0;
+        			if(@player_hit > 0) {
+						@sound_manager->Strike();
+						@sprite_manager->RenderPlayerHit();
+        			};
+
         			if(<>@player->IsAlive()) {
 						"--- He's dead Jim ---"->PrintLine();
         				@quit := true;
         			}
         			else {
 	        			@monster_hit := @player->Attack(@monster) ? 15 : 0;
+	        			
 	        			if(<>@monster->IsAlive()) {
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
@@ -313,9 +325,11 @@ class TinyDungeon {
 	        	}
 	        	else if(OnItem()) {
 	        		if(@view_type = MapManager->Type->POTION) {
+   						@sound_manager->Grab();
        					AddPotion(Potion->Type->WEAK_HEALTH);
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
+   						@sound_manager->Grab();
 	        			AddGold(10);
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_UP) {
@@ -903,7 +917,6 @@ class TinyDungeon {
 				@player_hit -= 1;
 			}
 			else if(@monster_hit > 0) {
-				@sprite_manager->RenderPlayerHit();
 				@monster_hit -= 1;
 			};
 		};

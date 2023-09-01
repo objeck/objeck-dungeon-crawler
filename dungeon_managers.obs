@@ -580,16 +580,27 @@ Managers sound assets
 class SoundManager from Manager {
 	@dungeon_sprites : AnimatedImageSprite;
 	@framework : GameFramework;
+
+	@music : MixMusic;
 	@step_chunk : MixChunk;
+	@strike_chunk : MixChunk;
+	@grab_chunk : MixChunk;
 
 	New(path : String, framework : GameFramework) {
 		Parent();
 		@framework := framework;
-		Load();
 	}
 
 	method : public : Step() ~ Nil {
-		@step_chunk->PlayChannel(1, 0);
+		@step_chunk->PlayChannel(-1, 0);
+	}
+
+	method : public : Strike() ~ Nil {
+		@strike_chunk->PlayChannel(-1, 0);
+	}
+
+	method : public : Grab() ~ Nil {
+		@grab_chunk->PlayChannel(-1, 0);
 	}
 
 	method : public : Load() ~ Bool {
@@ -600,10 +611,35 @@ class SoundManager from Manager {
 			return false;
 		};
 
+		strike_path := "./sounds/strike.wav";
+		@strike_chunk := MixChunk->New(strike_path);
+		if(@strike_chunk->IsNull()) {
+			"--- Cannot load music: '{$strike_path}'! ---"->ErrorLine();
+			return false;
+		};
+
+		grab_path := "./sounds/grab.wav";
+		@grab_chunk := MixChunk->New(grab_path);
+		if(@grab_chunk->IsNull()) {
+			"--- Cannot load music: '{$grab_path}'! ---"->ErrorLine();
+			return false;
+		};
+
+		music_path := "./sounds/music.wav";
+		@music := MixMusic->New(music_path);
+		if(@music->IsNull()) {
+			"--- Cannot load music: '{$music_path}'! ---"->ErrorLine();
+		};
+		@music->PlayMusic(-1);
+		@music->VolumeMusic(63);
+
 		return true;
 	}
 
 	method : public : Unload() ~ Nil {
+		@music->Free();
 		@step_chunk->Free();
+		@strike_chunk->Free();
+		@grab_chunk->Free();
 	}
 }
