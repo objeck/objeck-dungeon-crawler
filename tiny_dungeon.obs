@@ -198,7 +198,7 @@ class TinyDungeon {
 		# potions
 		potion1_text : String;
 		player_potion1 := @player->GetPotion1();
-		if(player_potion1 <> Nil) {
+		if(player_potion1 <> Nil & @player->GetPotion1()->GetCount() > 0) {
 			 potion_desc := @player->GetPotion1()->ToString();
 			 potion_count := @player->GetPotion1()->GetCount();
 			 potion1_text := "{$potion_desc} x {$potion_count}";
@@ -209,7 +209,7 @@ class TinyDungeon {
 
 		potion2_text : String;
 		player_potion2 := @player->GetPotion2();
-		if(player_potion2 <> Nil) {
+		if(player_potion2 <> Nil & @player->GetPotion1()->GetCount() > 0) {
 			 potion_desc := @player->GetPotion2()->ToString();
 			 potion_count := @player->GetPotion2()->GetCount();
 			 potion2_text := "{$potion_desc} x {$potion_count}";
@@ -220,7 +220,7 @@ class TinyDungeon {
 
 		potion3_text : String;
 		player_potion3 := @player->GetPotion3();
-		if(player_potion3 <> Nil) {
+		if(player_potion3 <> Nil & @player->GetPotion1()->GetCount() > 0) {
 			 potion_desc := @player->GetPotion3()->ToString();
 			 potion_count := @player->GetPotion3()->GetCount();
 			 potion3_text := "{$potion_desc} x {$potion_count}";
@@ -302,7 +302,7 @@ class TinyDungeon {
 
         	label Scancode->SDL_SCANCODE_SPACE {
         		if(@monster <> Nil) {
-        			@player_hit := @monster->Attack(@player) ? 15 : 0;
+        			@player_hit := @monster->Attack(@player) ? 10 : 0;
         			if(@player_hit > 0) {
 						@sound_manager->Strike();
 						@sprite_manager->RenderPlayerHit();
@@ -314,7 +314,10 @@ class TinyDungeon {
         			}
         			else {
 	        			@monster_hit := @player->Attack(@monster) ? 15 : 0;
-	        			
+	        			if(@monster_hit > 0) {
+							@sound_manager->Strike();
+						};
+
 	        			if(<>@monster->IsAlive()) {
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
@@ -346,6 +349,18 @@ class TinyDungeon {
         		if(@player->UsePotion(0)) {
         			RefreshStats();
         			RefreshItems();
+        		};
+
+        		if(@monster <> Nil) {
+        			@player_hit := @monster->Attack(@player) ? 5 : 0;
+        			if(@player_hit > 0) {
+						@sprite_manager->RenderPlayerHit();
+        			};
+
+        			if(<>@player->IsAlive()) {
+						"--- He's dead Jim ---"->PrintLine();
+        				@quit := true;
+        			};
         		};
         	}
 
