@@ -490,6 +490,24 @@ class SpriteManager from Manager {
 		return true;
 	}
 
+	# --- Dungeon Transform for Animation ---
+
+	method : public : SetDungeonTransform(scale : Float, top : Int, left : Int) ~ Nil {
+		each(i : @dungeon_sprites) {
+			@dungeon_sprites[i]->SetScale(scale);
+			@dungeon_sprites[i]->SetTop(top);
+			@dungeon_sprites[i]->SetLeft(left);
+		};
+	}
+
+	method : public : ResetDungeonTransform() ~ Nil {
+		each(i : @dungeon_sprites) {
+			@dungeon_sprites[i]->SetScale(0.5);
+			@dungeon_sprites[i]->SetTop(15);
+			@dungeon_sprites[i]->SetLeft(15);
+		};
+	}
+
 	# -------------
 
 	method : public : RenderMonsterHit() ~ Nil {
@@ -649,10 +667,10 @@ class SoundManager from Manager {
 	}
 
 	method : public : Unload() ~ Nil {
-		@music->Free();
-		@step_chunk->Free();
-		@strike_chunk->Free();
-		@grab_chunk->Free();
-		@coins_chunk->Free();
+		if(@music <> Nil) { @music->Free(); };
+		if(@step_chunk <> Nil) { @step_chunk->Free(); };
+		if(@strike_chunk <> Nil) { @strike_chunk->Free(); };
+		if(@grab_chunk <> Nil) { @grab_chunk->Free(); };
+		if(@coins_chunk <> Nil) { @coins_chunk->Free(); };
 	}
 }

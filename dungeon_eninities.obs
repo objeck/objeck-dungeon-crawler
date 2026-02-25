@@ -32,7 +32,7 @@ class SmallMissle from Magic {
 
 class Magic {
 	New(hp : Int, mp : Int, enc : Int, dam : Int) {
-		
+
 	}
 
 	method : virtual : public : ToString() ~ String;
@@ -45,7 +45,7 @@ class Potion {
 	@hp : Int;
 	@mp : Int;
 	@enc : Int;
-	
+
 	enum Type {
 		WEAK_HEALTH,
 		WEAK_MAGIC,
@@ -55,18 +55,18 @@ class Potion {
 	New(type : Potion->Type) {
 		@type := type;
 		select(type) {
-			label Type->WEAK_HEALTH {
+			label Potion->Type->WEAK_HEALTH {
 				@hp := Int->Random(4, 8);
 				@mp := @enc := 0;
 			}
 
-			label Type->WEAK_MAGIC {
+			label Potion->Type->WEAK_MAGIC {
 				@mp := Int->Random(3, 5);
 				@hp := @enc := 0;
 
 			}
 
-			label Type->WEAK_INVISIBILITY {
+			label Potion->Type->WEAK_INVISIBILITY {
 				@hp := @mp := 0;
 				@enc := Int->Random(5, 9);
 			}
@@ -108,15 +108,15 @@ class Potion {
 
 	method : public : ToString() ~ String {
 		select(@type) {
-			label Type->WEAK_HEALTH {
+			label Potion->Type->WEAK_HEALTH {
 				return "Weak Health";
 			}
 
-			label Type->WEAK_MAGIC {
+			label Potion->Type->WEAK_MAGIC {
 				return "Weak Magic";
 			}
 
-			label Type->WEAK_INVISIBILITY {
+			label Potion->Type->WEAK_INVISIBILITY {
 				return "Weak Invisibility";
 			}
 		};
@@ -141,7 +141,7 @@ class WoodenSword implements Weapon {
 
 interface Weapon {
 	method : virtual : public : GetHit() ~ Float;
-	method : virtual : public : ToString() ~ String;	
+	method : virtual : public : ToString() ~ String;
 }
 
 # --- Armor ---
@@ -167,8 +167,9 @@ interface Armor {
 
 class Player from Entity {
 	@name : String;
-	@experience : Int;
-	
+	@xp : Int;
+	@xp_thresholds : Int[];
+
 	@max_mp : Int;
 	@mp : Int;
 
@@ -193,10 +194,49 @@ class Player from Entity {
 			Int->Random(9, 15));	# stamina
 
 		@name := name;
+		@xp := 0;
 		@mp := @max_mp := Int->Random(7, 13);
-		
+
+		@xp_thresholds := Int->New[10];
+		@xp_thresholds[0] := 0;
+		@xp_thresholds[1] := 25;
+		@xp_thresholds[2] := 60;
+		@xp_thresholds[3] := 110;
+		@xp_thresholds[4] := 180;
+		@xp_thresholds[5] := 270;
+		@xp_thresholds[6] := 380;
+		@xp_thresholds[7] := 520;
+		@xp_thresholds[8] := 700;
+		@xp_thresholds[9] := 920;
+
 		@potions := Potion->New[3];
 		@magics := Magic->New[2];
+	}
+
+	#
+	# --- Level-Up ---
+	#
+	method : public : AddXP(amount : Int) ~ Bool {
+		@xp += amount;
+
+		if(@level < 9 & @xp >= @xp_thresholds[@level]) {
+			@level += 1;
+			@max_hp += 4;
+			@hp := @max_hp;
+			@strength += 1.5;
+			@stamina += 1.0;
+			return true;
+		};
+
+		return false;
+	}
+
+	method : public : GetLevel() ~ Int {
+		return @level;
+	}
+
+	method : public : GetXP() ~ Int {
+		return @xp;
 	}
 
 	#
@@ -240,7 +280,7 @@ class Player from Entity {
 				if(@mp > @max_mp) {
 					@mp := @max_mp;
 				};
-				
+
 				@enc += potion->GetEnc();
 
 				return true;
@@ -320,11 +360,11 @@ class Player from Entity {
 	# --- Gold and Exp ---
 	#
 	method : public : AddExperince(monster : Entity) ~ Nil {
-		@experience += monster->GetWinExp();
+		@xp += monster->GetWinExp();
 	}
 
 	method : public : GetExperince() ~ Int {
-		return @experience;
+		return @xp;
 	}
 
 	method : public : AddGold(value : Int) ~ Nil {
@@ -355,13 +395,13 @@ class Player from Entity {
 	}
 
 	method : public : GetWinExp() ~ Int {
-		return @experience;
+		return @xp;
 	}
 
 	method : public : GetHealth() ~ String {
 		return "Healthy";
 	}
-	
+
 	method : public : ToString() ~ String {
 		ac := GetAc();
 		return "{$@name}: HP={$@hp}, MP={$@mp}, AC={$ac}";
@@ -374,7 +414,7 @@ class Entity {
 	@level : Int;
 	@max_hp : Int;
 	@hp : Int;
-	
+
 	@strength : Float;
 	@agility : Float;
 	@stamina : Float;
@@ -390,7 +430,7 @@ class Entity {
 		RAT,
 		GHOST
 	}
-	
+
 	New(type : EntityType, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int) {
 		@type := type;
 		@level := level;
@@ -410,6 +450,10 @@ class Entity {
 	method : virtual : public : GetName() ~ String;
 
 	method : virtual : public : GetWinExp() ~ Int;
+
+	method : public : GetMaxHp() ~ Int {
+		return @max_hp;
+	}
 
 	method : public : GetHpPerc() ~ Float {
 		return @hp->As(Float) / @max_hp->As(Float);
@@ -446,7 +490,7 @@ class Entity {
 	method : public : Attack(opponent : Entity) ~ Bool {
 		attack := GetAttack();
 		defense := opponent->GetDefense();
-		
+
 		diff := attack - defense;
 		opponent->UpdateHp(diff < 0 ? Int->Random(0, 1) : diff);
 
@@ -469,12 +513,14 @@ class Monster from Entity {
 	method : virtual : public : GetImageStart() ~ Int;
 
 	method : public : GetImageEnd() ~ Int {
-		return GetImageStart() + 4; 
+		return GetImageStart() + 4;
 	}
 
 	method : virtual : public : GetName() ~ String;
 
 	method : virtual : public : GetWinExp() ~ Int;
+
+	method : virtual : public : IsBoss() ~ Bool;
 }
 
 #~
@@ -503,6 +549,10 @@ class Ghost from Monster {
 
 	method : public : GetImageStart() ~ Int {
 		return 8;
+	}
+
+	method : public : IsBoss() ~ Bool {
+		return false;
 	}
 }
 
@@ -533,6 +583,10 @@ class Slime from Monster {
 	method : public : GetImageStart() ~ Int {
 		return 4;
 	}
+
+	method : public : IsBoss() ~ Bool {
+		return false;
+	}
 }
 
 #~
@@ -561,5 +615,42 @@ class Rat from Monster {
 
 	method : public : GetImageStart() ~ Int {
 		return 0;
+	}
+
+	method : public : IsBoss() ~ Bool {
+		return false;
+	}
+}
+
+#~
+Dungeon Lord - Boss Monster
+~#
+class DungeonLord from Monster {
+	New(level : Int) {
+		Parent(EntityType->GHOST,	# type (reuses Ghost sprites)
+			level,					# level
+			Int->Random(50, 60),	# max hp
+			Int->Random(16, 18),	# strength
+			Int->Random(10, 12),	# agility
+			Int->Random(12, 14));	# stamina
+
+		SetWeaponHit(48.0);
+		SetArmorBlock(22.0);
+	}
+
+	method : public : GetName() ~ String {
+		return "Dungeon Lord";
+	}
+
+	method : public : GetWinExp() ~ Int {
+		return 100;
+	}
+
+	method : public : GetImageStart() ~ Int {
+		return 8;
+	}
+
+	method : public : IsBoss() ~ Bool {
+		return true;
 	}
 }

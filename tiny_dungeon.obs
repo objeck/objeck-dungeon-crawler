@@ -12,7 +12,7 @@ class TinyDungeon {
 	@sprite_manager : SpriteManager;
 	@sound_manager : SoundManager;
 	@map_manager : MapManager;
-	
+
 	@quit : Bool;
 	@debug : Bool;
 
@@ -34,7 +34,7 @@ class TinyDungeon {
 
 	@player : Player;
 	@player_hit : Int;
-	
+
 	@encounter_perc : Int;
 
 	@stat_box : Rectangle;
@@ -44,11 +44,54 @@ class TinyDungeon {
 	@item_box_texts : TextSprite[];
 
 	@text_color : Color;
+	@clear_color : Color;
+	@box_color : Color;
+	@border_color : Color;
+
+	# --- Animation ---
+	@anim_counter : Int;
+	@anim_type : Int;
+
+	# --- Atmosphere ---
+	@flicker_counter : Int;
+	@flicker_color : Color;
+	@flavor_color : Color;
+	@gameover_color : Color;
+	@victory_color : Color;
+	@border_rects : Rectangle[];
+	@compass_text : TextSprite;
+	@floor_text : TextSprite;
+	@flavor_texts : String[];
+	@flavor_text : TextSprite;
+	@flavor_timer : Int;
+	@quest_text : TextSprite;
+
+	# --- Game State ---
+	@game_state : Int;
+	@current_floor : Int;
+	@max_floors : Int;
+	@monsters_killed : Int;
+	@boss_fight : Bool;
+
+	# --- Combat UI ---
+	@monster_name_text : TextSprite;
+	@damage_text : TextSprite;
+	@damage_timer : Int;
+	@damage_is_player : Bool;
+	@reward_text : TextSprite;
+	@reward_timer : Int;
+	@levelup_text : TextSprite;
+	@levelup_timer : Int;
+
+	# --- Terminal screen texts ---
+	@terminal_title : TextSprite;
+	@terminal_stats : TextSprite[];
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Tiny Dungeon");
-		@framework->SetClearColor(Color->New(50, 60, 57));
-		
+		@clear_color := Color->New(30, 15, 5);
+		@framework->SetClearColor(@clear_color);
+
 		@player := Player->New("Blueberry");
 		@player->SetWeapon(WoodenSword->New());
 		@player->SetArmor(LeatherTunic->New());
@@ -59,11 +102,24 @@ class TinyDungeon {
 		@text_color := Color->New(248, 240, 227);
 		MakeManagers();
 		MakeTexts();
+		MakeAtmosphere();
+		MakeCombatUI();
 
 		@player_location := Int->New[3];
 		@dungeon_views := Int->New[SpriteManager->Clips->DUNGEON_X_CLIPS + 2];
 
 		@monster_sprint_index := 0;
+
+		# game state
+		@game_state := 0;
+		@current_floor := 1;
+		@max_floors := 4;
+		@monsters_killed := 0;
+		@boss_fight := false;
+
+		# animation
+		@anim_counter := 0;
+		@anim_type := 0;
 
 		@debug := true;
 	}
@@ -73,33 +129,39 @@ class TinyDungeon {
 	}
 
 	method : Run() ~ Nil {
+		"[DBG] Loading maps..."->ErrorLine();
 		if(<>@map_manager->Load()) {
 			"--- Unable to load maps! ---"->ErrorLine();
 			return;
 		};
+		"[DBG] Maps loaded OK"->ErrorLine();
 
+		"[DBG] Loading sprites..."->ErrorLine();
 		if(<>@sprite_manager->Load()) {
 			"--- Unable to load sprites! ---"->ErrorLine();
 			return;
 		};
+		"[DBG] Sprites loaded OK"->ErrorLine();
 
+		"[DBG] Loading sounds..."->ErrorLine();
 		if(<>@sound_manager->Load()) {
 			"--- Unable to load sounds! ---"->ErrorLine();
 			return;
 		};
-
-		#
-		# TODO: add sound manager
-		#
+		"[DBG] Sounds loaded OK"->ErrorLine();
 
 		leaving {
+			"[DBG] Unloading..."->ErrorLine();
 			@map_manager->Unload();
 			@sprite_manager->Unload();
 			@sound_manager->Unload();
+			"[DBG] Unload complete"->ErrorLine();
 		};
 
 		if(@framework->IsOk()) {
+			"[DBG] Framework OK, starting level..."->ErrorLine();
 			StartLevel(0);
+			"[DBG] Level started, entering game loop"->ErrorLine();
 
 			frame_count := 0;
 			@quit := false;
@@ -107,10 +169,10 @@ class TinyDungeon {
 			e := @framework->GetEvent();
 			while(<>@quit) {
 				@framework->FrameStart();
-				
+
 				# process input
 				while(e->Poll() <> 0) {
-					# @quit
+					# quit
 					if(e->GetType() = EventType->SDL_QUIT) {
 						@quit := true;
 					}
@@ -129,6 +191,7 @@ class TinyDungeon {
 					frame_count := 0;
 				};
 			};
+			"[DBG] Game loop exited normally"->ErrorLine();
 		}
 		else {
 			"--- Error Initializing Environment ---"->ErrorLine();
@@ -143,12 +206,14 @@ class TinyDungeon {
 	}
 
 	method : MakeTexts() ~ Nil {
+		@box_color := Color->New(78,53,36);
+
 		# make stat box
 		@stat_box := @framework->AddRectangle(400, 165);
 		@stat_box->SetFill(true);
-		@stat_box->SetColor(Color->New(78,53,36));
+		@stat_box->SetColor(@box_color);
 
-		@stat_box_texts := TextSprite->New[6];
+		@stat_box_texts := TextSprite->New[7];
 		each(i : @stat_box_texts) {
 			@stat_box_texts[i] := @framework->AddTextSprite();
 		};
@@ -157,32 +222,99 @@ class TinyDungeon {
 		# make item box
 		@item_box := @framework->AddRectangle(305, 165);
 		@item_box->SetFill(true);
-		@item_box->SetColor(Color->New(78,53,36));
+		@item_box->SetColor(@box_color);
 
 		@item_box_texts := TextSprite->New[5];
 		each(i : @item_box_texts) {
 			@item_box_texts[i] := @framework->AddTextSprite();
 		};
 		RefreshItems();
+
+		# terminal screen texts
+		@terminal_title := @framework->AddTextSprite();
+		@terminal_stats := TextSprite->New[5];
+		each(i : @terminal_stats) {
+			@terminal_stats[i] := @framework->AddTextSprite();
+		};
+	}
+
+	method : MakeAtmosphere() ~ Nil {
+		# reusable colors (avoid GC collecting while framework references them)
+		@flicker_color := Color->New(30, 15, 5);
+		@flavor_color := Color->New(160, 140, 100);
+		@gameover_color := Color->New(40, 5, 5);
+		@victory_color := Color->New(40, 35, 5);
+
+		# border rectangles (top, bottom, left, right)
+		@border_color := Color->New(45, 25, 10);
+		@border_rects := Rectangle->New[4];
+		each(i : @border_rects) {
+			@border_rects[i] := @framework->AddRectangle(1, 1);
+			@border_rects[i]->SetFill(true);
+			@border_rects[i]->SetColor(@border_color);
+		};
+
+		# compass
+		@compass_text := @framework->AddTextSprite();
+		@compass_text->RenderedText("N", Color->New(220, 200, 140));
+
+		# floor indicator
+		@floor_text := @framework->AddTextSprite();
+		@floor_text->RenderedText("Floor 1", Color->New(220, 200, 140));
+
+		# flavor texts
+		@flavor_texts := String->New[8];
+		@flavor_texts[0] := "You hear dripping water...";
+		@flavor_texts[1] := "A cold wind blows...";
+		@flavor_texts[2] := "Shadows dance on the walls...";
+		@flavor_texts[3] := "The air smells of decay...";
+		@flavor_texts[4] := "Distant footsteps echo...";
+		@flavor_texts[5] := "Torchlight flickers ominously...";
+		@flavor_texts[6] := "A faint growl in the dark...";
+		@flavor_texts[7] := "Stones crumble underfoot...";
+
+		@flavor_text := @framework->AddTextSprite();
+		@flavor_text->RenderedText(@flavor_texts[0], Color->New(160, 140, 100));
+		@flavor_timer := 0;
+
+		# quest objective
+		@quest_text := @framework->AddTextSprite();
+		@quest_text->RenderedText("Find the ladder down to Floor 2", Color->New(180, 170, 130));
+	}
+
+	method : MakeCombatUI() ~ Nil {
+		@monster_name_text := @framework->AddTextSprite();
+		@damage_text := @framework->AddTextSprite();
+		@damage_timer := 0;
+		@damage_is_player := false;
+		@reward_text := @framework->AddTextSprite();
+		@reward_timer := 0;
+		@levelup_text := @framework->AddTextSprite();
+		@levelup_timer := 0;
 	}
 
 	method : RefreshStats() ~ Nil {
-		# health and armor
-		player_health := @player->GetHealth();
-		player_weapon := @player->GetWeapon();
-		player_armor := @player->GetArmor();
-		
+		# health, armor and hp
+		player_health := @player->GetHealth() = Nil ? "None" : @player->GetHealth()->ToString();
+		player_weapon := @player->GetWeapon() = Nil ? "None" : @player->GetWeapon()->ToString();
+		player_armor := @player->GetArmor() = Nil ? "None" : @player->GetArmor()->ToString();
+		player_hp := @player->GetHp();
+		player_max_hp := @player->GetMaxHp();
+		player_level := @player->GetLevel();
+		player_xp := @player->GetXP();
+
 		# spells
 		player_spell1 := @player->GetMagic1() = Nil ? "None" : @player->GetMagic1()->ToString();
 		player_spell2 := @player->GetMagic2() = Nil ? "None" : @player->GetMagic2()->ToString();
-		
+
 		stat_box_copy := [
-			"{$@player}", 
+			"Lv:{$player_level} HP:{$player_hp}/{$player_max_hp}",
+			"XP: {$player_xp}",
+			"Condition: {$player_health}",
 			"{$player_weapon}, {$player_armor}",
 			"Spells",
 			"  1: {$player_spell1}",
-			"  2: {$player_spell2}",
-			"Condition: {$player_health}"];
+			"  2: {$player_spell2}"];
 
 		if(stat_box_copy->Size() <> @stat_box_texts->Size()) {
 			"--- Stat box copy mismatch ---"->ErrorLine();
@@ -228,7 +360,7 @@ class TinyDungeon {
 		else {
 			potion3_text := "None";
 		};
-		
+
 		# gold and tents
 		player_gold_text := @player->GetGold();
 		player_tent_text := @player->GetTents();
@@ -250,6 +382,42 @@ class TinyDungeon {
 		};
 	}
 
+	method : UpdateCompass() ~ Nil {
+		dir_str : String;
+		select(@player_direction) {
+			label MapManager->Direction->NORTH {
+				dir_str := "N";
+			}
+			label MapManager->Direction->SOUTH {
+				dir_str := "S";
+			}
+			label MapManager->Direction->EAST {
+				dir_str := "E";
+			}
+			label MapManager->Direction->WEST {
+				dir_str := "W";
+			}
+		};
+		@compass_text->RenderedText(dir_str, Color->New(220, 200, 140));
+	}
+
+	method : UpdateFloorText() ~ Nil {
+		floor_str := "Floor {$@current_floor}";
+		@floor_text->RenderedText(floor_str, Color->New(220, 200, 140));
+	}
+
+	method : UpdateQuestText() ~ Nil {
+		quest_str : String;
+		if(@current_floor < @max_floors) {
+			next_floor := @current_floor + 1;
+			quest_str := "Find the ladder down to Floor {$next_floor}";
+		}
+		else {
+			quest_str := "Defeat the Dungeon Lord!";
+		};
+		@quest_text->RenderedText(quest_str, Color->New(180, 170, 130));
+	}
+
 	method : StartLevel(inc_level : Int) ~ Nil {
 		@player_direction := MapManager->Direction->NORTH;
 		start_location := @map_manager->GetStart(inc_level);
@@ -262,17 +430,36 @@ class TinyDungeon {
 		@can_show_item := false;
 
 		if(inc_level > 0) {
+			@current_floor += 1;
 			@map_manager->SetType(@player_location, MapManager->Type->LATTER_DOWN);
 		}
 		else if(inc_level < 0) {
+			@current_floor -= 1;
 			@map_manager->SetType(@player_location, MapManager->Type->LATTER_UP);
 		};
+
+		UpdateFloorText();
+		UpdateQuestText();
+		UpdateCompass();
 
 		MoveForward();
 		UpdateView();
 	}
 
-	method : GetInput(e : Event) ~ Nil {	
+	method : GetInput(e : Event) ~ Nil {
+		# terminal screens: only ESC
+		if(@game_state <> 0) {
+			if(e->GetKey()->GetKeysym()->GetScancode() = Scancode->SDL_SCANCODE_ESCAPE) {
+				@quit := true;
+			};
+			return;
+		};
+
+		# block input during animation
+		if(@anim_counter > 0) {
+			return;
+		};
+
 		select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP
         	label Scancode->SDL_SCANCODE_W {
@@ -281,6 +468,10 @@ class TinyDungeon {
 	        		MoveForward();
 	        		UpdateView();
    		       		CheckBattle();
+
+					# start forward animation
+					@anim_type := 1;
+					@anim_counter := 5;
 	        	};
         	}
 
@@ -289,6 +480,11 @@ class TinyDungeon {
         		if(@monster = Nil) {
 	        		MoveLeft();
 	        		UpdateView();
+					UpdateCompass();
+
+					# start turn left animation
+					@anim_type := 2;
+					@anim_counter := 4;
 	        	};
         	}
 
@@ -297,6 +493,11 @@ class TinyDungeon {
         		if(@monster = Nil) {
 	        		MoveRight();
 	        		UpdateView();
+					UpdateCompass();
+
+					# start turn right animation
+					@anim_type := 3;
+					@anim_counter := 4;
 	        	};
         	}
 
@@ -306,27 +507,63 @@ class TinyDungeon {
         			if(@player_hit > 0) {
 						@sound_manager->Strike();
 						@sprite_manager->RenderPlayerHit();
+
+						# show player damage
+						@damage_text->RenderedText("-{$@player_hit}", Color->New(255, 60, 60));
+						@damage_timer := 20;
+						@damage_is_player := true;
         			};
 
         			if(<>@player->IsAlive()) {
-						"--- He's dead Jim ---"->PrintLine();
-        				@quit := true;
+						# game over
+						@game_state := 1;
+						ShowTerminalScreen();
         			}
         			else {
 	        			@monster_hit := @player->Attack(@monster) ? 15 : 0;
 	        			if(@monster_hit > 0) {
 							@sound_manager->Strike();
+
+							# show monster damage
+							@damage_text->RenderedText("-{$@monster_hit}", Color->New(60, 255, 60));
+							@damage_timer := 20;
+							@damage_is_player := false;
 						};
 
 	        			if(<>@monster->IsAlive()) {
+							# monster defeated
+							xp_reward := @monster->GetWinExp();
+							gold_reward := Int->Random(0, 2) * 10 + @current_floor * 5;
+							was_boss := @monster->IsBoss();
+							@monsters_killed += 1;
+
+							# add rewards
+							leveled_up := @player->AddXP(xp_reward);
+							@player->AddGold(gold_reward);
+
+							if(Int->Random(0, 2) = 0) {
+								AddPotion(Potion->Type->WEAK_HEALTH);
+							};
+
+							# show reward text
+							@reward_text->RenderedText("+{$xp_reward} XP  +{$gold_reward} Gold", Color->New(60, 255, 60));
+							@reward_timer := 60;
+
+							# check level up
+							if(leveled_up) {
+								new_level := @player->GetLevel();
+								@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
+								@levelup_timer := 90;
+							};
+
+							# check boss victory
+							if(was_boss) {
+								@game_state := 2;
+								ShowTerminalScreen();
+							};
+
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
-
-	        				if(Int->Random(0, 2) = 0) {
-	        					AddPotion(Potion->Type->WEAK_HEALTH);
-	        				};
-
-	        				AddGold(Int->Random(0, 2) * 10);
 	        			};
 	        		};
 
@@ -346,7 +583,18 @@ class TinyDungeon {
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_DOWN) {
 	        			StartLevel(-1);
-	        		};
+	        		}
+					else if(@view_type = MapManager->Type->END) {
+						# boss encounter on floor 4
+						if(@current_floor >= @max_floors) {
+							@monster := DungeonLord->New(@current_floor);
+							@monster_sprint_index := @monster->GetImageStart();
+							@boss_fight := true;
+
+							# show boss name
+							@monster_name_text->RenderedText("*** Dungeon Lord ***", Color->New(255, 60, 60));
+						};
+					};
 	        	};
         	}
 
@@ -364,8 +612,8 @@ class TinyDungeon {
         			};
 
         			if(<>@player->IsAlive()) {
-						"--- He's dead Jim ---"->PrintLine();
-        				@quit := true;
+						@game_state := 1;
+						ShowTerminalScreen();
         			};
         		};
         	}
@@ -377,8 +625,41 @@ class TinyDungeon {
         	# Potion 3
         	label Scancode->SDL_SCANCODE_F7 {
         	}
+
+			label Scancode->SDL_SCANCODE_ESCAPE {
+				@quit := true;
+			}
         };
 
+	}
+
+	method : ShowTerminalScreen() ~ Nil {
+		player_floor := @current_floor;
+		player_level := @player->GetLevel();
+		player_gold := @player->GetGold();
+		player_kills := @monsters_killed;
+		player_xp := @player->GetXP();
+
+		if(@game_state = 1) {
+			# game over
+			@terminal_title->RenderedText("YOU HAVE FALLEN...", Color->New(255, 80, 80));
+
+			@terminal_stats[0]->RenderedText("Floor: {$player_floor}", @text_color);
+			@terminal_stats[1]->RenderedText("Level: {$player_level}", @text_color);
+			@terminal_stats[2]->RenderedText("Gold: {$player_gold}", @text_color);
+			@terminal_stats[3]->RenderedText("Monsters Slain: {$player_kills}", @text_color);
+			@terminal_stats[4]->RenderedText("Press ESC to exit", Color->New(180, 160, 120));
+		}
+		else if(@game_state = 2) {
+			# victory
+			@terminal_title->RenderedText("VICTORY!", Color->New(255, 220, 60));
+
+			@terminal_stats[0]->RenderedText("XP Earned: {$player_xp}", @text_color);
+			@terminal_stats[1]->RenderedText("Level: {$player_level}", @text_color);
+			@terminal_stats[2]->RenderedText("Gold: {$player_gold}", @text_color);
+			@terminal_stats[3]->RenderedText("Monsters Slain: {$player_kills}", @text_color);
+			@terminal_stats[4]->RenderedText("Press ESC to exit", Color->New(180, 160, 120));
+		};
 	}
 
 	method : MoveForward() ~ Nil {
@@ -386,7 +667,7 @@ class TinyDungeon {
 		view_type := player_view[MapManager->View->VIEW_1, MapManager->Side->MIDDLE];
 		if(IsOpen(view_type)) {
 			@view_type := view_type;
-			
+
 			select(@player_direction) {
 				label MapManager->Direction->NORTH {
 					@player_location[0] -= 1;
@@ -405,7 +686,7 @@ class TinyDungeon {
 					@player_location[1] -= 1;
 				}
 			};
-			
+
 			if(@player_nav_map[@player_location[0], @player_location[1]] = 0) {
 				@player_nav_map[@player_location[0], @player_location[1]] := 1;
 			};
@@ -434,22 +715,35 @@ class TinyDungeon {
 	}
 
 	method : CheckBattle() ~ Nil {
+		# boss encounter on END tile
+		if(@view_type = MapManager->Type->END & @current_floor >= @max_floors & @monster = Nil) {
+			@monster := DungeonLord->New(@current_floor);
+			@monster_sprint_index := @monster->GetImageStart();
+			@boss_fight := true;
+			@monster_name_text->RenderedText("*** Dungeon Lord ***", Color->New(255, 60, 60));
+			return;
+		};
+
 		if(<>OnItem() & @monster = Nil & Int->Random(99) < @encounter_perc) {
 			select(Int->Random(2)) {
 				label 0 {
-					@monster := Rat->New(1);
+					@monster := Rat->New(@current_floor);
 				}
 
 				label 1 {
-					@monster := Ghost->New(1);
+					@monster := Ghost->New(@current_floor);
 				}
 
 				other {
-					@monster := Slime->New(1);
+					@monster := Slime->New(@current_floor);
 				}
 			};
 
 			@monster_sprint_index := @monster->GetImageStart();
+
+			# show monster name
+			monster_name := @monster->GetName();
+			@monster_name_text->RenderedText(monster_name, Color->New(255, 200, 200));
 		};
 	}
 
@@ -462,7 +756,7 @@ class TinyDungeon {
 
 	method : AddGold(amount : Int) ~ Nil {
 		if(@map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
-			@player->AddGold(amount);			
+			@player->AddGold(amount);
 			RefreshItems();
 			@can_show_item := false;
 		};
@@ -513,7 +807,7 @@ class TinyDungeon {
 		#
 		# V1
 		#
-		if(v1 <> 0 & v1 <> 1 & v1 <> 4) {	
+		if(v1 <> 0 & v1 <> 1 & v1 <> 4) {
 			select(v1) {
 				# enclosed
 				label 2 {
@@ -573,7 +867,7 @@ class TinyDungeon {
 					};
 				}
 			};
-			
+
 			#
 			# V2
 			#
@@ -646,7 +940,7 @@ class TinyDungeon {
 						else if(v1 = 7) {
 							@dungeon_views[3] := 25;
 						}
-						else {							
+						else {
 							@dungeon_views[3] := 9;
 						};
 					}
@@ -725,7 +1019,7 @@ class TinyDungeon {
 							}
 							else if(v2 = 3) {
 								if(v0 = 2 & v1 = 2) {
-									@dungeon_views[4] := 60;	
+									@dungeon_views[4] := 60;
 								}
 								else if(v0 = 2) {
 									@dungeon_views[4] := 56;
@@ -752,10 +1046,10 @@ class TinyDungeon {
 							}
 							else if(v2 = 6) {
 								if(v0 = 2 & v1 = 2) {
-									@dungeon_views[4] := 48;	
+									@dungeon_views[4] := 48;
 								}
 								else if(v0 = 2) {
-									@dungeon_views[4] := 44;	
+									@dungeon_views[4] := 44;
 								}
 								else if(v1 = 2) {
 									@dungeon_views[4] := 48;
@@ -841,36 +1135,37 @@ class TinyDungeon {
 				}
 			};
 		};
-				
+
 		@can_show_item := OnItem() & v0 = 2 & v1 = 0 & v2 = 0;
 		@can_preview_item := v1=2 & v2=0 & v4 = 0;
 
 		if(@debug) {
 			p0 := @dungeon_views[1]; p1 := @dungeon_views[2];
 			p2 := @dungeon_views[3]; p3 := @dungeon_views[4];
-			p4 := @dungeon_views[0]; 
+			p4 := @dungeon_views[0];
 
 			msg := "Hash Values:\n\tv0\tv1\tv2\tv3\tv4\n";
 			msg += "\t-----------------------------------\n";
 			msg += "View\t{$v0}\t{$v1}\t{$v2}\t{$v3}\t{$v4}\n";
 			msg += "Image\t{$p0}\t{$p1}\t{$p2}\t{$p3}\t{$p4}\n";
-			
+
 			view_type := @view_type->As(Int);
 			msg += "view_type={$view_type},";
 
 			view_forward_type := @view_forward_type->As(Int);
 			msg += "view_forward_type={$view_forward_type},";
-			
+
 			msg += "can_preview_item={$@can_preview_item},";
 			msg += "can_show_item={$@can_show_item}\n===";
-			
+
 			msg->PrintLine();
 		};
 	}
 
 	method : OnItem() ~ Bool {
-		return @view_type = MapManager->Type->POTION | @view_type = MapManager->Type->LOOT | 
-			@view_type = MapManager->Type->LATTER_UP | @view_type = MapManager->Type->LATTER_DOWN;
+		return @view_type = MapManager->Type->POTION | @view_type = MapManager->Type->LOOT |
+			@view_type = MapManager->Type->LATTER_UP | @view_type = MapManager->Type->LATTER_DOWN |
+			@view_type = MapManager->Type->END;
 	}
 
 	method : IsLadderForward() ~ Bool {
@@ -925,38 +1220,178 @@ class TinyDungeon {
 		};
 	}
 
+	method : UpdateAnimation() ~ Nil {
+		if(@anim_counter > 0) {
+			t := @anim_counter->As(Float);
+
+			if(@anim_type = 1) {
+				# forward: zoom settling effect
+				scale := 0.5 + 0.02 * t / 5.0;
+				top := 15 - (2.0 * t / 5.0)->As(Int);
+				@sprite_manager->SetDungeonTransform(scale, top, 15);
+			}
+			else if(@anim_type = 2) {
+				# turn left: slides from right
+				left := 15 + (5.0 * t / 4.0)->As(Int);
+				@sprite_manager->SetDungeonTransform(0.5, 15, left);
+			}
+			else if(@anim_type = 3) {
+				# turn right: slides from left
+				left := 15 - (5.0 * t / 4.0)->As(Int);
+				@sprite_manager->SetDungeonTransform(0.5, 15, left);
+			};
+
+			@anim_counter -= 1;
+			if(@anim_counter = 0) {
+				@sprite_manager->ResetDungeonTransform();
+				@anim_type := 0;
+			};
+		};
+	}
+
+	method : UpdateFlicker() ~ Nil {
+		# disabled for debugging - just use static color
+	}
+
 	method : Render(frame_count : Int) ~ Nil {
+		# terminal screens
+		if(@game_state <> 0) {
+			RenderTerminalScreen();
+			return;
+		};
+
 		@framework->Clear();
 
+		# update animations
+		UpdateAnimation();
+
+		# dungeon view
 		RenderDungeon(frame_count);
 
+		# monster combat
 		if(@monster <> Nil) {
 			RenderMonster(frame_count);
 
 			if(@player_hit > 0) {
-				@sprite_manager->RenderMonsterHit();
+				@sprite_manager->RenderPlayerHit();
 				@player_hit -= 1;
 			}
 			else if(@monster_hit > 0) {
 				@monster_hit -= 1;
 			};
+
+			# monster name
+			@monster_name_text->Render(170, 100);
 		};
+
+		# border
+		RenderBorder();
+
+		# minimap
 		RenderMap(frame_count);
 
+		# compass and floor indicator
+		@compass_text->Render(448, 300);
+		@floor_text->Render(490, 300);
+
+		# stat box
 		@stat_box->Render(15, 330);
 		each(i : @stat_box_texts) {
-			@stat_box_texts[i]->Render(25, 340 + i * 25);
+			@stat_box_texts[i]->Render(25, 340 + i * 22);
 		};
 
+		# item box
 		@item_box->Render(445, 330);
 		each(i : @item_box_texts) {
 			@item_box_texts[i]->Render(460, 340 + i * 30);
 		};
 
+		# quest text
+		@quest_text->Render(15, 497);
+
+		# flavor text
+		if(@flavor_timer > 0) {
+			@flavor_text->Render(300, 497);
+			@flavor_timer -= 1;
+		};
+		if(frame_count = 0 & @flavor_timer = 0) {
+			if(Int->Random(100) < 10) {
+				idx := Int->Random(@flavor_texts->Size() - 1);
+				@flavor_text->RenderedText(@flavor_texts[idx], @flavor_color);
+				@flavor_timer := 120;
+			};
+		};
+
+		# damage text
+		if(@damage_timer > 0) {
+			if(@damage_is_player) {
+				@damage_text->Render(350, 200);
+			}
+			else {
+				@damage_text->Render(200, 150);
+			};
+			@damage_timer -= 1;
+		};
+
+		# reward text
+		if(@reward_timer > 0) {
+			@reward_text->Render(200, 280);
+			@reward_timer -= 1;
+		};
+
+		# level up text
+		if(@levelup_timer > 0) {
+			@levelup_text->Render(200, 250);
+			@levelup_timer -= 1;
+		};
+
 		@framework->Show();
 	}
 
-	method : RenderMonster(frame_count : Int) ~ Nil {		
+	method : RenderBorder() ~ Nil {
+		# top border
+		@border_rects[0]->GetPosition()->GetRect()->SetW(430);
+		@border_rects[0]->GetPosition()->GetRect()->SetH(8);
+		@border_rects[0]->Render(7, 7);
+
+		# bottom border
+		@border_rects[1]->GetPosition()->GetRect()->SetW(430);
+		@border_rects[1]->GetPosition()->GetRect()->SetH(8);
+		@border_rects[1]->Render(7, 310);
+
+		# left border
+		@border_rects[2]->GetPosition()->GetRect()->SetW(8);
+		@border_rects[2]->GetPosition()->GetRect()->SetH(320);
+		@border_rects[2]->Render(7, 7);
+
+		# right border
+		@border_rects[3]->GetPosition()->GetRect()->SetW(8);
+		@border_rects[3]->GetPosition()->GetRect()->SetH(320);
+		@border_rects[3]->Render(429, 7);
+	}
+
+	method : RenderTerminalScreen() ~ Nil {
+		if(@game_state = 1) {
+			# game over - dark red background
+			@framework->SetClearColor(@gameover_color);
+		}
+		else {
+			# victory - dark gold background
+			@framework->SetClearColor(@victory_color);
+		};
+
+		@framework->Clear();
+
+		@terminal_title->Render(200, 100);
+
+		each(i : @terminal_stats) {
+			@terminal_stats[i]->Render(220, 200 + i * 40);
+		};
+
+		@framework->Show();
+	}
+
+	method : RenderMonster(frame_count : Int) ~ Nil {
 		@sprite_manager->RenderMonsterSprite(@monster_sprint_index, 95, 120);
 
 		# update
@@ -1013,7 +1448,7 @@ class TinyDungeon {
 		};
 	}
 
-	method : RenderMap(frame_count : Int) ~ Nil {		
+	method : RenderMap(frame_count : Int) ~ Nil {
 		x_offset := 445;
 		for(i := 0; i < MapManager->Type->MAP_SIZE; i += 1;) {
 			y_offset := 15;
