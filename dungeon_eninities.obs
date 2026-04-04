@@ -126,49 +126,152 @@ class Potion {
 }
 
 # --- Weapons ---
-class WoodenSword implements Weapon {
-	New() {
+interface Weapon {
+	method : virtual : public : GetHit() ~ Float;
+	method : virtual : public : GetTier() ~ Int;
+	method : virtual : public : ToString() ~ String;
+}
+
+class TieredWeapon implements Weapon {
+	@name : String;
+	@hit : Float;
+	@tier : Int;
+
+	New(name : String, hit : Float, tier : Int) {
+		@name := name;
+		@hit := hit;
+		@tier := tier;
 	}
 
-	method : public : GetHit() ~ Float {
-		return 27.5;
-	}
+	method : public : GetHit() ~ Float { return @hit; }
+	method : public : GetTier() ~ Int { return @tier; }
+	method : public : ToString() ~ String { return @name; }
 
-	method : public : ToString() ~ String {
-		return "Wooden Sword";
+	function : Create(tier : Int) ~ TieredWeapon {
+		select(tier) {
+			label 0 { return TieredWeapon->New("Fists", 4.0, 0); }
+			label 1 { return TieredWeapon->New("Rusty Dagger", 10.0, 1); }
+			label 2 { return TieredWeapon->New("Short Sword", 18.0, 2); }
+			label 3 { return TieredWeapon->New("Mace", 24.0, 3); }
+			label 4 { return TieredWeapon->New("Longsword", 30.0, 4); }
+			label 5 { return TieredWeapon->New("Battle Axe", 36.0, 5); }
+			label 6 { return TieredWeapon->New("Flaming Sword", 42.0, 6); }
+			label 7 { return TieredWeapon->New("Holy Avenger", 50.0, 7); }
+		};
+		return TieredWeapon->New("Fists", 4.0, 0);
 	}
 }
 
-interface Weapon {
-	method : virtual : public : GetHit() ~ Float;
-	method : virtual : public : ToString() ~ String;
+# backwards compat
+class WoodenSword implements Weapon {
+	New() { }
+	method : public : GetHit() ~ Float { return 18.0; }
+	method : public : GetTier() ~ Int { return 2; }
+	method : public : ToString() ~ String { return "Short Sword"; }
 }
 
 # --- Armor ---
-class LeatherTunic implements Armor {
-	New() {
+interface Armor {
+	method : virtual : public : GetBlock() ~ Float;
+	method : virtual : public : GetTier() ~ Int;
+	method : virtual : public : ToString() ~ String;
+}
+
+class TieredArmor implements Armor {
+	@name : String;
+	@block : Float;
+	@tier : Int;
+
+	New(name : String, block : Float, tier : Int) {
+		@name := name;
+		@block := block;
+		@tier := tier;
 	}
 
-	method : public : GetBlock() ~ Float {
-		return 15.5;
-	}
+	method : public : GetBlock() ~ Float { return @block; }
+	method : public : GetTier() ~ Int { return @tier; }
+	method : public : ToString() ~ String { return @name; }
 
-	method : public : ToString() ~ String {
-		return "Leather Tunic";
+	function : Create(tier : Int) ~ TieredArmor {
+		select(tier) {
+			label 0 { return TieredArmor->New("Rags", 3.0, 0); }
+			label 1 { return TieredArmor->New("Leather Tunic", 8.0, 1); }
+			label 2 { return TieredArmor->New("Studded Leather", 14.0, 2); }
+			label 3 { return TieredArmor->New("Chain Mail", 20.0, 3); }
+			label 4 { return TieredArmor->New("Plate Mail", 26.0, 4); }
+			label 5 { return TieredArmor->New("Dragon Scale", 32.0, 5); }
+			label 6 { return TieredArmor->New("Mithril Plate", 38.0, 6); }
+			label 7 { return TieredArmor->New("Blessed Armor", 46.0, 7); }
+		};
+		return TieredArmor->New("Rags", 3.0, 0);
 	}
 }
 
-interface Armor {
-	method : virtual : public : GetBlock() ~ Float;
-	method : virtual : public : ToString() ~ String;
+# backwards compat
+class LeatherTunic implements Armor {
+	New() { }
+	method : public : GetBlock() ~ Float { return 8.0; }
+	method : public : GetTier() ~ Int { return 1; }
+	method : public : ToString() ~ String { return "Leather Tunic"; }
+}
+
+# --- Spells ---
+class Spell {
+	@name : String;
+	@mp_cost : Int;
+	@power : Int;
+	@is_heal : Bool;
+	@level_req : Int;
+
+	New(name : String, mp_cost : Int, power : Int, is_heal : Bool, level_req : Int) {
+		@name := name;
+		@mp_cost := mp_cost;
+		@power := power;
+		@is_heal := is_heal;
+		@level_req := level_req;
+	}
+
+	method : public : GetName() ~ String { return @name; }
+	method : public : GetMpCost() ~ Int { return @mp_cost; }
+	method : public : GetPower() ~ Int { return @power; }
+	method : public : IsHeal() ~ Bool { return @is_heal; }
+	method : public : GetLevelReq() ~ Int { return @level_req; }
+
+	method : public : ToString() ~ String {
+		return "{$@name} ({$@mp_cost}mp)";
+	}
+
+	function : GetSpellForLevel(level : Int) ~ Spell {
+		select(level) {
+			label 1 { return Spell->New("Heal", 3, 15, true, 1); }
+			label 2 { return Spell->New("Flame", 5, 20, false, 2); }
+			label 3 { return Spell->New("Frost", 5, 18, false, 3); }
+			label 4 { return Spell->New("Shield", 4, 25, true, 4); }
+			label 5 { return Spell->New("Lightning", 8, 35, false, 5); }
+			label 7 { return Spell->New("Holy Smite", 12, 50, false, 7); }
+			label 9 { return Spell->New("Inferno", 20, 80, false, 9); }
+		};
+		return Nil;
+	}
+}
+
+# --- Player Classes ---
+consts PlayerClass {
+	KNIGHT := 0,
+	CLERIC := 1,
+	MAGE := 2,
+	NINJA := 3
 }
 
 # --- Player ---
 
 class Player from Entity {
 	@name : String;
+	@class_id : Int;
+	@class_name : String;
 	@xp : Int;
 	@xp_thresholds : Int[];
+	@crit_chance : Int;  # percentage chance of critical hit
 
 	@max_mp : Int;
 	@mp : Int;
@@ -184,18 +287,79 @@ class Player from Entity {
 
 	@potions : Potion[];
 	@magics : Magic[];
+	@spells : Spell[];
+	@num_spells : Int;
+	@poison_turns : Int;
+	@defense_bonus : Int;
+	@step_count : Int;
 
 	New(name : String) {
-		Parent(EntityType->PERSON,	# type
-			1, 						# level
-			Int->Random(21, 28),	# max hp
-			Int->Random(12, 18),	# strength
-			Int->Random(9, 13),		# agility
-			Int->Random(9, 15));	# stamina
+		# default: Knight
+		Parent(EntityType->PERSON, 1, Int->Random(28, 35), Int->Random(14, 18), Int->Random(9, 12), Int->Random(12, 16));
+		@name := name;
+		@class_id := PlayerClass->KNIGHT;
+		@class_name := "Knight";
+		@crit_chance := 5;
+		@xp := 0;
+		@mp := @max_mp := Int->Random(6, 10);
+	}
+
+	New(name : String, class_id : Int) {
+		# Parent must be called first - use Knight defaults, override below
+		Parent(EntityType->PERSON, 1, Int->Random(24, 30), Int->Random(12, 16), Int->Random(10, 14), Int->Random(10, 14));
 
 		@name := name;
+		@class_id := class_id;
 		@xp := 0;
-		@mp := @max_mp := Int->Random(7, 13);
+
+		# class-specific overrides
+		select(class_id) {
+			label PlayerClass->KNIGHT {
+				@class_name := "Knight";
+				@hp := @max_hp := Int->Random(28, 35);
+				@strength := Int->Random(14, 18)->As(Float);
+				@agility := Int->Random(9, 12)->As(Float);
+				@stamina := Int->Random(12, 16)->As(Float);
+				@mp := @max_mp := Int->Random(6, 10);
+				@crit_chance := 5;
+			}
+
+			label PlayerClass->CLERIC {
+				@class_name := "Cleric";
+				@hp := @max_hp := Int->Random(22, 28);
+				@strength := Int->Random(10, 14)->As(Float);
+				@agility := Int->Random(9, 12)->As(Float);
+				@stamina := Int->Random(10, 14)->As(Float);
+				@mp := @max_mp := Int->Random(14, 20);
+				@crit_chance := 3;
+			}
+
+			label PlayerClass->MAGE {
+				@class_name := "Mage";
+				@hp := @max_hp := Int->Random(16, 22);
+				@strength := Int->Random(8, 12)->As(Float);
+				@agility := Int->Random(10, 13)->As(Float);
+				@stamina := Int->Random(7, 11)->As(Float);
+				@mp := @max_mp := Int->Random(20, 28);
+				@crit_chance := 2;
+			}
+
+			label PlayerClass->NINJA {
+				@class_name := "Ninja";
+				@hp := @max_hp := Int->Random(22, 26);
+				@strength := Int->Random(12, 16)->As(Float);
+				@agility := Int->Random(14, 18)->As(Float);
+				@stamina := Int->Random(9, 13)->As(Float);
+				@mp := @max_mp := Int->Random(8, 12);
+				@crit_chance := 20;
+			}
+
+			other {
+				@class_name := "Adventurer";
+				@mp := @max_mp := Int->Random(10, 16);
+				@crit_chance := 5;
+			}
+		};
 
 		@xp_thresholds := Int->New[10];
 		@xp_thresholds[0] := 0;
@@ -211,6 +375,83 @@ class Player from Entity {
 
 		@potions := Potion->New[3];
 		@magics := Magic->New[2];
+		@spells := Spell->New[7];
+		@num_spells := 0;
+		@poison_turns := 0;
+		@defense_bonus := 0;
+		@step_count := 0;
+
+		# learn starting spell
+		LearnSpellForLevel(1);
+	}
+
+	method : LearnSpellForLevel(level : Int) ~ Nil {
+		spell := Spell->GetSpellForLevel(level);
+		if(spell <> Nil & @num_spells < @spells->Size()) {
+			@spells[@num_spells] := spell;
+			@num_spells += 1;
+		};
+	}
+
+	method : public : GetSpell(index : Int) ~ Spell {
+		if(index >= 0 & index < @num_spells) {
+			return @spells[index];
+		};
+		return Nil;
+	}
+
+	method : public : GetNumSpells() ~ Int { return @num_spells; }
+
+	method : public : CastSpell(index : Int) ~ Int {
+		spell := GetSpell(index);
+		if(spell <> Nil & @mp >= spell->GetMpCost()) {
+			@mp -= spell->GetMpCost();
+			if(spell->IsHeal()) {
+				@hp += spell->GetPower();
+				if(@hp > @max_hp) { @hp := @max_hp; };
+			};
+			return spell->GetPower();
+		};
+		return -1;
+	}
+
+	method : public : OnStep() ~ Int {
+		@step_count += 1;
+		# MP regen: 1 per 10 steps
+		if(@step_count % 10 = 0 & @mp < @max_mp) {
+			@mp += 1;
+		};
+		# poison damage
+		if(@poison_turns > 0) {
+			@poison_turns -= 1;
+			@hp -= 2;
+			return 2;
+		};
+		# defense bonus decay
+		if(@defense_bonus > 0 & @step_count % 5 = 0) {
+			@defense_bonus -= 5;
+			if(@defense_bonus < 0) { @defense_bonus := 0; };
+		};
+		return 0;
+	}
+
+	method : public : GetClassId() ~ Int { return @class_id; }
+	method : public : GetClassName() ~ String { return @class_name; }
+	method : public : GetCritChance() ~ Int { return @crit_chance; }
+	method : public : SetPoison(turns : Int) ~ Nil { @poison_turns := turns; }
+	method : public : IsPoisoned() ~ Bool { return @poison_turns > 0; }
+	method : public : AddDefenseBonus(bonus : Int) ~ Nil { @defense_bonus += bonus; }
+	method : public : GetDefenseBonus() ~ Int { return @defense_bonus; }
+
+	method : public : UseTent() ~ Bool {
+		if(@tents > 0) {
+			@tents -= 1;
+			@hp := @max_hp;
+			@mp := @max_mp;
+			@poison_turns := 0;
+			return true;
+		};
+		return false;
 	}
 
 	#
@@ -223,8 +464,11 @@ class Player from Entity {
 			@level += 1;
 			@max_hp += 4;
 			@hp := @max_hp;
+			@max_mp += 3;
+			@mp := @max_mp;
 			@strength += 1.5;
 			@stamina += 1.0;
+			LearnSpellForLevel(@level);
 			return true;
 		};
 
@@ -521,6 +765,50 @@ class Monster from Entity {
 	method : virtual : public : GetWinExp() ~ Int;
 
 	method : virtual : public : IsBoss() ~ Bool;
+
+	#~
+	Factory: create a monster by floor and type for the encounter table.
+	Scales stats by floor. Returns a GenericMonster with proper name.
+	~#
+	function : CreateByFloor(name : String, floor : Int, base_hp : Int, base_str : Int,
+			base_agi : Int, base_sta : Int, weapon : Float, armor : Float,
+			xp : Int, is_boss : Bool) ~ GenericMonster {
+		# floor scaling
+		scale := 1.0 + (floor - 1)->As(Float) * 0.4;
+		hp := (base_hp->As(Float) * scale)->As(Int) + Int->Random(0, 3);
+		str := (base_str->As(Float) * scale)->As(Int) + Int->Random(0, 2);
+		agi := (base_agi->As(Float) * scale)->As(Int) + Int->Random(0, 2);
+		sta := (base_sta->As(Float) * scale)->As(Int) + Int->Random(0, 2);
+		wpn := weapon * scale;
+		arm := armor * scale;
+		xp_r := (xp->As(Float) * scale)->As(Int);
+
+		return GenericMonster->New(name, floor, hp, str, agi, sta, wpn, arm, xp_r, is_boss);
+	}
+}
+
+#~
+Generic monster with configurable name and stats
+~#
+class GenericMonster from Monster {
+	@name : String;
+	@xp_reward : Int;
+	@is_boss : Bool;
+
+	New(name : String, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int,
+			weapon_hit : Float, armor_block : Float, xp_reward : Int, is_boss : Bool) {
+		Parent(EntityType->RAT, level, max_hp, strength, agility, stamina);
+		@name := name;
+		@xp_reward := xp_reward;
+		@is_boss := is_boss;
+		SetWeaponHit(weapon_hit);
+		SetArmorBlock(armor_block);
+	}
+
+	method : public : GetName() ~ String { return @name; }
+	method : public : GetWinExp() ~ Int { return @xp_reward; }
+	method : public : GetImageStart() ~ Int { return 0; }
+	method : public : IsBoss() ~ Bool { return @is_boss; }
 }
 
 #~

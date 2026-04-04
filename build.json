@@ -2,7 +2,8 @@
 	"files": [
 		"tiny_dungeon.obs",
 		"dungeon_managers.obs",
-		"dungeon_eninities.obs"
+		"dungeon_eninities.obs",
+		"dungeon_monsters.obs"
 	],
 	"libs": [
 		"gen_collect",

@@ -34,6 +34,10 @@ class MapManager from Manager {
 		@maps := Vector->New()<MapHolder>;
 		@player_view := Int->New[5, 3];
 		@player_view_id := -1;
+	}
+
+	method : public : GetFloorCount() ~ Int {
+		return @maps->Size();
 	}	
 	
 	method : public : Load() ~ Bool {
@@ -176,7 +180,7 @@ class MapManager from Manager {
 
 			for(j := 0; j < dims[1]; j += 1;) {
 				value := @player_view[i,j];
-				if(value >= Type->OPEN & value <= Type->END) {
+				if(value >= Type->OPEN & value <> Type->NONE & value <> Type->BLOCKED) {
 					hash_str += '1';
 				}
 				else {
@@ -212,72 +216,248 @@ class MapManager from Manager {
 	}
 
 	method : LoadMaps() ~ Bool {
-		map_file := FileReader->New(@path);
-		leaving {
-			map_file->Close();
-		};
-		
-		rows := cols := Type->MAP_SIZE;
-		line := map_file->ReadLine();
-		while(line <> Nil ) {
-			map := Byte->New[rows, cols];
+		# generate 4 procedural dungeon floors
+		for(floor := 0; floor < 4; floor += 1;) {
+			map := Byte->New[Type->MAP_SIZE, Type->MAP_SIZE];
 			map_start := Int->New[2];
 
-			for(i := 0; i < rows; i += 1;) {
-				
-				if(line->Size() <> cols) {
-					return false;
-				};
+			GenerateFloor(map, map_start, floor);
+			@maps->AddBack(MapHolder->New(map, map_start));
+		};
 
-				each(j : line) {
-					select(line->Get(j)) {
-						# clear
-						label '@' {
-							map[i,j] := MapManager->Type->OPEN;
-						}
-						# start
-						label 'S' {
-							map[i,j] := MapManager->Type->START;
-							map_start[0] := i; map_start[1] := j;
-						}
-						# end
-						label 'E' {
-							map[i,j] := MapManager->Type->END;
-						}
-						# loot
-						label 'L' {
-							map[i,j] := MapManager->Type->LOOT;
-						}
-						# potion
-						label 'P' {
-							map[i,j] := MapManager->Type->POTION;
-						}
-						# up latter
-						label 'U' {
-							map[i,j] := MapManager->Type->LATTER_UP;
-						}
-						# up down
-						label 'D' {
-							map[i,j] := MapManager->Type->LATTER_DOWN;
-						}
-						# trap
-						label 'T' {
-							map[i,j] := MapManager->Type->TRAP;
-						}
+		return true;
+	}
+
+	method : GenerateFloor(map : Byte[,], start : Int[], floor : Int) ~ Nil {
+		sz := Type->MAP_SIZE;
+
+		# fill all with walls
+		for(i := 0; i < sz; i += 1;) {
+			for(j := 0; j < sz; j += 1;) {
+				map[i, j] := Type->BLOCKED;
+			};
+		};
+
+		# carve corridors using recursive random walk
+		# start from a point near top-left
+		sy := 2; sx := 2;
+		map[sy, sx] := Type->START;
+		start[0] := sy; start[1] := sx;
+
+		# use stack-based maze carving (randomized DFS)
+		stack_y := Int->New[sz * sz];
+		stack_x := Int->New[sz * sz];
+		stack_top := 0;
+		stack_y[0] := sy; stack_x[0] := sx;
+		stack_top := 1;
+
+		# direction offsets: N, S, E, W (step by 2 to leave walls between corridors)
+		dy := Int->New[4]; dx := Int->New[4];
+		dy[0] := -2; dx[0] := 0;
+		dy[1] := 2;  dx[1] := 0;
+		dy[2] := 0;  dx[2] := 2;
+		dy[3] := 0;  dx[3] := -2;
+
+		while(stack_top > 0) {
+			cy := stack_y[stack_top - 1];
+			cx := stack_x[stack_top - 1];
+
+			# find unvisited neighbors
+			neighbors := Int->New[4];
+			n_count := 0;
+
+			for(d := 0; d < 4; d += 1;) {
+				ny := cy + dy[d];
+				nx := cx + dx[d];
+				if(ny > 0 & ny < sz - 1 & nx > 0 & nx < sz - 1) {
+					if(map[ny, nx] = Type->BLOCKED) {
+						neighbors[n_count] := d;
+						n_count += 1;
 					};
 				};
-
-				line := map_file->ReadLine();
 			};
 
-			if(line->StartsWith('-')) {
-				@maps->AddBack(MapHolder->New(map, map_start));
-				line := map_file->ReadLine();
-			};
+			if(n_count > 0) {
+				# pick random neighbor
+				pick := Int->Random(0, n_count - 1);
+				d := neighbors[pick];
+				ny := cy + dy[d];
+				nx := cx + dx[d];
 
+				# carve the wall between current and neighbor
+				wy := cy + dy[d] / 2;
+				wx := cx + dx[d] / 2;
+				map[wy, wx] := Type->OPEN;
+				map[ny, nx] := Type->OPEN;
+
+				# push neighbor onto stack
+				stack_y[stack_top] := ny;
+				stack_x[stack_top] := nx;
+				stack_top += 1;
+			}
+			else {
+				# backtrack
+				stack_top -= 1;
+			};
 		};
-		
-		return true;
+
+		# add extra passages for loops (make it less of a perfect maze)
+		extra := 8 + floor * 3;
+		for(i := 0; i < extra; i += 1;) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			if(map[ry, rx] = Type->BLOCKED) {
+				# check if opening this creates a useful connection
+				open_neighbors := 0;
+				if(ry > 0 & map[ry-1, rx] >= Type->OPEN & map[ry-1, rx] <= Type->END) { open_neighbors += 1; };
+				if(ry < sz-1 & map[ry+1, rx] >= Type->OPEN & map[ry+1, rx] <= Type->END) { open_neighbors += 1; };
+				if(rx > 0 & map[ry, rx-1] >= Type->OPEN & map[ry, rx-1] <= Type->END) { open_neighbors += 1; };
+				if(rx < sz-1 & map[ry, rx+1] >= Type->OPEN & map[ry, rx+1] <= Type->END) { open_neighbors += 1; };
+				if(open_neighbors >= 2) {
+					map[ry, rx] := Type->OPEN;
+				};
+			};
+		};
+
+		# place ladder down (or END on last floor) - far from start
+		best_dist := 0;
+		end_y := sz - 3; end_x := sz - 3;
+		for(i := 2; i < sz - 2; i += 1;) {
+			for(j := 2; j < sz - 2; j += 1;) {
+				if(map[i, j] = Type->OPEN) {
+					dist := (i - sy) * (i - sy) + (j - sx) * (j - sx);
+					if(dist > best_dist) {
+						best_dist := dist;
+						end_y := i; end_x := j;
+					};
+				};
+			};
+		};
+
+		if(floor < 3) {
+			map[end_y, end_x] := Type->LATTER_UP;
+		}
+		else {
+			map[end_y, end_x] := Type->END;
+		};
+
+		# place potions (more on later floors)
+		num_potions := 2 + floor;
+		placed := 0;
+		while(placed < num_potions) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			if(map[ry, rx] = Type->OPEN) {
+				map[ry, rx] := Type->POTION;
+				placed += 1;
+			};
+		};
+
+		# place loot/treasure
+		num_loot := 2 + floor;
+		placed := 0;
+		while(placed < num_loot) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			if(map[ry, rx] = Type->OPEN) {
+				map[ry, rx] := Type->LOOT;
+				placed += 1;
+			};
+		};
+
+		# place traps (none on floor 1, more on later floors)
+		num_traps := floor;
+		placed := 0;
+		while(placed < num_traps) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			if(map[ry, rx] = Type->OPEN) {
+				map[ry, rx] := Type->TRAP;
+				placed += 1;
+			};
+		};
+
+		# place secret rooms (dead-end extensions with loot)
+		num_secrets := 1 + Int->Random(0, 1);
+		placed := 0;
+		attempts := 0;
+		while(placed < num_secrets & attempts < 50) {
+			ry := Int->Random(3, sz - 4);
+			rx := Int->Random(3, sz - 4);
+			if(map[ry, rx] = Type->BLOCKED) {
+				adj := 0;
+				if(ry > 0 & map[ry-1, rx] = Type->OPEN) { adj += 1; };
+				if(ry < sz-1 & map[ry+1, rx] = Type->OPEN) { adj += 1; };
+				if(rx > 0 & map[ry, rx-1] = Type->OPEN) { adj += 1; };
+				if(rx < sz-1 & map[ry, rx+1] = Type->OPEN) { adj += 1; };
+				if(adj = 1) {
+					map[ry, rx] := Type->LOOT;
+					placed += 1;
+				};
+			};
+			attempts += 1;
+		};
+
+		# --- Environmental artifacts ---
+		# (torches are rendered as wall decorations, not tiles)
+
+		# floor-specific features
+		if(floor = 0) {
+			# Catacombs: graves
+			num := Int->Random(2, 4);
+			placed := 0; attempts := 0;
+			while(placed < num & attempts < 40) {
+				ry := Int->Random(2, sz - 3);
+				rx := Int->Random(2, sz - 3);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->GRAVE;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		}
+		else if(floor = 1) {
+			# Crypts: altars
+			num := Int->Random(1, 3);
+			placed := 0; attempts := 0;
+			while(placed < num & attempts < 40) {
+				ry := Int->Random(2, sz - 3);
+				rx := Int->Random(2, sz - 3);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->ALTAR;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		}
+		else if(floor = 2) {
+			# Deep Halls: pillars
+			num := Int->Random(3, 5);
+			placed := 0; attempts := 0;
+			while(placed < num & attempts < 40) {
+				ry := Int->Random(2, sz - 3);
+				rx := Int->Random(2, sz - 3);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->PILLAR;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		}
+		else {
+			# Abyss: fountains of blood
+			num := Int->Random(1, 2);
+			placed := 0; attempts := 0;
+			while(placed < num & attempts < 40) {
+				ry := Int->Random(2, sz - 3);
+				rx := Int->Random(2, sz - 3);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->FOUNTAIN;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		};
 	}
 
 	method : public : Unload() ~ Nil {
@@ -386,8 +566,13 @@ class MapManager from Manager {
 		LATTER_UP := 5,
 		LATTER_DOWN := 6,
 		END := 7,
+		TORCH := 8,
 		TRAP := 9,
-		NONE := 10
+		NONE := 10,
+		FOUNTAIN := 11,
+		ALTAR := 12,
+		GRAVE := 13,
+		PILLAR := 14
 	}
 
 	enum Direction {
@@ -431,132 +616,579 @@ class MapHolder {
 }
 
 #~
-Managers sprite images
+Geometric first-person dungeon renderer (Wizardry-style)
+Replaces sprite-based rendering with procedural walls using SDL2 primitives.
+~#
+class DungeonRenderer {
+	@renderer : Renderer;
+
+	# depth coordinates (6 levels: 0=nearest/full viewport, 5=vanishing point)
+	@dl : Int[];
+	@dr : Int[];
+	@dt : Int[];
+	@db : Int[];
+
+	# fog brightness per depth (0-4)
+	@bright : Float[];
+
+	# floor color palettes (4 floors, indexed 0-3)
+	@wall_r : Int[];  @wall_g : Int[];  @wall_b : Int[];
+	@flr_r : Int[];   @flr_g : Int[];   @flr_b : Int[];
+	@ceil_r : Int[];   @ceil_g : Int[];   @ceil_b : Int[];
+
+	# reusable polygon vertex arrays
+	@vx : Int[];
+	@vy : Int[];
+
+	# animation offset
+	@anim_ox : Int;
+	@anim_oy : Int;
+
+	New(renderer : Renderer) {
+		@renderer := renderer;
+		@anim_ox := 0;
+		@anim_oy := 0;
+
+		@vx := Int->New[4];
+		@vy := Int->New[4];
+
+		# 6 depth levels (viewport shrinks toward vanishing point)
+		@dl := Int->New[6]; @dr := Int->New[6];
+		@dt := Int->New[6]; @db := Int->New[6];
+
+		@dl[0] := 15;  @dr[0] := 429; @dt[0] := 7;   @db[0] := 310;
+		@dl[1] := 55;  @dr[1] := 389; @dt[1] := 32;  @db[1] := 285;
+		@dl[2] := 105; @dr[2] := 339; @dt[2] := 62;  @db[2] := 255;
+		@dl[3] := 148; @dr[3] := 296; @dt[3] := 92;  @db[3] := 225;
+		@dl[4] := 178; @dr[4] := 266; @dt[4] := 120; @db[4] := 197;
+		@dl[5] := 198; @dr[5] := 246; @dt[5] := 142; @db[5] := 175;
+
+		# brightness per depth
+		@bright := Float->New[5];
+		@bright[0] := 1.0;
+		@bright[1] := 0.78;
+		@bright[2] := 0.58;
+		@bright[3] := 0.42;
+		@bright[4] := 0.30;
+
+		# wall colors per floor
+		@wall_r := Int->New[4]; @wall_g := Int->New[4]; @wall_b := Int->New[4];
+		@wall_r[0] := 110; @wall_g[0] := 95; @wall_b[0] := 75;
+		@wall_r[1] := 80;  @wall_g[1] := 85; @wall_b[1] := 100;
+		@wall_r[2] := 75;  @wall_g[2] := 62; @wall_b[2] := 55;
+		@wall_r[3] := 60;  @wall_g[3] := 30; @wall_b[3] := 35;
+
+		# floor colors per floor
+		@flr_r := Int->New[4]; @flr_g := Int->New[4]; @flr_b := Int->New[4];
+		@flr_r[0] := 60; @flr_g[0] := 50; @flr_b[0] := 40;
+		@flr_r[1] := 42; @flr_g[1] := 48; @flr_b[1] := 58;
+		@flr_r[2] := 38; @flr_g[2] := 32; @flr_b[2] := 28;
+		@flr_r[3] := 28; @flr_g[3] := 15; @flr_b[3] := 18;
+
+		# ceiling colors per floor
+		@ceil_r := Int->New[4]; @ceil_g := Int->New[4]; @ceil_b := Int->New[4];
+		@ceil_r[0] := 48; @ceil_g[0] := 42; @ceil_b[0] := 36;
+		@ceil_r[1] := 36; @ceil_g[1] := 40; @ceil_b[1] := 48;
+		@ceil_r[2] := 32; @ceil_g[2] := 27; @ceil_b[2] := 24;
+		@ceil_r[3] := 22; @ceil_g[3] := 12; @ceil_b[3] := 16;
+	}
+
+	method : public : SetAnimOffset(ox : Int, oy : Int) ~ Nil {
+		@anim_ox := ox;
+		@anim_oy := oy;
+	}
+
+	method : public : ResetAnim() ~ Nil {
+		@anim_ox := 0;
+		@anim_oy := 0;
+	}
+
+	method : IsOpen(tile : Int) ~ Bool {
+		return tile >= MapManager->Type->OPEN & tile <> MapManager->Type->NONE & tile <> MapManager->Type->BLOCKED;
+	}
+
+	method : Br(base : Int, depth : Int) ~ Int {
+		v := (base->As(Float) * @bright[depth])->As(Int);
+		if(v > 255) { v := 255; };
+		if(v < 0) { v := 0; };
+		return v;
+	}
+
+	method : WallCol(fi : Int, d : Int) ~ Color {
+		return Color->New(Br(@wall_r[fi], d), Br(@wall_g[fi], d), Br(@wall_b[fi], d));
+	}
+
+	method : FloorCol(fi : Int, d : Int) ~ Color {
+		return Color->New(Br(@flr_r[fi], d), Br(@flr_g[fi], d), Br(@flr_b[fi], d));
+	}
+
+	method : CeilCol(fi : Int, d : Int) ~ Color {
+		return Color->New(Br(@ceil_r[fi], d), Br(@ceil_g[fi], d), Br(@ceil_b[fi], d));
+	}
+
+	method : WallDark(fi : Int, d : Int) ~ Color {
+		return Color->New(Br(@wall_r[fi] - 18, d), Br(@wall_g[fi] - 18, d), Br(@wall_b[fi] - 18, d));
+	}
+
+	method : WallLight(fi : Int, d : Int) ~ Color {
+		return Color->New(Br(@wall_r[fi] + 14, d), Br(@wall_g[fi] + 14, d), Br(@wall_b[fi] + 14, d));
+	}
+
+	# animated coordinate accessors
+	method : L(d : Int) ~ Int { return @dl[d] + @anim_ox; }
+	method : R(d : Int) ~ Int { return @dr[d] + @anim_ox; }
+	method : T(d : Int) ~ Int { return @dt[d] + @anim_oy; }
+	method : B(d : Int) ~ Int { return @db[d] + @anim_oy; }
+
+	#~
+	Main render entry point
+	@param view 5x3 view array from MapManager
+	@param floor_num current floor (1-4)
+	@param tile_type tile type at player position
+	@param fwd_type tile type one step ahead
+	@param show_item true if can interact with current tile
+	@param preview true if can see distant item
+	@param frame frame counter for animation
+	~#
+	method : public : Render(view : Int[,], floor_num : Int, tile_type : Int, fwd_type : Int,
+			show_item : Bool, preview : Bool, frame : Int) ~ Nil {
+		fi := floor_num - 1;
+		if(fi < 0) { fi := 0; };
+		if(fi > 3) { fi := 3; };
+
+		# fill viewport background with deepest fog color
+		@renderer->SetDrawColor(Br(@ceil_r[fi], 4), Br(@ceil_g[fi], 4), Br(@ceil_b[fi], 4), 255);
+		@renderer->FillRect(Rect->New(15, 7, 414, 303));
+
+		# draw from back (depth 4) to front (depth 0)
+		for(d := 4; d >= 0; d -= 1;) {
+			mid := view[d, 1];
+			left := view[d, 0];
+			right := view[d, 2];
+
+			# ceiling band (trapezoid between depth d+1 and d)
+			DrawCeiling(d, fi);
+
+			# floor band
+			DrawFloor(d, fi);
+
+			# side walls where blocked
+			if(<>IsOpen(left)) {
+				DrawLeftWall(d, fi);
+			};
+
+			if(<>IsOpen(right)) {
+				DrawRightWall(d, fi);
+			};
+
+			# front wall (depth 1+ only; depth 0 is player position)
+			if(d > 0 & <>IsOpen(mid)) {
+				DrawFrontWall(d, fi);
+			};
+
+			# environmental decorations on the corridor walls/floor at this depth
+			if(IsEnvTile(mid)) {
+				DrawEnvFeature(d, mid, fi, frame);
+			};
+		};
+
+		# torch glow effect
+		DrawTorchGlow(fi, frame);
+
+		# special tile indicators
+		if(show_item) {
+			DrawSpecialTile(0, tile_type, fi);
+		};
+		if(preview) {
+			DrawSpecialTile(1, fwd_type, fi);
+		};
+	}
+
+	method : DrawCeiling(d : Int, fi : Int) ~ Nil {
+		color := CeilCol(fi, d);
+		@vx[0] := L(d);   @vy[0] := T(d);
+		@vx[1] := R(d);   @vy[1] := T(d);
+		@vx[2] := R(d+1); @vy[2] := T(d+1);
+		@vx[3] := L(d+1); @vy[3] := T(d+1);
+		@renderer->FilledPolygonColor(@vx, @vy, color);
+	}
+
+	method : DrawFloor(d : Int, fi : Int) ~ Nil {
+		color := FloorCol(fi, d);
+		@vx[0] := L(d);   @vy[0] := B(d);
+		@vx[1] := R(d);   @vy[1] := B(d);
+		@vx[2] := R(d+1); @vy[2] := B(d+1);
+		@vx[3] := L(d+1); @vy[3] := B(d+1);
+		@renderer->FilledPolygonColor(@vx, @vy, color);
+	}
+
+	method : DrawLeftWall(d : Int, fi : Int) ~ Nil {
+		color := WallCol(fi, d);
+		@vx[0] := L(d);   @vy[0] := T(d);
+		@vx[1] := L(d+1); @vy[1] := T(d+1);
+		@vx[2] := L(d+1); @vy[2] := B(d+1);
+		@vx[3] := L(d);   @vy[3] := B(d);
+		@renderer->FilledPolygonColor(@vx, @vy, color);
+
+		# mortar lines
+		DrawSideTexture(d, fi, true);
+
+		# wall torch on every other depth
+		if(d % 2 = 1 & d < 4) {
+			DrawWallTorch(d, fi, true);
+		};
+	}
+
+	method : DrawRightWall(d : Int, fi : Int) ~ Nil {
+		color := WallCol(fi, d);
+		@vx[0] := R(d);   @vy[0] := T(d);
+		@vx[1] := R(d+1); @vy[1] := T(d+1);
+		@vx[2] := R(d+1); @vy[2] := B(d+1);
+		@vx[3] := R(d);   @vy[3] := B(d);
+		@renderer->FilledPolygonColor(@vx, @vy, color);
+
+		# mortar lines
+		DrawSideTexture(d, fi, false);
+
+		# wall torch on even depths
+		if(d % 2 = 0 & d < 4) {
+			DrawWallTorch(d, fi, false);
+		};
+	}
+
+	method : DrawFrontWall(d : Int, fi : Int) ~ Nil {
+		color := WallCol(fi, d);
+		@renderer->BoxColor(L(d), T(d), R(d), B(d), color);
+
+		dark := WallDark(fi, d);
+		wall_h := B(d) - T(d);
+		wall_w := R(d) - L(d);
+
+		# horizontal mortar lines
+		rows := 4;
+		row_sp := wall_h / (rows + 1);
+		for(i := 1; i <= rows; i += 1;) {
+			y := T(d) + row_sp * i;
+			@renderer->HLineColor(L(d) + 2, R(d) - 2, y, dark);
+		};
+
+		# vertical mortar (brick pattern, offset every other row)
+		cols := 3;
+		col_sp := wall_w / (cols + 1);
+		for(i := 1; i <= cols; i += 1;) {
+			for(j := 0; j <= rows; j += 1;) {
+				y_s := T(d) + row_sp * j;
+				y_e := T(d) + row_sp * (j + 1);
+				if(y_e > B(d)) { y_e := B(d); };
+
+				offset := 0;
+				if(j % 2 = 1) { offset := col_sp / 2; };
+				x := L(d) + col_sp * i + offset;
+				if(x > L(d) + 2 & x < R(d) - 2) {
+					@renderer->VlineColor(x, y_s + 1, y_e - 1, dark);
+				};
+			};
+		};
+
+		# highlight on top edge
+		light := WallLight(fi, d);
+		@renderer->HLineColor(L(d), R(d), T(d) + 1, light);
+	}
+
+	method : DrawSideTexture(d : Int, fi : Int, is_left : Bool) ~ Nil {
+		dark := WallDark(fi, d);
+		rows := 3;
+		near_h := B(d) - T(d);
+		far_h := B(d+1) - T(d+1);
+
+		for(i := 1; i <= rows; i += 1;) {
+			t := i->As(Float) / (rows + 1)->As(Float);
+			near_y := T(d) + (near_h->As(Float) * t)->As(Int);
+			far_y := T(d+1) + (far_h->As(Float) * t)->As(Int);
+
+			if(is_left) {
+				@renderer->LineColor(L(d), near_y, L(d+1), far_y, dark);
+			}
+			else {
+				@renderer->LineColor(R(d), near_y, R(d+1), far_y, dark);
+			};
+		};
+	}
+
+	method : DrawWallTorch(d : Int, fi : Int, is_left : Bool) ~ Nil {
+		# torch mounted on a side wall
+		mid_x : Int;
+		if(is_left) {
+			mid_x := (L(d) + L(d+1)) / 2 + 5;
+		}
+		else {
+			mid_x := (R(d) + R(d+1)) / 2 - 5;
+		};
+		mid_y := (T(d) + B(d)) / 2 - 10;
+
+		sc := 4 - d;
+		if(sc < 1) { sc := 1; };
+
+		# iron bracket
+		@renderer->ThickLineColor(mid_x, mid_y + sc * 3, mid_x, mid_y, 2, Color->New(Br(90, d), Br(70, d), Br(45, d)));
+
+		# flame
+		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2, sc * 2 + 1, Color->New(Br(255, d), Br(150, d), Br(30, d), 200));
+		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2 - 1, sc + 1, Color->New(Br(255, d), Br(220, d), Br(80, d), 220));
+
+		# glow on wall
+		glow_r := sc * 8 + 12;
+		@renderer->FilledCircleColor(mid_x, mid_y - sc, glow_r, Color->New(255, 140, 40, 8));
+	}
+
+	method : DrawTorchGlow(fi : Int, frame : Int) ~ Nil {
+		flicker := (Float->Sin(frame->As(Float) * 0.15) * 8.0)->As(Int);
+		alpha := 18 + flicker;
+		if(alpha < 5) { alpha := 5; };
+		if(alpha > 40) { alpha := 40; };
+
+		glow := Color->New(255, 180, 80, alpha);
+		@renderer->FilledCircleColor(35, 280, 55, glow);
+		@renderer->FilledCircleColor(409, 280, 55, glow);
+
+		core := Color->New(255, 200, 120, alpha + 10);
+		@renderer->FilledCircleColor(35, 285, 30, core);
+		@renderer->FilledCircleColor(409, 285, 30, core);
+	}
+
+	method : DrawSpecialTile(d : Int, tile_type : Int, fi : Int) ~ Nil {
+		cx := (L(d) + R(d)) / 2;
+		cy := B(d) - 40;
+
+		if(d = 1) {
+			cx := (L(1) + R(1)) / 2;
+			cy := (B(1) + B(2)) / 2 - 8;
+		};
+
+		if(tile_type = MapManager->Type->POTION) {
+			# potion bottle
+			sz := 18 - d * 3;
+			if(sz < 6) { sz := 6; };
+			# bottle body (rounded)
+			@renderer->FilledEllipseColor(cx, cy + 2, sz, sz + 4, Color->New(30, 180, 50, 230));
+			# liquid highlight
+			@renderer->FilledEllipseColor(cx - 2, cy, sz / 2, sz + 2, Color->New(60, 230, 80, 180));
+			# bottle neck
+			@renderer->BoxColor(cx - sz / 3, cy - sz - 3, cx + sz / 3, cy - sz + 4, Color->New(40, 190, 60, 220));
+			# cork
+			@renderer->BoxColor(cx - sz / 3 - 1, cy - sz - 6, cx + sz / 3 + 1, cy - sz - 2, Color->New(160, 120, 60, 220));
+			# shine
+			@renderer->VlineColor(cx + sz / 3, cy - sz / 2, cy + sz / 2, Color->New(120, 255, 140, 100));
+		}
+		else if(tile_type = MapManager->Type->LOOT) {
+			# treasure chest - large and prominent
+			sz := 40 - d * 8;
+			if(sz < 12) { sz := 12; };
+			h := sz * 2 / 3;
+			# chest body
+			@renderer->BoxColor(cx - sz, cy - h / 2, cx + sz, cy + h + 4, Color->New(170, 130, 25, 240));
+			# darker front face
+			@renderer->BoxColor(cx - sz + 3, cy + 3, cx + sz - 3, cy + h + 2, Color->New(140, 100, 15, 230));
+			# lid (lighter, top half)
+			@renderer->BoxColor(cx - sz, cy - h / 2, cx + sz, cy + 2, Color->New(200, 160, 35, 240));
+			# lid top highlight
+			@renderer->HLineColor(cx - sz + 1, cx + sz - 1, cy - h / 2, Color->New(240, 210, 80, 230));
+			@renderer->HLineColor(cx - sz + 1, cx + sz - 1, cy - h / 2 + 1, Color->New(230, 200, 70, 200));
+			# metal bands (horizontal)
+			@renderer->ThickLineColor(cx - sz, cy, cx + sz, cy, 2, Color->New(110, 80, 15, 220));
+			@renderer->ThickLineColor(cx - sz, cy + h + 3, cx + sz, cy + h + 3, 2, Color->New(110, 80, 15, 220));
+			# metal bands (vertical)
+			@renderer->ThickLineColor(cx - sz / 2, cy - h / 2, cx - sz / 2, cy + h + 3, 2, Color->New(110, 80, 15, 220));
+			@renderer->ThickLineColor(cx + sz / 2, cy - h / 2, cx + sz / 2, cy + h + 3, 2, Color->New(110, 80, 15, 220));
+			# corner rivets
+			@renderer->FilledCircleColor(cx - sz + 4, cy - h / 2 + 4, 2, Color->New(220, 180, 50, 220));
+			@renderer->FilledCircleColor(cx + sz - 4, cy - h / 2 + 4, 2, Color->New(220, 180, 50, 220));
+			@renderer->FilledCircleColor(cx - sz + 4, cy + h + 1, 2, Color->New(220, 180, 50, 220));
+			@renderer->FilledCircleColor(cx + sz - 4, cy + h + 1, 2, Color->New(220, 180, 50, 220));
+			# lock
+			@renderer->FilledCircleColor(cx, cy + 4, 5, Color->New(210, 170, 40, 240));
+			@renderer->FilledCircleColor(cx, cy + 4, 3, Color->New(90, 60, 10, 220));
+			# keyhole
+			@renderer->VlineColor(cx, cy + 5, cy + 8, Color->New(40, 30, 5, 200));
+		}
+		else if(tile_type = MapManager->Type->LATTER_UP) {
+			# ladder going up
+			hw := 16 - d * 3;
+			if(hw < 5) { hw := 5; };
+			for(i := 0; i < 5; i += 1;) {
+				y := cy - 28 + i * 12;
+				@renderer->HLineColor(cx - hw, cx + hw, y, Color->New(160, 130, 80, 200));
+			};
+			@renderer->ThickLineColor(cx - hw, cy - 32, cx - hw, cy + 25, 2, Color->New(140, 110, 60, 200));
+			@renderer->ThickLineColor(cx + hw, cy - 32, cx + hw, cy + 25, 2, Color->New(140, 110, 60, 200));
+		}
+		else if(tile_type = MapManager->Type->LATTER_DOWN) {
+			# ladder going down
+			hw := 16 - d * 3;
+			if(hw < 5) { hw := 5; };
+			for(i := 0; i < 5; i += 1;) {
+				y := cy - 20 + i * 12;
+				@renderer->HLineColor(cx - hw, cx + hw, y, Color->New(120, 100, 60, 200));
+			};
+			@renderer->ThickLineColor(cx - hw, cy - 24, cx - hw, cy + 32, 2, Color->New(100, 80, 50, 200));
+			@renderer->ThickLineColor(cx + hw, cy - 24, cx + hw, cy + 32, 2, Color->New(100, 80, 50, 200));
+		}
+		else if(tile_type = MapManager->Type->END) {
+			# ominous door/portal
+			sz := 25 - d * 5;
+			if(sz < 8) { sz := 8; };
+			@renderer->BoxColor(cx - sz, cy - sz * 2, cx + sz, cy + sz / 2, Color->New(80, 20, 20, 200));
+			@renderer->RectangleColor(cx - sz, cy - sz * 2, cx + sz, cy + sz / 2, Color->New(120, 40, 40, 220));
+			# glowing eye
+			@renderer->FilledCircleColor(cx, cy - sz, 6, Color->New(255, 60, 30, 150));
+			@renderer->FilledCircleColor(cx, cy - sz, 3, Color->New(255, 200, 100, 200));
+		}
+		else if(tile_type = MapManager->Type->TORCH) {
+			# wall torch: bracket + flame
+			sz := 10 - d * 2;
+			if(sz < 4) { sz := 4; };
+			@renderer->ThickLineColor(cx, cy - sz * 2, cx, cy, 2, Color->New(120, 90, 50, 200));
+			@renderer->HLineColor(cx - sz, cx + sz, cy - sz * 2, Color->New(120, 90, 50, 200));
+			@renderer->FilledCircleColor(cx, cy - sz * 2 - sz, sz + 2, Color->New(255, 160, 40, 180));
+			@renderer->FilledCircleColor(cx, cy - sz * 2 - sz - 2, sz / 2 + 2, Color->New(255, 220, 80, 200));
+		}
+		else if(tile_type = MapManager->Type->FOUNTAIN) {
+			sz := 16 - d * 3;
+			if(sz < 5) { sz := 5; };
+			@renderer->FilledEllipseColor(cx, cy, sz + 5, sz / 2 + 2, Color->New(80, 70, 65, 200));
+			@renderer->FilledEllipseColor(cx, cy - 2, sz + 3, sz / 2, Color->New(140, 20, 20, 180));
+			@renderer->ThickLineColor(cx, cy - sz * 2, cx, cy - sz / 2, 2, Color->New(90, 80, 70, 200));
+			@renderer->FilledCircleColor(cx, cy - sz * 2, 3, Color->New(140, 30, 30, 160));
+		}
+		else if(tile_type = MapManager->Type->ALTAR) {
+			sz := 16 - d * 3;
+			if(sz < 5) { sz := 5; };
+			@renderer->BoxColor(cx - sz - 4, cy - 3, cx + sz + 4, cy + sz / 2 + 4, Color->New(100, 90, 80, 200));
+			@renderer->BoxColor(cx - sz, cy - sz, cx + sz, cy - 3, Color->New(120, 110, 100, 200));
+			@renderer->FilledCircleColor(cx, cy - sz / 2 - 3, 5, Color->New(100, 200, 255, 160));
+		}
+		else if(tile_type = MapManager->Type->GRAVE) {
+			sz := 14 - d * 3;
+			if(sz < 5) { sz := 5; };
+			@renderer->BoxColor(cx - sz / 2 - 2, cy - sz * 2, cx + sz / 2 + 2, cy + 4, Color->New(130, 125, 120, 200));
+			@renderer->FilledCircleColor(cx, cy - sz * 2, sz / 2 + 2, Color->New(130, 125, 120, 200));
+			@renderer->ThickLineColor(cx, cy - sz * 2 + 3, cx, cy - sz / 2, 2, Color->New(90, 85, 80, 180));
+			@renderer->HLineColor(cx - sz / 3 - 2, cx + sz / 3 + 2, cy - sz, Color->New(90, 85, 80, 180));
+		}
+		else if(tile_type = MapManager->Type->PILLAR) {
+			sz := 10 - d * 2;
+			if(sz < 3) { sz := 3; };
+			@renderer->BoxColor(cx - sz, cy - sz * 5, cx + sz, cy + sz + 4, Color->New(100, 95, 88, 200));
+			@renderer->BoxColor(cx - sz - 3, cy - sz * 5 - 3, cx + sz + 3, cy - sz * 5 + 3, Color->New(115, 110, 100, 200));
+			@renderer->BoxColor(cx - sz - 3, cy + sz + 1, cx + sz + 3, cy + sz + 7, Color->New(115, 110, 100, 200));
+		};
+	}
+
+	method : IsEnvTile(tile : Int) ~ Bool {
+		return tile = MapManager->Type->FOUNTAIN | tile = MapManager->Type->ALTAR |
+			tile = MapManager->Type->GRAVE | tile = MapManager->Type->PILLAR;
+	}
+
+	method : DrawEnvFeature(d : Int, tile : Int, fi : Int, frame : Int) ~ Nil {
+		sc := 5 - d;
+		if(sc < 1) { sc := 1; };
+
+		if(tile = MapManager->Type->GRAVE) {
+			# tombstone against left wall
+			gx := L(d) + 25 + sc * 4;
+			gy := B(d) - sc * 4;
+			hw := sc * 3 + 2;
+			hh := sc * 6 + 4;
+			@renderer->BoxColor(gx - hw, gy - hh, gx + hw, gy, Color->New(120, 115, 110));
+			@renderer->FilledCircleColor(gx, gy - hh, hw, Color->New(120, 115, 110));
+			@renderer->ThickLineColor(gx, gy - hh + 3, gx, gy - sc * 2, 2, Color->New(80, 75, 70));
+			@renderer->HLineColor(gx - sc * 2, gx + sc * 2, gy - hh + sc * 2 + 3, Color->New(80, 75, 70));
+		}
+		else if(tile = MapManager->Type->ALTAR) {
+			# stone altar on floor center
+			ax := (L(d) + R(d)) / 2;
+			ay := B(d) - sc * 3;
+			aw := sc * 6 + 4;
+			ah := sc * 3 + 2;
+			# base
+			@renderer->BoxColor(ax - aw, ay - 2, ax + aw, ay + ah, Color->New(95, 85, 75));
+			# top slab
+			@renderer->BoxColor(ax - aw + 2, ay - ah, ax + aw - 2, ay - 2, Color->New(110, 100, 90));
+			# glowing rune
+			rune_pulse := (Float->Sin(frame->As(Float) * 0.08) * 40.0)->As(Int);
+			@renderer->FilledCircleColor(ax, ay - ah / 2 - 2, sc + 2, Color->New(80, 180 + rune_pulse, 255, 180));
+		}
+		else if(tile = MapManager->Type->PILLAR) {
+			# stone pillar on floor center
+			px := (L(d) + R(d)) / 2;
+			pw := sc * 3 + 2;
+			pt := T(d) + (B(d) - T(d)) / 4;
+			pb := B(d) - sc * 2;
+			# shaft
+			@renderer->BoxColor(px - pw, pt, px + pw, pb, Color->New(100, 95, 88));
+			# capital
+			@renderer->BoxColor(px - pw - 3, pt - 3, px + pw + 3, pt + 3, Color->New(115, 108, 98));
+			# base
+			@renderer->BoxColor(px - pw - 3, pb - 3, px + pw + 3, pb + 3, Color->New(115, 108, 98));
+		}
+		else if(tile = MapManager->Type->FOUNTAIN) {
+			# fountain on floor center
+			fx := (L(d) + R(d)) / 2;
+			fy := B(d) - sc * 4;
+			fr := sc * 4 + 3;
+			# basin
+			@renderer->FilledEllipseColor(fx, fy + 2, fr + 4, fr / 2 + 2, Color->New(75, 65, 60));
+			# liquid color: blood in Abyss, water elsewhere
+			liquid_r := 40; liquid_g := 80; liquid_b := 160;
+			if(fi = 3) {
+				liquid_r := 140; liquid_g := 20; liquid_b := 20;
+			};
+			@renderer->FilledEllipseColor(fx, fy, fr + 2, fr / 2, Color->New(liquid_r, liquid_g, liquid_b, 180));
+			# spout
+			@renderer->ThickLineColor(fx, fy - fr * 2, fx, fy - fr / 2, 2, Color->New(85, 75, 65));
+		};
+	}
+
+	method : public : RenderPlayerHit() ~ Nil {
+		@renderer->BoxColor(15, 7, 429, 310, Color->New(180, 20, 20, 60));
+	}
+
+	method : public : RenderMonsterHit() ~ Nil {
+		@renderer->BoxColor(15, 7, 429, 310, Color->New(220, 220, 220, 40));
+	}
+}
+
+#~
+Sprite helper for monster and map tile rendering (temporary - will be replaced by procedural art)
 ~#
 class SpriteManager from Manager {
 	@framework : GameFramework;
-	@dungeon_sprites : AnimatedImageSprite[];
 	@map_sprites : AnimatedImageSprite;
 	@monster_sprites : AnimatedImageSprite;
 
 	New(path : String, framework : GameFramework) {
 		Parent();
 		@framework := framework;
-		@dungeon_sprites := AnimatedImageSprite->New[SpriteManager->Clips->DUNGEON_SHEETS];
-		@dungeon_sprites[0] := @framework->AddAnimatedImageSprite("{$path}/dungeon_0.png");
-		@dungeon_sprites[1] := @framework->AddAnimatedImageSprite("{$path}/dungeon_1.png");
-		@dungeon_sprites[2] := @framework->AddAnimatedImageSprite("{$path}/dungeon_2.png");
-		@dungeon_sprites[3] := @framework->AddAnimatedImageSprite("{$path}/dungeon_3.png");
-		@dungeon_sprites[4] := @framework->AddAnimatedImageSprite("{$path}/dungeon_4.png");
-		@dungeon_sprites[5] := @framework->AddAnimatedImageSprite("{$path}/dungeon_5.png");
-
 		@map_sprites := @framework->AddAnimatedImageSprite("{$path}/map_0.png");
-
 		@monster_sprites := @framework->AddAnimatedImageSprite("{$path}/monsters_1.png");
 	}
 
 	method : public : Load() ~ Bool {
-		# dungeon sprites
-		for(i := 0; i < Clips->DUNGEON_SHEETS; i += 1;) {
-			if(<>@dungeon_sprites[i]->IsOk()) {
-				"--- Unable to load images! ---"->ErrorLine();
-				return false;
-			};
-
-			for(j := 0; j < Clips->DUNGEON_Y_CLIPS; j += 1;) {
-				for(k := 0; k < Clips->DUNGEON_X_CLIPS; k += 1;) {
-					@dungeon_sprites[i]->AddClip(Rect->New(k * 800, j * 600, 800, 600));
-				};
-			};
-			@dungeon_sprites[i]->SetTop(15);
-			@dungeon_sprites[i]->SetLeft(15);
-			@dungeon_sprites[i]->SetScale(0.5);
-		};
-
 		# map sprites
 		if(<>@map_sprites->IsOk()) {
-			"--- Unable to load images! ---"->ErrorLine();
+			"--- Unable to load map sprites! ---"->ErrorLine();
 			return false;
 		};
 		@map_sprites->AddClips(Clips->MAP_X_CLIPS, 14, Clips->MAP_Y_CLIPS, 14);
 
 		# monster sprites
 		if(<>@monster_sprites->IsOk()) {
-			"--- Unable to load images! ---"->ErrorLine();
+			"--- Unable to load monster sprites! ---"->ErrorLine();
 			return false;
-		};		
+		};
 		@monster_sprites->AddClips(Clips->MONSTER_X_CLIPS, 188, Clips->MONSTER_Y_CLIPS, 224);
-		
+
 		return true;
-	}
-
-	# --- Dungeon Transform for Animation ---
-
-	method : public : SetDungeonTransform(scale : Float, top : Int, left : Int) ~ Nil {
-		each(i : @dungeon_sprites) {
-			@dungeon_sprites[i]->SetScale(scale);
-			@dungeon_sprites[i]->SetTop(top);
-			@dungeon_sprites[i]->SetLeft(left);
-		};
-	}
-
-	method : public : ResetDungeonTransform() ~ Nil {
-		each(i : @dungeon_sprites) {
-			@dungeon_sprites[i]->SetScale(0.5);
-			@dungeon_sprites[i]->SetTop(15);
-			@dungeon_sprites[i]->SetLeft(15);
-		};
-	}
-
-	# -------------
-
-	method : public : RenderMonsterHit() ~ Nil {
-		@dungeon_sprites[4]->Render(4);		
-	}
-
-	method : public : RenderPlayerHit() ~ Nil {
-		@dungeon_sprites[4]->Render(8);		
-	}
-
-	method : public : RenderPotion() ~ Nil {
-		@dungeon_sprites[5]->Render(3);
-	}
-
-	method : public : RenderLoot() ~ Nil {
-		@dungeon_sprites[5]->Render(7);
-	}
-
-	method : public : RenderDistantDown() ~ Nil {
-		@dungeon_sprites[5]->Render(19);
-	}
-
-	method : public : RenderDown() ~ Nil {
-		@dungeon_sprites[5]->Render(15);
-	}
-
-
-	method : public : RenderDistantUp() ~ Nil {
-		@dungeon_sprites[5]->Render(11);
-	}
-
-	method : public : RenderUp() ~ Nil {
-		@dungeon_sprites[5]->Render(23);
-	}
-
-	# -------------
-
-	method : public : Render() ~ Nil {
-		@dungeon_sprites[5]->Render(0);
-	}
-
-	method : public : RenderDungeonSprite(raw_index : Int) ~ Nil {
-		if(raw_index > -1) {
-			sheet_size := Clips->DUNGEON_Y_CLIPS * Clips->DUNGEON_X_CLIPS;
-			sheet_index := raw_index / sheet_size;
-			image_index := raw_index - sheet_index * sheet_size;
-# "### raw_index={$raw_index}: sheet_size={$sheet_size}, sheet_index={$sheet_index}, image_index={$image_index} ###"->PrintLine();
-			@dungeon_sprites[sheet_index]->Render(image_index);
-		};
 	}
 
 	method : public : RenderMapSprite(image_index : Int, top : Int, left : Int) ~ Nil {
@@ -576,17 +1208,11 @@ class SpriteManager from Manager {
 	}
 
 	method : public : Unload() ~ Nil {
-		
 	}
 
 	consts Clips {
-		DUNGEON_X_CLIPS := 4,
-		DUNGEON_Y_CLIPS := 6,
-		DUNGEON_SHEETS := 6,
-
 		MAP_X_CLIPS := 8,
 		MAP_Y_CLIPS := 1,
-		
 		MONSTER_X_CLIPS := 4,
 		MONSTER_Y_CLIPS := 3
 	}
@@ -661,7 +1287,10 @@ class SoundManager from Manager {
 			"--- Cannot load music: '{$music_path}'! ---"->ErrorLine();
 		};
 		@music->PlayMusic(-1);
-		@music->VolumeMusic(63);
+		@music->VolumeMusic(40);
+
+		# turn down sound effects (all channels, 0-128 range)
+		Mixer->Volume(-1, 24);
 
 		return true;
 	}
