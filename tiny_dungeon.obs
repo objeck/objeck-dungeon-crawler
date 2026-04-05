@@ -52,6 +52,7 @@ class TinyDungeon {
 	# --- Animation ---
 	@anim_counter : Int;
 	@anim_type : Int;
+	@anim_max_frames : Int;
 
 	# --- Atmosphere ---
 	@flicker_counter : Int;
@@ -67,12 +68,25 @@ class TinyDungeon {
 	@flavor_timer : Int;
 	@quest_text : TextSprite;
 
+	# --- Merchant ---
+	@merchant_option : Int;
+
+	# --- Reusable temp arrays (avoid per-frame allocations) ---
+	@tri_vx : Int[];
+	@tri_vy : Int[];
+
+	# --- Plaques ---
+	@plaque_texts : String[];
+	@plaque_text_sprite : TextSprite;
+	@plaque_timer : Int;
+
 	# --- Game State ---
 	@game_state : Int;
 	@current_floor : Int;
 	@max_floors : Int;
 	@monsters_killed : Int;
 	@boss_fight : Bool;
+	@mini_boss_fight : Bool;
 
 	# --- Combat UI ---
 	@monster_name_text : TextSprite;
@@ -83,6 +97,22 @@ class TinyDungeon {
 	@reward_timer : Int;
 	@levelup_text : TextSprite;
 	@levelup_timer : Int;
+
+	# --- Puzzle Door State ---
+	@puzzle_active : Bool;
+	@puzzle_type : Int;          # 0=rune, 1=spell, 2=key
+	@puzzle_sequence : Int[];    # rune door: direction sequence (0=N,1=S,2=E,3=W)
+	@puzzle_seq_len : Int;
+	@puzzle_input_pos : Int;     # how many correct inputs so far
+	@puzzle_text : TextSprite;
+	@puzzle_timer : Int;
+	@puzzle_spell_element : Int; # spell door: 0=fire,1=frost,2=lightning
+	@has_dungeon_key : Bool;
+
+	# --- Combat Attack Animation ---
+	@attack_anim_timer : Int;
+	@attack_anim_type : Int;   # 0=none, 1=slash, 2=smite, 3=bolt, 4=cut
+	@attack_anim_frame : Int;
 
 	# --- Terminal screen texts ---
 	@terminal_title : TextSprite;
@@ -101,6 +131,7 @@ class TinyDungeon {
 	@class_desc : TextSprite[];
 	@class_cursor : Int;
 	@class_select_text : TextSprite;
+	@class_inst_text : TextSprite;
 
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Warden of Greyhold");
@@ -128,10 +159,25 @@ class TinyDungeon {
 		@max_floors := 4;
 		@monsters_killed := 0;
 		@boss_fight := false;
+		@mini_boss_fight := false;
 
 		# animation
 		@anim_counter := 0;
 		@anim_type := 0;
+		@anim_max_frames := 12;
+
+		# puzzle state
+		@puzzle_active := false;
+		@puzzle_sequence := Int->New[4];
+		@puzzle_seq_len := 3;
+		@puzzle_input_pos := 0;
+		@puzzle_timer := 0;
+		@has_dungeon_key := false;
+		@attack_anim_timer := 0;
+		@tri_vx := Int->New[3];
+		@tri_vy := Int->New[3];
+		@attack_anim_type := 0;
+		@attack_anim_frame := 0;
 
 		@debug := true;
 	}
@@ -163,6 +209,9 @@ class TinyDungeon {
 		@class_cursor := 0;
 		@class_select_text := @framework->AddTextSprite();
 		@class_select_text->RenderedText("Choose Your Class", Color->New(220, 180, 60));
+
+		@class_inst_text := @framework->AddTextSprite();
+		@class_inst_text->RenderedText("UP/DOWN to select, SPACE to confirm, ESC to go back", Color->New(120, 110, 90));
 
 		@class_texts := TextSprite->New[4];
 		@class_desc := TextSprite->New[4];
@@ -322,7 +371,7 @@ class TinyDungeon {
 		@floor_text->RenderedText("Floor 1", Color->New(220, 200, 140));
 
 		# flavor texts
-		@flavor_texts := String->New[8];
+		@flavor_texts := String->New[12];
 		@flavor_texts[0] := "You hear dripping water...";
 		@flavor_texts[1] := "A cold wind blows...";
 		@flavor_texts[2] := "Shadows dance on the walls...";
@@ -331,6 +380,10 @@ class TinyDungeon {
 		@flavor_texts[5] := "Torchlight flickers ominously...";
 		@flavor_texts[6] := "A faint growl in the dark...";
 		@flavor_texts[7] := "Stones crumble underfoot...";
+		@flavor_texts[8] := "Strange runes glow ahead...";
+		@flavor_texts[9] := "Spores drift in the stale air...";
+		@flavor_texts[10] := "Something moves in the chest...";
+		@flavor_texts[11] := "A sealed door blocks the way...";
 
 		@flavor_text := @framework->AddTextSprite();
 		@flavor_text->RenderedText(@flavor_texts[0], Color->New(160, 140, 100));
@@ -339,6 +392,35 @@ class TinyDungeon {
 		# quest objective
 		@quest_text := @framework->AddTextSprite();
 		@quest_text->RenderedText("Find the ladder down to Floor 2", Color->New(180, 170, 130));
+
+		# wall plaque messages
+		@plaque_texts := String->New[24];
+		@plaque_texts[0] := "The Warden Order fell in the Third Age.";
+		@plaque_texts[1] := "Search the walls. Not all stone is solid.";
+		@plaque_texts[2] := "Fire melts ice. Frost quenches flame.";
+		@plaque_texts[3] := "The deeper you go, the darker it gets.";
+		@plaque_texts[4] := "Tents restore body and spirit alike.";
+		@plaque_texts[5] := "Beware the chest that bites back.";
+		@plaque_texts[6] := "A merchant lurks in these halls.";
+		@plaque_texts[7] := "Cursed steel cuts deep but poisons the soul.";
+		@plaque_texts[8] := "The runes speak to those who listen.";
+		@plaque_texts[9] := "Remember the sequence. Forget and bleed.";
+		@plaque_texts[10] := "Champions guard the treasures of old.";
+		@plaque_texts[11] := "Malachar waits below. Are you ready?";
+		@plaque_texts[12] := "Here lie the bones of the 4th Warden.";
+		@plaque_texts[13] := "The eyes see all. Close yours.";
+		@plaque_texts[14] := "Stone does not breathe. Stone does not die.";
+		@plaque_texts[15] := "Fungi thrive where the dead decay.";
+		@plaque_texts[16] := "The knight strikes hard. The ninja strikes true.";
+		@plaque_texts[17] := "Pray at altars. Rest at camps.";
+		@plaque_texts[18] := "Gold buys safety. Courage buys glory.";
+		@plaque_texts[19] := "Three fell to poison. One fell to pride.";
+		@plaque_texts[20] := "The seal requires the right element.";
+		@plaque_texts[21] := "Every step deeper brings new horrors.";
+		@plaque_texts[22] := "Keys open what force cannot.";
+		@plaque_texts[23] := "Turn back. Or don't. It matters not.";
+		@plaque_text_sprite := @framework->AddTextSprite();
+		@plaque_timer := 0;
 	}
 
 	method : MakeCombatUI() ~ Nil {
@@ -350,6 +432,7 @@ class TinyDungeon {
 		@reward_timer := 0;
 		@levelup_text := @framework->AddTextSprite();
 		@levelup_timer := 0;
+		@puzzle_text := @framework->AddTextSprite();
 	}
 
 	method : RefreshStats() ~ Nil {
@@ -402,9 +485,9 @@ class TinyDungeon {
 
 		potion2_text : String;
 		player_potion2 := @player->GetPotion2();
-		if(player_potion2 <> Nil & @player->GetPotion1()->GetCount() > 0) {
-			 potion_desc := @player->GetPotion2()->ToString();
-			 potion_count := @player->GetPotion2()->GetCount();
+		if(player_potion2 <> Nil & player_potion2->GetCount() > 0) {
+			 potion_desc := player_potion2->ToString();
+			 potion_count := player_potion2->GetCount();
 			 potion2_text := "{$potion_desc} x {$potion_count}";
 		}
 		else {
@@ -413,9 +496,9 @@ class TinyDungeon {
 
 		potion3_text : String;
 		player_potion3 := @player->GetPotion3();
-		if(player_potion3 <> Nil & @player->GetPotion1()->GetCount() > 0) {
-			 potion_desc := @player->GetPotion3()->ToString();
-			 potion_count := @player->GetPotion3()->GetCount();
+		if(player_potion3 <> Nil & player_potion3->GetCount() > 0) {
+			 potion_desc := player_potion3->ToString();
+			 potion_count := player_potion3->GetCount();
 			 potion3_text := "{$potion_desc} x {$potion_count}";
 		}
 		else {
@@ -489,6 +572,9 @@ class TinyDungeon {
 		@player_nav_map[@player_location[0], @player_location[1]] := 1;
 
 		@can_show_item := false;
+		@has_dungeon_key := false;
+		@puzzle_active := false;
+		@puzzle_timer := 0;
 
 		if(inc_level > 0) {
 			@current_floor += 1;
@@ -581,10 +667,82 @@ class TinyDungeon {
 			return;
 		};
 
+		# --- Puzzle input mode ---
+		if(@puzzle_active & @puzzle_type = 0) {
+			# rune door: match arrow sequence
+			code := e->GetKey()->GetKeysym()->GetScancode();
+			input_dir := -1;
+			if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) { input_dir := 0; }
+			else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) { input_dir := 1; }
+			else if(code = Scancode->SDL_SCANCODE_RIGHT | code = Scancode->SDL_SCANCODE_D) { input_dir := 2; }
+			else if(code = Scancode->SDL_SCANCODE_LEFT | code = Scancode->SDL_SCANCODE_A) { input_dir := 3; }
+			else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+				# cancel puzzle
+				@puzzle_active := false;
+				@puzzle_timer := 0;
+				return;
+			};
+
+			if(input_dir >= 0) {
+				if(input_dir = @puzzle_sequence[@puzzle_input_pos]) {
+					@puzzle_input_pos += 1;
+					if(@puzzle_input_pos >= @puzzle_seq_len) {
+						# puzzle solved!
+						@puzzle_active := false;
+						@puzzle_timer := 0;
+						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@view_type := MapManager->Type->OPEN;
+						@can_show_item := false;
+						gold_amount := 25 + @current_floor * 15 + Int->Random(0, 30);
+						@player->AddGold(gold_amount);
+						@reward_text->RenderedText("Rune door opens! +{$gold_amount} gold!", Color->New(100, 200, 255));
+						@reward_timer := 60;
+						RefreshStats();
+						RefreshItems();
+					}
+					else {
+						# show progress
+						progress := @puzzle_input_pos;
+						@puzzle_text->RenderedText("{$progress}/{$@puzzle_seq_len} correct...", Color->New(100, 220, 100));
+						@puzzle_timer := 60;
+					};
+				}
+				else {
+					# wrong input - take damage and reset
+					dmg := 3 + @current_floor * 2;
+					@player->UpdateHp(dmg);
+					@damage_text->RenderedText("-{$dmg} Wrong sequence!", Color->New(255, 80, 40));
+					@damage_timer := 30;
+					@damage_is_player := true;
+					@puzzle_active := false;
+					@puzzle_timer := 0;
+					RefreshStats();
+					if(<>@player->IsAlive()) { @game_state := 1; ShowTerminalScreen(); };
+				};
+			};
+			return;
+		};
+
 		select(e->GetKey()->GetKeysym()->GetScancode()) {
         	label Scancode->SDL_SCANCODE_UP
         	label Scancode->SDL_SCANCODE_W {
-        		if(@monster = Nil) {
+        		if(@monster = Nil & <>@puzzle_active) {
+        			# slow effect: skip every other move
+        			if(@player <> Nil & @player->IsSlowed()) {
+        				@damage_text->RenderedText("Slowed...", Color->New(150, 150, 200));
+        				@damage_timer := 10;
+        				@damage_is_player := true;
+        				@player->SetSlow(@player->IsSlowed() ? 0 : 0);
+        			};
+        			# confusion effect: random direction change before moving
+        			if(@player <> Nil & @player->IsConfused() & Int->Random(99) < 40) {
+        				confuse_dir := Int->Random(2);
+        				if(confuse_dir = 0) { MoveLeft(); }
+        				else if(confuse_dir = 1) { MoveRight(); };
+        				@damage_text->RenderedText("Confused!", Color->New(200, 150, 255));
+        				@damage_timer := 15;
+        				@damage_is_player := true;
+        			};
    					@sound_manager->Step();
 	        		MoveForward();
 	        		UpdateView();
@@ -592,7 +750,8 @@ class TinyDungeon {
 
 					# start forward animation
 					@anim_type := 1;
-					@anim_counter := 5;
+					@anim_max_frames := 12;
+					@anim_counter := 12;
 	        	};
         	}
 
@@ -605,7 +764,8 @@ class TinyDungeon {
 
 					# start turn left animation
 					@anim_type := 2;
-					@anim_counter := 4;
+					@anim_max_frames := 14;
+					@anim_counter := 14;
 	        	};
         	}
 
@@ -618,7 +778,8 @@ class TinyDungeon {
 
 					# start turn right animation
 					@anim_type := 3;
-					@anim_counter := 4;
+					@anim_max_frames := 14;
+					@anim_counter := 14;
 	        	};
         	}
 
@@ -632,6 +793,9 @@ class TinyDungeon {
 						@damage_text->RenderedText("-{$@player_hit}", Color->New(255, 60, 60));
 						@damage_timer := 20;
 						@damage_is_player := true;
+
+						# check monster special ability
+						ApplyMonsterAbility();
         			};
 
         			if(<>@player->IsAlive()) {
@@ -648,6 +812,16 @@ class TinyDungeon {
 							@damage_text->RenderedText("-{$@monster_hit}", Color->New(60, 255, 60));
 							@damage_timer := 20;
 							@damage_is_player := false;
+
+							# trigger class-based attack animation
+							select(@player->GetClassId()) {
+								label PlayerClass->KNIGHT { @attack_anim_type := 1; }
+								label PlayerClass->CLERIC { @attack_anim_type := 2; }
+								label PlayerClass->MAGE { @attack_anim_type := 3; }
+								label PlayerClass->NINJA { @attack_anim_type := 4; }
+							};
+							@attack_anim_timer := 20;
+							@attack_anim_frame := 20;
 						};
 
 	        			if(<>@monster->IsAlive()) {
@@ -677,9 +851,34 @@ class TinyDungeon {
 							};
 
 							# check boss victory
-							if(was_boss) {
+							if(was_boss & <>@mini_boss_fight) {
 								@game_state := 2;
 								ShowTerminalScreen();
+							};
+
+							# mini-boss guaranteed loot drop
+							if(@mini_boss_fight) {
+								tier := @current_floor + 1;
+								if(tier > 7) { tier := 7; };
+								if(Int->Random(1) = 0) {
+									new_weapon := TieredWeapon->Create(tier);
+									if(new_weapon->GetHit() > @player->GetWeapon()->GetHit()) {
+										@player->SetWeapon(new_weapon);
+									};
+									weapon_name := new_weapon->ToString();
+									@levelup_text->RenderedText("Champion's drop: {$weapon_name}!", Color->New(255, 200, 60));
+								}
+								else {
+									new_armor := TieredArmor->Create(tier);
+									if(new_armor->GetBlock() > @player->GetArmor()->GetBlock()) {
+										@player->SetArmor(new_armor);
+									};
+									armor_name := new_armor->ToString();
+									@levelup_text->RenderedText("Champion's drop: {$armor_name}!", Color->New(255, 200, 60));
+								};
+								@levelup_timer := 90;
+								@mini_boss_fight := false;
+								@boss_fight := false;
 							};
 
 	        				@monster := Nil;
@@ -695,6 +894,17 @@ class TinyDungeon {
        					AddPotion(Potion->Type->WEAK_HEALTH);
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
+	        			# mimic chance: 15% on floor 2+, the chest fights back!
+	        			if(@current_floor >= 2 & Int->Random(99) < 15 & @monster = Nil) {
+	        				fl := @current_floor;
+	        				@monster := Monster->CreateByFloor("Mimic", fl, 16 + fl * 4, 14, 10, 10, 36.0 + fl->As(Float) * 4.0, 16.0 + fl->As(Float) * 3.0, 25 + fl * 5, false);
+	        				@monster_sprint_index := MonsterID->MIMIC;
+	        				@monster_name_text->RenderedText("It's a Mimic!", Color->New(255, 200, 60));
+	        				@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+	        				@can_show_item := false;
+	        				RefreshStats();
+	        			}
+	        			else {
    						@sound_manager->TakeLoot();
 	        			# floor-scaled loot
 	        			gold_amount := 20 + @current_floor * 15 + Int->Random(0, 30);
@@ -703,25 +913,45 @@ class TinyDungeon {
 	        			# chance for weapon upgrade
 	        			if(Int->Random(99) < 35) {
 	        				tier := @current_floor + Int->Random(0, 1);
+	        				is_cursed := @current_floor >= 3 & Int->Random(99) < 20;
+	        				if(is_cursed) { tier += 1; };
 	        				if(tier > 7) { tier := 7; };
 	        				new_weapon := TieredWeapon->Create(tier);
-	        				if(new_weapon->GetHit() > @player->GetWeapon()->GetHit()) {
-	        					@player->SetWeapon(new_weapon);
-	        					weapon_name := new_weapon->ToString();
-	        					@reward_text->RenderedText("Found: {$weapon_name}!", Color->New(255, 220, 60));
-	        					@reward_timer := 60;
+	        				if(new_weapon->GetHit() > @player->GetWeapon()->GetHit() | is_cursed) {
+	        					if(<>@player->HasCursedWeapon() | <>is_cursed) {
+	        						@player->SetWeapon(new_weapon);
+	        						weapon_name := new_weapon->ToString();
+	        						if(is_cursed) {
+	        							@player->SetCursedWeapon(true);
+	        							@reward_text->RenderedText("Cursed: {$weapon_name}!", Color->New(180, 60, 180));
+	        						}
+	        						else {
+	        							@reward_text->RenderedText("Found: {$weapon_name}!", Color->New(255, 220, 60));
+	        						};
+	        						@reward_timer := 60;
+	        					};
 	        				};
 	        			}
 	        			# chance for armor upgrade
 	        			else if(Int->Random(99) < 35) {
 	        				tier := @current_floor + Int->Random(0, 1);
+	        				is_cursed := @current_floor >= 3 & Int->Random(99) < 20;
+	        				if(is_cursed) { tier += 1; };
 	        				if(tier > 7) { tier := 7; };
 	        				new_armor := TieredArmor->Create(tier);
-	        				if(new_armor->GetBlock() > @player->GetArmor()->GetBlock()) {
-	        					@player->SetArmor(new_armor);
-	        					armor_name := new_armor->ToString();
-	        					@reward_text->RenderedText("Found: {$armor_name}!", Color->New(255, 220, 60));
-	        					@reward_timer := 60;
+	        				if(new_armor->GetBlock() > @player->GetArmor()->GetBlock() | is_cursed) {
+	        					if(<>@player->HasCursedArmor() | <>is_cursed) {
+	        						@player->SetArmor(new_armor);
+	        						armor_name := new_armor->ToString();
+	        						if(is_cursed) {
+	        							@player->SetCursedArmor(true);
+	        							@reward_text->RenderedText("Cursed: {$armor_name}!", Color->New(180, 60, 180));
+	        						}
+	        						else {
+	        							@reward_text->RenderedText("Found: {$armor_name}!", Color->New(255, 220, 60));
+	        						};
+	        						@reward_timer := 60;
+	        					};
 	        				};
 	        			}
 	        			# chance for tent
@@ -732,6 +962,7 @@ class TinyDungeon {
 	        			};
 
 	        			RefreshStats();
+	        		    };
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_UP) {
 	        			StartLevel(1);
@@ -740,14 +971,160 @@ class TinyDungeon {
 	        			StartLevel(-1);
 	        		}
 					else if(@view_type = MapManager->Type->END) {
-						if(@current_floor >= @max_floors) {
-							@monster := Monster->CreateByFloor("Malachar", @current_floor, 55, 18, 12, 14, 48.0, 22.0, 100, true);
-							@monster_sprint_index := MonsterID->DEMON_LORD;
-							@boss_fight := true;
-							@monster_name_text->RenderedText("*** Malachar, the Undying ***", Color->New(255, 60, 60));
+						if(@current_floor >= @max_floors & @monster = Nil) {
+							SpawnBoss();
 						};
+					}
+					# --- Dungeon Key pickup ---
+					else if(@view_type = MapManager->Type->DUNGEON_KEY) {
+						@has_dungeon_key := true;
+						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@view_type := MapManager->Type->OPEN;
+						@can_show_item := false;
+						@reward_text->RenderedText("Found a Dungeon Key!", Color->New(220, 200, 60));
+						@reward_timer := 60;
+					}
+					# --- Rune Door: start arrow sequence puzzle ---
+					else if(@view_type = MapManager->Type->RUNE_DOOR) {
+						if(<>@puzzle_active) {
+							@puzzle_active := true;
+							@puzzle_type := 0;
+							@puzzle_seq_len := 3 + @current_floor / 3;
+							if(@puzzle_seq_len > 4) { @puzzle_seq_len := 4; };
+							# generate random sequence based on position
+							each(i : @puzzle_sequence) {
+								@puzzle_sequence[i] := Int->Random(3);
+							};
+							@puzzle_input_pos := 0;
+							# build display string
+							seq_str := "Repeat: ";
+							for(i := 0; i < @puzzle_seq_len; i += 1;) {
+								select(@puzzle_sequence[i]) {
+									label 0 { seq_str->Append("UP "); }
+									label 1 { seq_str->Append("DOWN "); }
+									label 2 { seq_str->Append("RIGHT "); }
+									label 3 { seq_str->Append("LEFT "); }
+								};
+							};
+							@puzzle_text->RenderedText(seq_str, Color->New(100, 180, 255));
+							@puzzle_timer := 90;
+						};
+					}
+					# --- Spell Door: cast matching element ---
+					else if(@view_type = MapManager->Type->SPELL_DOOR) {
+						if(<>@puzzle_active) {
+							@puzzle_active := true;
+							@puzzle_type := 1;
+							@puzzle_spell_element := Int->Random(2);
+							element_name : String;
+							select(@puzzle_spell_element) {
+								label 0 { element_name := "Cast FLAME to open"; }
+								label 1 { element_name := "Cast FROST to open"; }
+								label 2 { element_name := "Cast LIGHTNING to open"; }
+							};
+							@puzzle_text->RenderedText(element_name, Color->New(255, 140, 50));
+							@puzzle_timer := 120;
+						};
+					}
+					# --- Key Door: check for key ---
+					else if(@view_type = MapManager->Type->KEY_DOOR) {
+						if(@has_dungeon_key) {
+							@has_dungeon_key := false;
+							@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+							@view_type := MapManager->Type->OPEN;
+							@can_show_item := false;
+							# reward: guaranteed loot
+							gold_amount := 30 + @current_floor * 20 + Int->Random(0, 40);
+							@player->AddGold(gold_amount);
+							@reward_text->RenderedText("Door unlocked! +{$gold_amount} gold!", Color->New(255, 220, 60));
+							@reward_timer := 60;
+							RefreshStats();
+							RefreshItems();
+						}
+						else {
+							@damage_text->RenderedText("Locked! Find the dungeon key.", Color->New(200, 160, 60));
+							@damage_timer := 40;
+							@damage_is_player := false;
+						};
+					}
+					# --- Mini-Boss encounter ---
+					else if(@view_type = MapManager->Type->MINI_BOSS & @monster = Nil) {
+						fl := @current_floor;
+						if(fl <= 1) {
+							@monster := Monster->CreateByFloor("Skeletal Champion", fl, 20, 15, 10, 12, 38.0, 18.0, 35, false);
+							@monster_sprint_index := MonsterID->SKELETON;
+						}
+						else if(fl = 2) {
+							@monster := Monster->CreateByFloor("Vampire Lord", fl, 24, 16, 12, 11, 42.0, 18.0, 40, false);
+							@monster_sprint_index := MonsterID->VAMPIRE;
+						}
+						else if(fl = 3) {
+							@monster := Monster->CreateByFloor("Iron Golem", fl, 35, 18, 5, 20, 44.0, 30.0, 50, false);
+							@monster_sprint_index := MonsterID->GOLEM;
+						}
+						else {
+							@monster := Monster->CreateByFloor("Eye of Chaos", fl, 30, 16, 14, 14, 50.0, 22.0, 55, false);
+							@monster_sprint_index := MonsterID->EYE_TYRANT;
+						};
+						@boss_fight := true;
+						@mini_boss_fight := true;
+						monster_name := @monster->GetName();
+						@monster_name_text->RenderedText("** {$monster_name} **", Color->New(255, 180, 60));
+						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@can_show_item := false;
+					}
+					# --- Merchant interaction ---
+					else if(@view_type = MapManager->Type->MERCHANT) {
+						HandleMerchant();
+					}
+					# --- Slopes: just flavor text ---
+					else if(@view_type = MapManager->Type->SLOPE_UP) {
+						@damage_text->RenderedText("The passage slopes upward...", Color->New(160, 150, 120));
+						@damage_timer := 25;
+						@damage_is_player := false;
+					}
+					else if(@view_type = MapManager->Type->SLOPE_DOWN) {
+						@damage_text->RenderedText("The passage slopes downward...", Color->New(160, 150, 120));
+						@damage_timer := 25;
+						@damage_is_player := false;
+					}
+					# --- Safe room: rest and partial restore ---
+					else if(@view_type = MapManager->Type->SAFE_ROOM) {
+						# restore 40% HP and 30% MP, clear status effects
+						restore_hp := @player->GetMaxHp() * 2 / 5;
+						hp_before := @player->GetHp();
+						@player->UpdateHp(-restore_hp);
+						if(@player->GetHp() > @player->GetMaxHp()) {
+							@player->UpdateHp(@player->GetHp() - @player->GetMaxHp());
+						};
+						hp_gained := @player->GetHp() - hp_before;
+						# clear negative status
+						@player->SetPoison(0);
+						@player->SetBlind(0);
+						@player->SetConfuse(0);
+						@player->SetSlow(0);
+						@reward_text->RenderedText("Safe haven! +{$hp_gained} HP restored", Color->New(255, 220, 100));
+						@reward_timer := 60;
+						RefreshStats();
 					};
 	        	};
+        	}
+
+        	# Read wall plaque (F2) - face a wall with a plaque and read it
+        	label Scancode->SDL_SCANCODE_F2 {
+        		if(@monster = Nil) {
+        			# check if the wall ahead is a plaque
+        			if(@view_forward_type = MapManager->Type->PLAQUE) {
+        				idx := Int->Random(@plaque_texts->Size() - 1);
+        				@plaque_text_sprite->RenderedText(@plaque_texts[idx], Color->New(200, 190, 160));
+        				@plaque_timer := 120;
+        			}
+        			else {
+        				@damage_text->RenderedText("No inscription here.", Color->New(140, 130, 110));
+        				@damage_timer := 15;
+        				@damage_is_player := false;
+        			};
+        		};
         	}
 
         	# Potion 1
@@ -769,7 +1146,44 @@ class TinyDungeon {
 
         	# Cast spell (best available damage or heal)
         	label Scancode->SDL_SCANCODE_F6 {
-        		if(@monster <> Nil & @player <> Nil) {
+        		# spell door puzzle: cast matching element to open
+        		if(@puzzle_active & @puzzle_type = 1 & @player <> Nil) {
+        			required_spell : String;
+        			select(@puzzle_spell_element) {
+        				label 0 { required_spell := "Flame"; }
+        				label 1 { required_spell := "Frost"; }
+        				label 2 { required_spell := "Lightning"; }
+        			};
+        			# find and try to cast the matching spell
+        			cast_ok := false;
+        			for(i := 0; i < @player->GetNumSpells(); i += 1;) {
+        				sp := @player->GetSpell(i);
+        				if(sp <> Nil & sp->GetName()->Equals(required_spell) & @player->GetMp() >= sp->GetMpCost()) {
+        					power := @player->CastSpell(i);
+        					if(power > 0) {
+        						# spell door opens!
+        						@puzzle_active := false;
+        						@puzzle_timer := 0;
+        						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+        						@view_type := MapManager->Type->OPEN;
+        						@can_show_item := false;
+        						gold_amount := 30 + @current_floor * 20 + Int->Random(0, 35);
+        						@player->AddGold(gold_amount);
+        						@reward_text->RenderedText("Seal broken! +{$gold_amount} gold!", Color->New(255, 180, 60));
+        						@reward_timer := 60;
+        						cast_ok := true;
+        					};
+        				};
+        			};
+        			if(<>cast_ok) {
+        				@damage_text->RenderedText("Wrong element or not enough MP!", Color->New(255, 100, 60));
+        				@damage_timer := 30;
+        				@damage_is_player := false;
+        			};
+        			RefreshStats();
+        			RefreshItems();
+        		}
+        		else if(@monster <> Nil & @player <> Nil) {
         			# find best spell to cast
         			cast_idx := -1;
         			# if low HP, try heal first
@@ -811,6 +1225,11 @@ class TinyDungeon {
         						@damage_text->RenderedText("-{$power} ({$spell_name})", Color->New(100, 200, 255));
         						@damage_timer := 25;
         						@damage_is_player := false;
+
+        						# spell attack animation (always arcane bolt style)
+        						@attack_anim_type := 3;
+        						@attack_anim_timer := 20;
+        						@attack_anim_frame := 20;
 
         						if(<>@monster->IsAlive()) {
         							xp_reward := @monster->GetWinExp();
@@ -888,11 +1307,184 @@ class TinyDungeon {
         		};
         	}
 
+			# Search wall / bash (F1) - find secret walls
+			label Scancode->SDL_SCANCODE_F1 {
+				if(@monster = Nil) {
+					# check the tile directly ahead
+					fwd_type := @view_forward_type;
+					if(fwd_type = MapManager->Type->SECRET_WALL) {
+						# found a secret passage!
+						secret_pos := Int->New[2];
+						secret_pos[0] := @player_location[0];
+						secret_pos[1] := @player_location[1];
+						select(@player_direction) {
+							label MapManager->Direction->NORTH { secret_pos[0] -= 1; }
+							label MapManager->Direction->SOUTH { secret_pos[0] += 1; }
+							label MapManager->Direction->EAST { secret_pos[1] += 1; }
+							label MapManager->Direction->WEST { secret_pos[1] -= 1; }
+						};
+						@map_manager->SetType(secret_pos, MapManager->Type->LOOT);
+						UpdateView();
+						@reward_text->RenderedText("Secret passage found!", Color->New(255, 220, 100));
+						@reward_timer := 60;
+						@sound_manager->TakeLoot();
+					}
+					else if(fwd_type = MapManager->Type->BLOCKED) {
+						@damage_text->RenderedText("Nothing here...", Color->New(140, 130, 110));
+						@damage_timer := 15;
+						@damage_is_player := false;
+					}
+					else {
+						@damage_text->RenderedText("Search the walls ahead.", Color->New(140, 130, 110));
+						@damage_timer := 15;
+						@damage_is_player := false;
+					};
+				};
+			}
+
 			label Scancode->SDL_SCANCODE_ESCAPE {
 				@quit := true;
 			}
         };
 
+	}
+
+	method : ApplyMonsterAbility() ~ Nil {
+		if(@monster = Nil | @player = Nil) { return; };
+
+		gm := @monster->As(GenericMonster);
+		if(gm = Nil) { return; };
+
+		ability := gm->TryAbility();
+		if(ability = MonsterAbility->NONE) { return; };
+
+		select(ability) {
+			label MonsterAbility->POISON_BITE {
+				if(<>@player->IsPoisoned()) {
+					@player->SetPoison(6 + @current_floor * 2);
+					@reward_text->RenderedText("Poisoned!", Color->New(120, 255, 60));
+					@reward_timer := 40;
+				};
+			}
+
+			label MonsterAbility->LIFE_DRAIN {
+				drain := 3 + @current_floor;
+				@player->UpdateHp(drain);
+				@monster->UpdateHp(-drain);
+				@reward_text->RenderedText("Life drained! -{$drain} HP", Color->New(180, 40, 180));
+				@reward_timer := 40;
+			}
+
+			label MonsterAbility->STUN {
+				@player->SetSlow(4 + @current_floor);
+				@reward_text->RenderedText("Stunned! Slowed...", Color->New(150, 150, 220));
+				@reward_timer := 40;
+			}
+
+			label MonsterAbility->BLIND {
+				@player->SetBlind(5 + @current_floor * 2);
+				@reward_text->RenderedText("Blinded! Can't see the map!", Color->New(80, 80, 80));
+				@reward_timer := 40;
+			}
+
+			label MonsterAbility->CONFUSE {
+				@player->SetConfuse(6 + @current_floor);
+				@reward_text->RenderedText("Confused! Directions scrambled!", Color->New(200, 150, 255));
+				@reward_timer := 40;
+			}
+
+			label MonsterAbility->FIRE_BREATH {
+				burn := 5 + @current_floor * 2 + Int->Random(0, 4);
+				@player->UpdateHp(burn);
+				@reward_text->RenderedText("Fire breath! -{$burn} HP!", Color->New(255, 120, 30));
+				@reward_timer := 40;
+			}
+		};
+
+		RefreshStats();
+	}
+
+	method : HandleMerchant() ~ Nil {
+		if(@player = Nil) { return; };
+
+		# cycle through merchant options each press
+		@merchant_option += 1;
+		if(@merchant_option > 4) { @merchant_option := 1; };
+
+		gold := @player->GetGold();
+
+		select(@merchant_option) {
+			label 1 {
+				# buy health potion (25 gold)
+				if(gold >= 25) {
+					@player->AddGold(-25);
+					@player->AddPotion(Potion->Type->WEAK_HEALTH, 2);
+					@reward_text->RenderedText("Bought Health Potion x2 (-25g)", Color->New(100, 255, 100));
+					@reward_timer := 50;
+				}
+				else {
+					@damage_text->RenderedText("Not enough gold! (25g: Potion)", Color->New(200, 160, 60));
+					@damage_timer := 30;
+					@damage_is_player := false;
+				};
+			}
+
+			label 2 {
+				# buy tent (40 gold)
+				if(gold >= 40) {
+					@player->AddGold(-40);
+					@player->AddTent();
+					@reward_text->RenderedText("Bought a Tent (-40g)", Color->New(200, 200, 150));
+					@reward_timer := 50;
+				}
+				else {
+					@damage_text->RenderedText("Not enough gold! (40g: Tent)", Color->New(200, 160, 60));
+					@damage_timer := 30;
+					@damage_is_player := false;
+				};
+			}
+
+			label 3 {
+				# remove curse (50 gold)
+				if(@player->HasAnyCurse()) {
+					if(gold >= 50) {
+						@player->AddGold(-50);
+						@player->SetCursedWeapon(false);
+						@player->SetCursedArmor(false);
+						@reward_text->RenderedText("Curse lifted! (-50g)", Color->New(255, 255, 200));
+						@reward_timer := 60;
+					}
+					else {
+						@damage_text->RenderedText("Not enough gold! (50g: Remove Curse)", Color->New(200, 160, 60));
+						@damage_timer := 30;
+						@damage_is_player := false;
+					};
+				}
+				else {
+					@damage_text->RenderedText("No curses to remove.", Color->New(140, 130, 110));
+					@damage_timer := 20;
+					@damage_is_player := false;
+				};
+			}
+
+			label 4 {
+				# buy MP potion (30 gold)
+				if(gold >= 30) {
+					@player->AddGold(-30);
+					@player->AddPotion(Potion->Type->WEAK_MAGIC, 2);
+					@reward_text->RenderedText("Bought Magic Potion x2 (-30g)", Color->New(100, 150, 255));
+					@reward_timer := 50;
+				}
+				else {
+					@damage_text->RenderedText("Not enough gold! (30g: MP Potion)", Color->New(200, 160, 60));
+					@damage_timer := 30;
+					@damage_is_player := false;
+				};
+			}
+		};
+
+		RefreshStats();
+		RefreshItems();
 	}
 
 	method : ShowTerminalScreen() ~ Nil {
@@ -1028,13 +1620,17 @@ class TinyDungeon {
 		};
 	}
 
+	method : SpawnBoss() ~ Nil {
+		@monster := Monster->CreateByFloor("Malachar", @current_floor, 55, 18, 12, 14, 48.0, 22.0, 100, true);
+		@monster_sprint_index := MonsterID->DEMON_LORD;
+		@boss_fight := true;
+		@monster_name_text->RenderedText("*** Malachar, the Undying ***", Color->New(255, 60, 60));
+	}
+
 	method : CheckBattle() ~ Nil {
 		# boss encounter on END tile
 		if(@view_type = MapManager->Type->END & @current_floor >= @max_floors & @monster = Nil) {
-			@monster := Monster->CreateByFloor("Malachar", @current_floor, 55, 18, 12, 14, 48.0, 22.0, 100, true);
-			@monster_sprint_index := MonsterID->DEMON_LORD;
-			@boss_fight := true;
-			@monster_name_text->RenderedText("*** Malachar, the Undying ***", Color->New(255, 60, 60));
+			SpawnBoss();
 			return;
 		};
 
@@ -1047,32 +1643,36 @@ class TinyDungeon {
 			# floor-specific encounter tables with unique names and stats
 			#                                     name            fl  hp  str agi sta  wpn   arm  xp  boss
 			if(fl = 1) {
-				if(roll < 30)      { @monster := Monster->CreateByFloor("Giant Rat",     fl, 8,  12, 10, 5,  30.0, 10.0, 13, false); @monster_sprint_index := MonsterID->RAT; }
-				else if(roll < 55) { @monster := Monster->CreateByFloor("Cave Bat",      fl, 6,  9,  13, 4,  25.0, 8.0,  10, false); @monster_sprint_index := MonsterID->BAT; }
-				else if(roll < 75) { @monster := Monster->CreateByFloor("Skeleton",      fl, 10, 11, 8,  7,  32.0, 14.0, 15, false); @monster_sprint_index := MonsterID->SKELETON; }
-				else if(roll < 90) { @monster := Monster->CreateByFloor("Dungeon Spider", fl, 7,  10, 12, 5,  28.0, 9.0,  12, false); @monster_sprint_index := MonsterID->SPIDER; }
-				else               { @monster := Monster->CreateByFloor("Zombie",         fl, 14, 13, 5,  9,  34.0, 16.0, 18, false); @monster_sprint_index := MonsterID->ZOMBIE; };
+				if(roll < 25)      { @monster := Monster->CreateByFloor("Giant Rat",       fl, 8,  12, 10, 5,  30.0, 10.0, 13, false); @monster_sprint_index := MonsterID->RAT; }
+				else if(roll < 45) { @monster := Monster->CreateByFloor("Cave Bat",        fl, 6,  9,  13, 4,  25.0, 8.0,  10, false); @monster_sprint_index := MonsterID->BAT; }
+				else if(roll < 60) { @monster := Monster->CreateByFloor("Skeleton",        fl, 10, 11, 8,  7,  32.0, 14.0, 15, false); @monster_sprint_index := MonsterID->SKELETON; }
+				else if(roll < 75) { @monster := Monster->CreateByFloor("Dungeon Spider",  fl, 7,  10, 12, 5,  28.0, 9.0,  12, false); @monster_sprint_index := MonsterID->SPIDER; }
+				else if(roll < 88) { @monster := Monster->CreateByFloor("Zombie",          fl, 14, 13, 5,  9,  34.0, 16.0, 18, false); @monster_sprint_index := MonsterID->ZOMBIE; }
+				else               { @monster := Monster->CreateByFloor("Mushroom Fiend",  fl, 9,  8,  7,  6,  26.0, 12.0, 14, false); @monster_sprint_index := MonsterID->MUSHROOM; };
 			}
 			else if(fl = 2) {
-				if(roll < 25)      { @monster := Monster->CreateByFloor("Ghost",         fl, 11, 10, 8,  7,  35.0, 13.0, 14, false); @monster_sprint_index := MonsterID->GHOST; }
-				else if(roll < 50) { @monster := Monster->CreateByFloor("Shadow",        fl, 9,  11, 11, 6,  33.0, 11.0, 13, false); @monster_sprint_index := MonsterID->SHADOW; }
-				else if(roll < 70) { @monster := Monster->CreateByFloor("Ghoul",         fl, 13, 12, 7,  8,  36.0, 15.0, 16, false); @monster_sprint_index := MonsterID->GHOUL; }
-				else if(roll < 85) { @monster := Monster->CreateByFloor("Wraith",        fl, 10, 11, 9,  7,  38.0, 12.0, 15, false); @monster_sprint_index := MonsterID->WRAITH; }
-				else               { @monster := Monster->CreateByFloor("Dark Priest",   fl, 12, 10, 7,  9,  34.0, 17.0, 18, false); @monster_sprint_index := MonsterID->DARK_PRIEST; };
+				if(roll < 20)      { @monster := Monster->CreateByFloor("Ghost",           fl, 11, 10, 8,  7,  35.0, 13.0, 14, false); @monster_sprint_index := MonsterID->GHOST; }
+				else if(roll < 38) { @monster := Monster->CreateByFloor("Shadow",          fl, 9,  11, 11, 6,  33.0, 11.0, 13, false); @monster_sprint_index := MonsterID->SHADOW; }
+				else if(roll < 55) { @monster := Monster->CreateByFloor("Ghoul",           fl, 13, 12, 7,  8,  36.0, 15.0, 16, false); @monster_sprint_index := MonsterID->GHOUL; }
+				else if(roll < 70) { @monster := Monster->CreateByFloor("Wraith",          fl, 10, 11, 9,  7,  38.0, 12.0, 15, false); @monster_sprint_index := MonsterID->WRAITH; }
+				else if(roll < 85) { @monster := Monster->CreateByFloor("Dark Priest",     fl, 12, 10, 7,  9,  34.0, 17.0, 18, false); @monster_sprint_index := MonsterID->DARK_PRIEST; }
+				else               { @monster := Monster->CreateByFloor("Vampire",          fl, 14, 13, 10, 8,  38.0, 14.0, 20, false); @monster_sprint_index := MonsterID->VAMPIRE; };
 			}
 			else if(fl = 3) {
-				if(roll < 25)      { @monster := Monster->CreateByFloor("Ogre",          fl, 18, 15, 6,  12, 40.0, 20.0, 22, false); @monster_sprint_index := MonsterID->OGRE; }
-				else if(roll < 45) { @monster := Monster->CreateByFloor("Troll",         fl, 20, 14, 7,  13, 38.0, 22.0, 24, false); @monster_sprint_index := MonsterID->TROLL; }
-				else if(roll < 65) { @monster := Monster->CreateByFloor("Dark Knight",   fl, 16, 16, 9,  14, 44.0, 24.0, 26, false); @monster_sprint_index := MonsterID->DARK_KNIGHT; }
-				else if(roll < 85) { @monster := Monster->CreateByFloor("Gargoyle",      fl, 15, 13, 10, 15, 36.0, 26.0, 23, false); @monster_sprint_index := MonsterID->GARGOYLE; }
-				else               { @monster := Monster->CreateByFloor("Lich",           fl, 14, 12, 8,  10, 42.0, 18.0, 30, false); @monster_sprint_index := MonsterID->LICH; };
+				if(roll < 20)      { @monster := Monster->CreateByFloor("Ogre",            fl, 18, 15, 6,  12, 40.0, 20.0, 22, false); @monster_sprint_index := MonsterID->OGRE; }
+				else if(roll < 38) { @monster := Monster->CreateByFloor("Troll",           fl, 20, 14, 7,  13, 38.0, 22.0, 24, false); @monster_sprint_index := MonsterID->TROLL; }
+				else if(roll < 55) { @monster := Monster->CreateByFloor("Dark Knight",     fl, 16, 16, 9,  14, 44.0, 24.0, 26, false); @monster_sprint_index := MonsterID->DARK_KNIGHT; }
+				else if(roll < 70) { @monster := Monster->CreateByFloor("Gargoyle",        fl, 15, 13, 10, 15, 36.0, 26.0, 23, false); @monster_sprint_index := MonsterID->GARGOYLE; }
+				else if(roll < 82) { @monster := Monster->CreateByFloor("Lich",            fl, 14, 12, 8,  10, 42.0, 18.0, 30, false); @monster_sprint_index := MonsterID->LICH; }
+				else               { @monster := Monster->CreateByFloor("Stone Golem",     fl, 25, 16, 4,  18, 38.0, 28.0, 28, false); @monster_sprint_index := MonsterID->GOLEM; };
 			}
 			else {
-				if(roll < 25)      { @monster := Monster->CreateByFloor("Demon",         fl, 22, 16, 10, 13, 46.0, 22.0, 35, false); @monster_sprint_index := MonsterID->DEMON; }
-				else if(roll < 50) { @monster := Monster->CreateByFloor("Hellhound",     fl, 18, 15, 14, 10, 42.0, 18.0, 30, false); @monster_sprint_index := MonsterID->HELLHOUND; }
-				else if(roll < 70) { @monster := Monster->CreateByFloor("Dark Sorcerer", fl, 16, 12, 9,  11, 48.0, 16.0, 38, false); @monster_sprint_index := MonsterID->DARK_SORCERER; }
-				else if(roll < 85) { @monster := Monster->CreateByFloor("Dragon",        fl, 30, 18, 8,  16, 50.0, 28.0, 50, false); @monster_sprint_index := MonsterID->DRAGON; }
-				else               { @monster := Monster->CreateByFloor("Balor",          fl, 28, 17, 10, 15, 48.0, 26.0, 45, false); @monster_sprint_index := MonsterID->BALOR; };
+				if(roll < 20)      { @monster := Monster->CreateByFloor("Demon",           fl, 22, 16, 10, 13, 46.0, 22.0, 35, false); @monster_sprint_index := MonsterID->DEMON; }
+				else if(roll < 38) { @monster := Monster->CreateByFloor("Hellhound",       fl, 18, 15, 14, 10, 42.0, 18.0, 30, false); @monster_sprint_index := MonsterID->HELLHOUND; }
+				else if(roll < 55) { @monster := Monster->CreateByFloor("Dark Sorcerer",   fl, 16, 12, 9,  11, 48.0, 16.0, 38, false); @monster_sprint_index := MonsterID->DARK_SORCERER; }
+				else if(roll < 70) { @monster := Monster->CreateByFloor("Dragon",          fl, 30, 18, 8,  16, 50.0, 28.0, 50, false); @monster_sprint_index := MonsterID->DRAGON; }
+				else if(roll < 82) { @monster := Monster->CreateByFloor("Balor",           fl, 28, 17, 10, 15, 48.0, 26.0, 45, false); @monster_sprint_index := MonsterID->BALOR; }
+				else               { @monster := Monster->CreateByFloor("Eye Tyrant",      fl, 24, 14, 11, 12, 50.0, 20.0, 42, false); @monster_sprint_index := MonsterID->EYE_TYRANT; };
 			};
 
 			# show monster name
@@ -1109,7 +1709,12 @@ class TinyDungeon {
 	method : OnItem() ~ Bool {
 		return @view_type = MapManager->Type->POTION | @view_type = MapManager->Type->LOOT |
 			@view_type = MapManager->Type->LATTER_UP | @view_type = MapManager->Type->LATTER_DOWN |
-			@view_type = MapManager->Type->END;
+			@view_type = MapManager->Type->END |
+			@view_type = MapManager->Type->RUNE_DOOR | @view_type = MapManager->Type->SPELL_DOOR |
+			@view_type = MapManager->Type->KEY_DOOR | @view_type = MapManager->Type->DUNGEON_KEY |
+			@view_type = MapManager->Type->MERCHANT | @view_type = MapManager->Type->MINI_BOSS |
+			@view_type = MapManager->Type->SLOPE_UP | @view_type = MapManager->Type->SLOPE_DOWN |
+			@view_type = MapManager->Type->SAFE_ROOM;
 	}
 
 	method : IsEnvironment() ~ Bool {
@@ -1123,7 +1728,9 @@ class TinyDungeon {
 	}
 
 	method : IsOpen(player_view : Int) ~ Bool {
-		return player_view >= MapManager->Type->OPEN & player_view <> MapManager->Type->NONE & player_view <> MapManager->Type->BLOCKED;
+		return player_view >= MapManager->Type->OPEN & player_view <> MapManager->Type->NONE &
+			player_view <> MapManager->Type->BLOCKED & player_view <> MapManager->Type->SECRET_WALL &
+			player_view <> MapManager->Type->PLAQUE;
 	}
 
 	method : MoveLeft() ~ Nil {
@@ -1168,22 +1775,30 @@ class TinyDungeon {
 
 	method : UpdateAnimation() ~ Nil {
 		if(@anim_counter > 0) {
-			t := @anim_counter->As(Float);
+			max_frames := @anim_max_frames;
+			progress := 1.0 - @anim_counter->As(Float) / max_frames->As(Float);
+			# ease-out: fast start, smooth deceleration
+			ease := 1.0 - (1.0 - progress) * (1.0 - progress);
 
 			if(@anim_type = 1) {
-				# forward: slight bounce
-				oy := (t * 1.5)->As(Int);
-				@dungeon_renderer->SetAnimOffset(0, -oy);
+				# forward: perspective zoom with subtle head bob
+				zoom := (ease * 18.0)->As(Int);
+				bob := (Float->Sin(progress * 3.14) * 3.0)->As(Int);
+				@dungeon_renderer->SetAnimOffset(0, -zoom + bob);
 			}
 			else if(@anim_type = 2) {
-				# turn left: slide from right
-				ox := (5.0 * t / 4.0)->As(Int);
-				@dungeon_renderer->SetAnimOffset(ox, 0);
+				# turn left: dramatic wall sweep from right
+				sweep := 1.0 - ease;
+				ox := (sweep * 60.0)->As(Int);
+				oy := (Float->Sin(ease * 3.14) * 3.0)->As(Int);
+				@dungeon_renderer->SetAnimOffset(ox, -oy);
 			}
 			else if(@anim_type = 3) {
-				# turn right: slide from left
-				ox := (5.0 * t / 4.0)->As(Int);
-				@dungeon_renderer->SetAnimOffset(-ox, 0);
+				# turn right: dramatic wall sweep from left
+				sweep := 1.0 - ease;
+				ox := (sweep * 60.0)->As(Int);
+				oy := (Float->Sin(ease * 3.14) * 3.0)->As(Int);
+				@dungeon_renderer->SetAnimOffset(-ox, -oy);
 			};
 
 			@anim_counter -= 1;
@@ -1225,6 +1840,33 @@ class TinyDungeon {
 		# dungeon view
 		RenderDungeon(frame_count);
 
+		# slope visual effect when on or looking at slope tiles
+		if(@view_type = MapManager->Type->SLOPE_UP | @view_type = MapManager->Type->SLOPE_DOWN) {
+			@dungeon_renderer->RenderSlopeEffect(@view_type, @current_floor);
+		}
+		else if(@view_forward_type = MapManager->Type->SLOPE_UP | @view_forward_type = MapManager->Type->SLOPE_DOWN) {
+			@dungeon_renderer->RenderSlopeEffect(@view_forward_type, @current_floor);
+		};
+
+		# movement transition overlay
+		if(@anim_counter > 0) {
+			progress := 1.0 - @anim_counter->As(Float) / @anim_max_frames->As(Float);
+
+			# 45-degree corner view during turns (strongest at mid-turn)
+			if(@anim_type = 2 | @anim_type = 3) {
+				# bell curve intensity: peaks at progress=0.5
+				corner_intensity := Float->Sin(progress * 3.14);
+				if(corner_intensity > 0.15) {
+					fi := @current_floor - 1;
+					if(fi < 0) { fi := 0; };
+					if(fi > 3) { fi := 3; };
+					@dungeon_renderer->RenderCornerView(@anim_type, corner_intensity, fi);
+				};
+			};
+
+			@dungeon_renderer->RenderTransition(@anim_type, progress);
+		};
+
 		# monster combat
 		if(@monster <> Nil) {
 			RenderMonster(frame_count);
@@ -1238,6 +1880,12 @@ class TinyDungeon {
 				@monster_hit -= 1;
 			};
 
+			# class-based attack animation overlay
+			if(@attack_anim_timer > 0) {
+				@dungeon_renderer->RenderAttackAnim(@attack_anim_type, @attack_anim_timer, 20);
+				@attack_anim_timer -= 1;
+			};
+
 			# monster name
 			@monster_name_text->Render(170, 100);
 
@@ -1245,15 +1893,24 @@ class TinyDungeon {
 			renderer := @framework->GetRenderer();
 			renderer->BoxColor(15, 312, 429, 328, Color->New(25, 15, 8));
 			hint_color := Color->New(160, 150, 120);
-			@quest_text->RenderedText("SPACE:Attack  F5:Potion  F6:Spell  F7:Flee", hint_color);
+			@quest_text->RenderedText("SPC:Attack F5:Potion F6:Spell F7:Flee", hint_color);
 			@quest_text->Render(25, 314);
 		};
 
 		# border
 		RenderBorder();
 
-		# minimap
-		RenderMap(frame_count);
+		# minimap (hidden when blinded)
+		if(@player = Nil | <>@player->IsBlind()) {
+			RenderMap(frame_count);
+		}
+		else {
+			# blinded - show dark overlay where map would be
+			renderer2 := @framework->GetRenderer();
+			renderer2->BoxColor(445, 15, 750, 295, Color->New(10, 5, 3));
+			@flavor_text->RenderedText("You can't see!", Color->New(180, 80, 80));
+			@flavor_text->Render(530, 140);
+		};
 
 		# compass and floor indicator
 		@compass_text->Render(448, 300);
@@ -1285,6 +1942,45 @@ class TinyDungeon {
 				@flavor_text->RenderedText(@flavor_texts[idx], @flavor_color);
 				@flavor_timer := 120;
 			};
+		};
+
+		# puzzle door UI overlay
+		if(@puzzle_active & @puzzle_timer > 0) {
+			renderer := @framework->GetRenderer();
+			# dark overlay
+			renderer->BoxColor(60, 130, 380, 190, Color->New(15, 10, 8, 200));
+			renderer->RectangleColor(60, 130, 380, 190, Color->New(120, 100, 60));
+			@puzzle_text->Render(75, 145);
+			if(@puzzle_type = 0) {
+				hint_text := "Use arrow keys to match the sequence";
+				@flavor_text->RenderedText(hint_text, Color->New(140, 130, 100));
+				@flavor_text->Render(75, 168);
+			}
+			else if(@puzzle_type = 1) {
+				@flavor_text->RenderedText("Press F6 to cast", Color->New(140, 130, 100));
+				@flavor_text->Render(75, 168);
+			};
+			@puzzle_timer -= 1;
+			if(@puzzle_timer = 0) {
+				@puzzle_active := false;
+			};
+		};
+
+		# plaque inscription overlay
+		if(@plaque_timer > 0) {
+			renderer := @framework->GetRenderer();
+			# stone tablet background
+			renderer->BoxColor(40, 120, 400, 175, Color->New(110, 105, 90, 220));
+			renderer->RectangleColor(40, 120, 400, 175, Color->New(80, 75, 60));
+			renderer->RectangleColor(43, 123, 397, 172, Color->New(130, 125, 110, 150));
+			# decorative corners
+			renderer->FilledCircleColor(48, 128, 3, Color->New(140, 135, 120));
+			renderer->FilledCircleColor(392, 128, 3, Color->New(140, 135, 120));
+			renderer->FilledCircleColor(48, 167, 3, Color->New(140, 135, 120));
+			renderer->FilledCircleColor(392, 167, 3, Color->New(140, 135, 120));
+			# inscription text
+			@plaque_text_sprite->Render(55, 140);
+			@plaque_timer -= 1;
 		};
 
 		# damage text
@@ -1371,11 +2067,9 @@ class TinyDungeon {
 			@class_desc[i]->Render(80, y + 28);
 		};
 
-		# instructions
+		# instructions (blink)
 		if((frame / 35) % 2 = 0) {
-			inst := @framework->AddTextSprite();
-			inst->RenderedText("UP/DOWN to select, SPACE to confirm, ESC to go back", Color->New(120, 110, 90));
-			inst->Render(Game->SCREEN_WIDTH / 2 - inst->GetWidth() / 2, Game->SCREEN_HEIGHT - 40);
+			@class_inst_text->Render(Game->SCREEN_WIDTH / 2 - @class_inst_text->GetWidth() / 2, Game->SCREEN_HEIGHT - 40);
 		};
 
 		@framework->Show();
@@ -1478,17 +2172,20 @@ class TinyDungeon {
 		# humanoids and large monsters draw higher
 		m_cy := 220;
 		mid := @monster_sprint_index;
-		if(mid = MonsterID->RAT | mid = MonsterID->SPIDER | mid = MonsterID->HELLHOUND) {
+		if(mid = MonsterID->RAT | mid = MonsterID->SPIDER | mid = MonsterID->HELLHOUND | mid = MonsterID->MUSHROOM) {
 			m_cy := 245;
 		}
-		else if(mid = MonsterID->BAT) {
+		else if(mid = MonsterID->BAT | mid = MonsterID->EYE_TYRANT) {
 			m_cy := 190;
 		}
-		else if(mid = MonsterID->DRAGON | mid = MonsterID->DEMON_LORD | mid = MonsterID->BALOR) {
+		else if(mid = MonsterID->DRAGON | mid = MonsterID->DEMON_LORD | mid = MonsterID->BALOR | mid = MonsterID->GOLEM) {
 			m_cy := 195;
 		}
 		else if(mid = MonsterID->OGRE | mid = MonsterID->TROLL) {
 			m_cy := 205;
+		}
+		else if(mid = MonsterID->MIMIC) {
+			m_cy := 250;
 		};
 
 		MonsterArt->Draw(renderer, @monster_sprint_index, 222, m_cy, frame_count);
@@ -1521,6 +2218,7 @@ class TinyDungeon {
 	}
 
 	method : RenderMap(frame_count : Int) ~ Nil {
+		renderer := @framework->GetRenderer();
 		x_offset := 445;
 		for(i := 0; i < MapManager->Type->MAP_SIZE; i += 1;) {
 			y_offset := 15;
@@ -1550,6 +2248,94 @@ class TinyDungeon {
 					}
 					else {
 						@sprite_manager->RenderMapSprite(1, y_offset, x_offset);
+
+						# draw item/feature indicators on explored tiles
+						tile := @map_manager->GetType(j, i);
+						dot_x := x_offset + 8;
+						dot_y := y_offset + 8;
+
+						select(tile) {
+							label MapManager->Type->POTION {
+								# green dot
+								renderer->FilledCircleColor(dot_x, dot_y, 3, Color->New(40, 200, 60, 220));
+							}
+
+							label MapManager->Type->LOOT {
+								# gold dot
+								renderer->FilledCircleColor(dot_x, dot_y, 3, Color->New(220, 180, 40, 220));
+							}
+
+							label MapManager->Type->LATTER_UP {
+								# bright white filled down-triangle (ladder deeper)
+								@tri_vx[0] := dot_x - 4; @tri_vy[0] := dot_y - 3;
+								@tri_vx[1] := dot_x + 4; @tri_vy[1] := dot_y - 3;
+								@tri_vx[2] := dot_x;     @tri_vy[2] := dot_y + 4;
+								renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(230, 230, 255, 240));
+							}
+
+							label MapManager->Type->LATTER_DOWN {
+								# light blue filled up-triangle (ladder back up)
+								@tri_vx[0] := dot_x - 4; @tri_vy[0] := dot_y + 3;
+								@tri_vx[1] := dot_x + 4; @tri_vy[1] := dot_y + 3;
+								@tri_vx[2] := dot_x;     @tri_vy[2] := dot_y - 4;
+								renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(180, 200, 240, 240));
+							}
+
+							label MapManager->Type->END {
+								# red pulsing dot (boss door)
+								renderer->FilledCircleColor(dot_x, dot_y, 4, Color->New(255, 40, 30, 200));
+								renderer->FilledCircleColor(dot_x, dot_y, 2, Color->New(255, 150, 100, 220));
+							}
+
+							label MapManager->Type->MERCHANT {
+								# purple dot
+								renderer->FilledCircleColor(dot_x, dot_y, 3, Color->New(160, 80, 200, 220));
+							}
+
+							label MapManager->Type->MINI_BOSS {
+								# orange dot
+								renderer->FilledCircleColor(dot_x, dot_y, 3, Color->New(255, 160, 40, 220));
+							}
+
+							label MapManager->Type->RUNE_DOOR
+							label MapManager->Type->SPELL_DOOR
+							label MapManager->Type->KEY_DOOR {
+								# cyan dot (puzzle door)
+								renderer->FilledCircleColor(dot_x, dot_y, 3, Color->New(80, 180, 255, 220));
+							}
+
+							label MapManager->Type->DUNGEON_KEY {
+								# yellow key shape
+								renderer->FilledCircleColor(dot_x, dot_y, 3, Color->New(240, 220, 60, 230));
+							}
+
+							label MapManager->Type->SAFE_ROOM {
+								# warm orange glow
+								renderer->FilledCircleColor(dot_x, dot_y, 4, Color->New(255, 200, 80, 180));
+								renderer->FilledCircleColor(dot_x, dot_y, 2, Color->New(255, 240, 150, 220));
+							}
+
+							label MapManager->Type->TRAP {
+								# small red X
+								renderer->LineColor(dot_x - 2, dot_y - 2, dot_x + 2, dot_y + 2, Color->New(200, 50, 40, 150));
+								renderer->LineColor(dot_x + 2, dot_y - 2, dot_x - 2, dot_y + 2, Color->New(200, 50, 40, 150));
+							}
+						};
+
+						# plaque indicator on walls next to explored tiles
+						# check if any adjacent BLOCKED tile is actually a plaque
+						if(j > 0 & @map_manager->GetType(j - 1, i) = MapManager->Type->PLAQUE) {
+							renderer->FilledCircleColor(dot_x, dot_y - 6, 2, Color->New(180, 170, 140, 180));
+						};
+						if(j < MapManager->Type->MAP_SIZE - 1 & @map_manager->GetType(j + 1, i) = MapManager->Type->PLAQUE) {
+							renderer->FilledCircleColor(dot_x, dot_y + 6, 2, Color->New(180, 170, 140, 180));
+						};
+						if(i > 0 & @map_manager->GetType(j, i - 1) = MapManager->Type->PLAQUE) {
+							renderer->FilledCircleColor(dot_x - 6, dot_y, 2, Color->New(180, 170, 140, 180));
+						};
+						if(i < MapManager->Type->MAP_SIZE - 1 & @map_manager->GetType(j, i + 1) = MapManager->Type->PLAQUE) {
+							renderer->FilledCircleColor(dot_x + 6, dot_y, 2, Color->New(180, 170, 140, 180));
+						};
 					};
 				};
 				y_offset += 17;

@@ -290,8 +290,13 @@ class Player from Entity {
 	@spells : Spell[];
 	@num_spells : Int;
 	@poison_turns : Int;
+	@blind_turns : Int;
+	@confuse_turns : Int;
+	@slow_turns : Int;
 	@defense_bonus : Int;
 	@step_count : Int;
+	@cursed_weapon : Bool;
+	@cursed_armor : Bool;
 
 	New(name : String) {
 		# default: Knight
@@ -417,6 +422,8 @@ class Player from Entity {
 
 	method : public : OnStep() ~ Int {
 		@step_count += 1;
+		dmg := 0;
+
 		# MP regen: 1 per 10 steps
 		if(@step_count % 10 = 0 & @mp < @max_mp) {
 			@mp += 1;
@@ -425,14 +432,27 @@ class Player from Entity {
 		if(@poison_turns > 0) {
 			@poison_turns -= 1;
 			@hp -= 2;
-			return 2;
+			dmg += 2;
 		};
+		# cursed equipment HP drain (1 per 8 steps)
+		if(@cursed_weapon & @step_count % 8 = 0) {
+			@hp -= 1;
+			dmg += 1;
+		};
+		if(@cursed_armor & @step_count % 8 = 0) {
+			@hp -= 1;
+			dmg += 1;
+		};
+		# status effect decay
+		if(@blind_turns > 0) { @blind_turns -= 1; };
+		if(@confuse_turns > 0) { @confuse_turns -= 1; };
+		if(@slow_turns > 0) { @slow_turns -= 1; };
 		# defense bonus decay
 		if(@defense_bonus > 0 & @step_count % 5 = 0) {
 			@defense_bonus -= 5;
 			if(@defense_bonus < 0) { @defense_bonus := 0; };
 		};
-		return 0;
+		return dmg;
 	}
 
 	method : public : GetClassId() ~ Int { return @class_id; }
@@ -440,8 +460,19 @@ class Player from Entity {
 	method : public : GetCritChance() ~ Int { return @crit_chance; }
 	method : public : SetPoison(turns : Int) ~ Nil { @poison_turns := turns; }
 	method : public : IsPoisoned() ~ Bool { return @poison_turns > 0; }
+	method : public : SetBlind(turns : Int) ~ Nil { @blind_turns := turns; }
+	method : public : IsBlind() ~ Bool { return @blind_turns > 0; }
+	method : public : SetConfuse(turns : Int) ~ Nil { @confuse_turns := turns; }
+	method : public : IsConfused() ~ Bool { return @confuse_turns > 0; }
+	method : public : SetSlow(turns : Int) ~ Nil { @slow_turns := turns; }
+	method : public : IsSlowed() ~ Bool { return @slow_turns > 0; }
 	method : public : AddDefenseBonus(bonus : Int) ~ Nil { @defense_bonus += bonus; }
 	method : public : GetDefenseBonus() ~ Int { return @defense_bonus; }
+	method : public : SetCursedWeapon(cursed : Bool) ~ Nil { @cursed_weapon := cursed; }
+	method : public : SetCursedArmor(cursed : Bool) ~ Nil { @cursed_armor := cursed; }
+	method : public : HasCursedWeapon() ~ Bool { return @cursed_weapon; }
+	method : public : HasCursedArmor() ~ Bool { return @cursed_armor; }
+	method : public : HasAnyCurse() ~ Bool { return @cursed_weapon | @cursed_armor; }
 
 	method : public : UseTent() ~ Bool {
 		if(@tents > 0) {
@@ -449,6 +480,9 @@ class Player from Entity {
 			@hp := @max_hp;
 			@mp := @max_mp;
 			@poison_turns := 0;
+			@blind_turns := 0;
+			@confuse_turns := 0;
+			@slow_turns := 0;
 			return true;
 		};
 		return false;
@@ -643,6 +677,11 @@ class Player from Entity {
 	}
 
 	method : public : GetHealth() ~ String {
+		if(@poison_turns > 0) { return "Poisoned"; };
+		if(@blind_turns > 0) { return "Blinded"; };
+		if(@confuse_turns > 0) { return "Confused"; };
+		if(@slow_turns > 0) { return "Slowed"; };
+		if(@cursed_weapon | @cursed_armor) { return "Cursed"; };
 		return "Healthy";
 	}
 
@@ -783,8 +822,44 @@ class Monster from Entity {
 		arm := armor * scale;
 		xp_r := (xp->As(Float) * scale)->As(Int);
 
-		return GenericMonster->New(name, floor, hp, str, agi, sta, wpn, arm, xp_r, is_boss);
+		m := GenericMonster->New(name, floor, hp, str, agi, sta, wpn, arm, xp_r, is_boss);
+
+		# assign special abilities based on monster name
+		if(name->Equals("Dungeon Spider") | name->Equals("Mushroom Fiend")) {
+			m->SetAbility(MonsterAbility->POISON_BITE, 30);
+		}
+		else if(name->Equals("Vampire") | name->Equals("Wraith")) {
+			m->SetAbility(MonsterAbility->LIFE_DRAIN, 25);
+		}
+		else if(name->Equals("Stone Golem") | name->Equals("Ogre")) {
+			m->SetAbility(MonsterAbility->STUN, 20);
+		}
+		else if(name->Equals("Dark Priest") | name->Equals("Dark Sorcerer")) {
+			m->SetAbility(MonsterAbility->BLIND, 25);
+		}
+		else if(name->Equals("Eye Tyrant") | name->Equals("Ghost")) {
+			m->SetAbility(MonsterAbility->CONFUSE, 30);
+		}
+		else if(name->Equals("Dragon") | name->Equals("Hellhound") | name->Equals("Demon")) {
+			m->SetAbility(MonsterAbility->FIRE_BREATH, 25);
+		}
+		else if(name->Equals("Malachar")) {
+			m->SetAbility(MonsterAbility->FIRE_BREATH, 35);
+		};
+
+		return m;
 	}
+}
+
+# Monster ability types
+consts MonsterAbility {
+	NONE := 0,
+	POISON_BITE := 1,    # inflicts poison (spiders, mushroom)
+	LIFE_DRAIN := 2,     # heals self for damage dealt (vampire, wraith)
+	STUN := 3,           # slows target (golem, ogre)
+	BLIND := 4,          # blinds target (dark priest, dark sorcerer)
+	CONFUSE := 5,        # confuses target (eye tyrant, ghost)
+	FIRE_BREATH := 6     # extra fire damage (dragon, hellhound, demon)
 }
 
 #~
@@ -794,6 +869,8 @@ class GenericMonster from Monster {
 	@name : String;
 	@xp_reward : Int;
 	@is_boss : Bool;
+	@ability : Int;
+	@ability_chance : Int;
 
 	New(name : String, level : Int, max_hp : Int, strength : Int, agility : Int, stamina : Int,
 			weapon_hit : Float, armor_block : Float, xp_reward : Int, is_boss : Bool) {
@@ -801,8 +878,26 @@ class GenericMonster from Monster {
 		@name := name;
 		@xp_reward := xp_reward;
 		@is_boss := is_boss;
+		@ability := MonsterAbility->NONE;
+		@ability_chance := 0;
 		SetWeaponHit(weapon_hit);
 		SetArmorBlock(armor_block);
+	}
+
+	method : public : SetAbility(ability : Int, chance : Int) ~ Nil {
+		@ability := ability;
+		@ability_chance := chance;
+	}
+
+	method : public : GetAbility() ~ Int { return @ability; }
+	method : public : GetAbilityChance() ~ Int { return @ability_chance; }
+
+	# Try special ability - returns ability type if triggered, 0 if not
+	method : public : TryAbility() ~ Int {
+		if(@ability <> MonsterAbility->NONE & Int->Random(99) < @ability_chance) {
+			return @ability;
+		};
+		return MonsterAbility->NONE;
 	}
 
 	method : public : GetName() ~ String { return @name; }

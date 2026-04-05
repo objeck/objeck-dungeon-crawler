@@ -341,6 +341,20 @@ class MapManager from Manager {
 			map[end_y, end_x] := Type->END;
 		};
 
+		# place ladder back up (on floors 1+, near the start)
+		if(floor > 0) {
+			placed := 0; attempts := 0;
+			while(placed < 1 & attempts < 50) {
+				ry := Int->Random(1, 4);
+				rx := Int->Random(1, 4);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->LATTER_DOWN;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		};
+
 		# place potions (more on later floors)
 		num_potions := 2 + floor;
 		placed := 0;
@@ -394,6 +408,150 @@ class MapManager from Manager {
 					map[ry, rx] := Type->LOOT;
 					placed += 1;
 				};
+			};
+			attempts += 1;
+		};
+
+		# --- Puzzle doors and keys (floor 2+) ---
+		if(floor >= 1) {
+			# place 1-2 puzzle doors per floor with loot behind them
+			num_doors := 1 + Int->Random(0, 1);
+			placed := 0; attempts := 0;
+			while(placed < num_doors & attempts < 60) {
+				ry := Int->Random(3, sz - 4);
+				rx := Int->Random(3, sz - 4);
+				# puzzle door must be on an open tile with a wall behind it that has an open tile behind THAT
+				# (so opening it leads somewhere)
+				if(map[ry, rx] = Type->OPEN) {
+					# pick a random door type
+					door_roll := Int->Random(2);
+					if(door_roll = 0) {
+						map[ry, rx] := Type->RUNE_DOOR;
+					}
+					else if(door_roll = 1) {
+						map[ry, rx] := Type->SPELL_DOOR;
+					}
+					else {
+						map[ry, rx] := Type->KEY_DOOR;
+						# place a matching key elsewhere on the floor
+						key_placed := false;
+						key_attempts := 0;
+						while(<>key_placed & key_attempts < 40) {
+							ky := Int->Random(2, sz - 3);
+							kx := Int->Random(2, sz - 3);
+							if(map[ky, kx] = Type->OPEN) {
+								map[ky, kx] := Type->DUNGEON_KEY;
+								key_placed := true;
+							};
+							key_attempts += 1;
+						};
+					};
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		};
+
+		# --- Secret walls (breakable walls with hidden passages) ---
+		num_secrets := 1 + Int->Random(0, floor);
+		if(num_secrets > 3) { num_secrets := 3; };
+		placed := 0; attempts := 0;
+		while(placed < num_secrets & attempts < 80) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			# a secret wall must be a BLOCKED tile adjacent to exactly one OPEN tile
+			# (so it acts as a breakable dead-end wall)
+			if(map[ry, rx] = Type->BLOCKED) {
+				adj_open := 0;
+				if(ry > 0 & map[ry-1, rx] >= Type->OPEN & map[ry-1, rx] <= Type->END) { adj_open += 1; };
+				if(ry < sz-1 & map[ry+1, rx] >= Type->OPEN & map[ry+1, rx] <= Type->END) { adj_open += 1; };
+				if(rx > 0 & map[ry, rx-1] >= Type->OPEN & map[ry, rx-1] <= Type->END) { adj_open += 1; };
+				if(rx < sz-1 & map[ry, rx+1] >= Type->OPEN & map[ry, rx+1] <= Type->END) { adj_open += 1; };
+				if(adj_open = 1) {
+					map[ry, rx] := Type->SECRET_WALL;
+					placed += 1;
+				};
+			};
+			attempts += 1;
+		};
+
+		# --- Mini-boss room (one per floor, floor 1+) ---
+		if(floor >= 1) {
+			placed := 0; attempts := 0;
+			while(placed < 1 & attempts < 50) {
+				ry := Int->Random(3, sz - 4);
+				rx := Int->Random(3, sz - 4);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->MINI_BOSS;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		};
+
+		# --- Merchant (floor 2+, one per floor) ---
+		if(floor >= 1) {
+			placed := 0; attempts := 0;
+			while(placed < 1 & attempts < 40) {
+				ry := Int->Random(2, sz - 3);
+				rx := Int->Random(2, sz - 3);
+				if(map[ry, rx] = Type->OPEN) {
+					map[ry, rx] := Type->MERCHANT;
+					placed += 1;
+				};
+				attempts += 1;
+			};
+		};
+
+		# --- Safe room (one per floor, no encounters) ---
+		placed := 0; attempts := 0;
+		while(placed < 1 & attempts < 40) {
+			ry := Int->Random(3, sz - 4);
+			rx := Int->Random(3, sz - 4);
+			if(map[ry, rx] = Type->OPEN) {
+				map[ry, rx] := Type->SAFE_ROOM;
+				placed += 1;
+			};
+			attempts += 1;
+		};
+
+		# --- Wall plaques (mounted on walls facing corridors) ---
+		num_plaques := 2 + Int->Random(0, 2);
+		placed := 0; attempts := 0;
+		while(placed < num_plaques & attempts < 80) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			# plaque must be on a BLOCKED tile adjacent to exactly one OPEN tile
+			# (so the player can face the wall and see it)
+			if(map[ry, rx] = Type->BLOCKED) {
+				adj_open := 0;
+				if(ry > 0 & map[ry-1, rx] >= Type->OPEN & map[ry-1, rx] <= Type->END) { adj_open += 1; };
+				if(ry < sz-1 & map[ry+1, rx] >= Type->OPEN & map[ry+1, rx] <= Type->END) { adj_open += 1; };
+				if(rx > 0 & map[ry, rx-1] >= Type->OPEN & map[ry, rx-1] <= Type->END) { adj_open += 1; };
+				if(rx < sz-1 & map[ry, rx+1] >= Type->OPEN & map[ry, rx+1] <= Type->END) { adj_open += 1; };
+				if(adj_open >= 1 & adj_open <= 2) {
+					map[ry, rx] := Type->PLAQUE;
+					placed += 1;
+				};
+			};
+			attempts += 1;
+		};
+
+		# --- Slope tiles (elevation changes for cave feel) ---
+		num_slopes := 2 + floor;
+		if(num_slopes > 5) { num_slopes := 5; };
+		placed := 0; attempts := 0;
+		while(placed < num_slopes & attempts < 60) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			if(map[ry, rx] = Type->OPEN) {
+				if(Int->Random(1) = 0) {
+					map[ry, rx] := Type->SLOPE_UP;
+				}
+				else {
+					map[ry, rx] := Type->SLOPE_DOWN;
+				};
+				placed += 1;
 			};
 			attempts += 1;
 		};
@@ -529,6 +687,44 @@ class MapManager from Manager {
 						label Type->TRAP {
 							out := 'T';
 						}
+
+						label Type->RUNE_DOOR
+						label Type->SPELL_DOOR
+						label Type->KEY_DOOR {
+							out := '!';
+						}
+
+						label Type->DUNGEON_KEY {
+							out := 'K';
+						}
+
+						label Type->SECRET_WALL {
+							out := '#';
+						}
+
+						label Type->MERCHANT {
+							out := 'M';
+						}
+
+						label Type->MINI_BOSS {
+							out := 'B';
+						}
+
+						label Type->PLAQUE {
+							out := '"';
+						}
+
+						label Type->SLOPE_UP {
+							out := '/';
+						}
+
+						label Type->SLOPE_DOWN {
+							out := '\\';
+						}
+
+						label Type->SAFE_ROOM {
+							out := 'R';
+						}
 					};
 				};
 				"{$out} "->Print();
@@ -572,7 +768,18 @@ class MapManager from Manager {
 		FOUNTAIN := 11,
 		ALTAR := 12,
 		GRAVE := 13,
-		PILLAR := 14
+		PILLAR := 14,
+		RUNE_DOOR := 15,
+		SPELL_DOOR := 16,
+		KEY_DOOR := 17,
+		DUNGEON_KEY := 18,
+		SECRET_WALL := 19,
+		MERCHANT := 20,
+		MINI_BOSS := 21,
+		PLAQUE := 22,
+		SLOPE_UP := 23,
+		SLOPE_DOWN := 24,
+		SAFE_ROOM := 25
 	}
 
 	enum Direction {
@@ -703,8 +910,284 @@ class DungeonRenderer {
 		@anim_oy := 0;
 	}
 
+	#~
+	Render a 45-degree corner view during turn animation.
+	This creates the illusion of seeing the corridor corner mid-rotation.
+	turn_dir: 2=turning left, 3=turning right
+	intensity: 0.0 to 1.0, peaks at 0.5 (mid-turn)
+	~#
+	method : public : RenderCornerView(turn_dir : Int, intensity : Float, fi : Int) ~ Nil {
+		# viewport bounds
+		vl := 15; vr := 429; vt := 7; vb := 310;
+		vmid_x := (vl + vr) / 2;
+		vmid_y := (vt + vb) / 2;
+
+		# fade intensity for the corner elements (peak at mid-turn)
+		alpha := (intensity * 255.0)->As(Int);
+		if(alpha > 220) { alpha := 220; };
+		if(alpha < 0) { alpha := 0; };
+
+		wall := Color->New(Br(@wall_r[fi], 1), Br(@wall_g[fi], 1), Br(@wall_b[fi], 1), alpha);
+		wall_dk := Color->New(Br(@wall_r[fi] - 20, 1), Br(@wall_g[fi] - 20, 1), Br(@wall_b[fi] - 20, 1), alpha);
+		wall_lt := Color->New(Br(@wall_r[fi] + 10, 2), Br(@wall_g[fi] + 10, 2), Br(@wall_b[fi] + 10, 2), alpha);
+		floor_c := Color->New(Br(@flr_r[fi], 1), Br(@flr_g[fi], 1), Br(@flr_b[fi], 1), alpha * 3 / 4);
+		ceil_c := Color->New(Br(@ceil_r[fi], 1), Br(@ceil_g[fi], 1), Br(@ceil_b[fi], 1), alpha * 3 / 4);
+
+		# the corner column position shifts based on turn direction
+		corner_x : Int;
+		if(turn_dir = 2) {
+			# turning left: corner appears more to the left
+			corner_x := vmid_x - 30;
+		}
+		else {
+			# turning right: corner appears more to the right
+			corner_x := vmid_x + 30;
+		};
+
+		# --- draw the corner stone pillar (vertical edge where two walls meet) ---
+		pillar_w := 8;
+		@renderer->BoxColor(corner_x - pillar_w / 2, vt + 20, corner_x + pillar_w / 2, vb - 20, wall_dk);
+		# pillar highlight edge (light catches the corner)
+		@renderer->VlineColor(corner_x - pillar_w / 2, vt + 20, vb - 20, wall_lt);
+
+		# --- draw diagonal wall surfaces receding from the corner ---
+
+		# left wall surface (recedes from corner to left edge)
+		@vx[0] := corner_x - pillar_w / 2; @vy[0] := vt + 20;
+		@vx[1] := vl;                       @vy[1] := vt + 5;
+		@vx[2] := vl;                       @vy[2] := vb - 5;
+		@vx[3] := corner_x - pillar_w / 2; @vy[3] := vb - 20;
+		@renderer->FilledPolygonColor(@vx, @vy, wall);
+
+		# right wall surface (recedes from corner to right edge)
+		@vx[0] := corner_x + pillar_w / 2; @vy[0] := vt + 20;
+		@vx[1] := vr;                       @vy[1] := vt + 5;
+		@vx[2] := vr;                       @vy[2] := vb - 5;
+		@vx[3] := corner_x + pillar_w / 2; @vy[3] := vb - 20;
+		@renderer->FilledPolygonColor(@vx, @vy, wall_dk);
+
+		# --- stone block lines on the diagonal walls ---
+		# left wall horizontal mortar lines
+		for(i := 0; i < 4; i += 1;) {
+			t := (i + 1)->As(Float) / 5.0;
+			ly := vt + 20 + ((vb - vt - 40)->As(Float) * t)->As(Int);
+			lx := corner_x - pillar_w / 2;
+			# perspective: mortar line goes from pillar edge to viewport edge
+			@renderer->LineColor(lx, ly, vl, vt + 5 + ((vb - vt - 10)->As(Float) * t)->As(Int),
+				Color->New(Br(@wall_r[fi] - 30, 2), Br(@wall_g[fi] - 30, 2), Br(@wall_b[fi] - 30, 2), alpha / 2));
+		};
+		# right wall horizontal mortar lines
+		for(i := 0; i < 4; i += 1;) {
+			t := (i + 1)->As(Float) / 5.0;
+			ry := vt + 20 + ((vb - vt - 40)->As(Float) * t)->As(Int);
+			rx := corner_x + pillar_w / 2;
+			@renderer->LineColor(rx, ry, vr, vt + 5 + ((vb - vt - 10)->As(Float) * t)->As(Int),
+				Color->New(Br(@wall_r[fi] - 30, 2), Br(@wall_g[fi] - 30, 2), Br(@wall_b[fi] - 30, 2), alpha / 2));
+		};
+
+		# --- floor triangle at corner base ---
+		tri_x := Int->New[3];
+		tri_y := Int->New[3];
+		tri_x[0] := corner_x - 40; tri_y[0] := vb - 5;
+		tri_x[1] := corner_x;      tri_y[1] := vb - 20;
+		tri_x[2] := corner_x + 40; tri_y[2] := vb - 5;
+		@renderer->FilledPolygonColor(tri_x, tri_y, floor_c);
+
+		# --- ceiling triangle at corner top ---
+		tri_x[0] := corner_x - 40; tri_y[0] := vt + 5;
+		tri_x[1] := corner_x;      tri_y[1] := vt + 20;
+		tri_x[2] := corner_x + 40; tri_y[2] := vt + 5;
+		@renderer->FilledPolygonColor(tri_x, tri_y, ceil_c);
+
+		# --- torch glow near corner (atmospheric) ---
+		torch_a := alpha / 4;
+		@renderer->FilledCircleColor(corner_x, vmid_y - 40, 20, Color->New(255, 180, 60, torch_a));
+		@renderer->FilledCircleColor(corner_x, vmid_y - 40, 8, Color->New(255, 220, 100, torch_a));
+	}
+
+	# Render a motion blur / transition overlay during movement
+	method : public : RenderTransition(anim_type : Int, progress : Float) ~ Nil {
+		if(anim_type = 1) {
+			# forward: subtle vignette darkening at edges during zoom
+			edge_a := (30.0 * (1.0 - progress))->As(Int);
+			if(edge_a > 0) {
+				@renderer->BoxColor(15, 7, 55, 310, Color->New(0, 0, 0, edge_a));
+				@renderer->BoxColor(389, 7, 429, 310, Color->New(0, 0, 0, edge_a));
+				@renderer->BoxColor(15, 7, 429, 30, Color->New(0, 0, 0, edge_a / 2));
+				@renderer->BoxColor(15, 290, 429, 310, Color->New(0, 0, 0, edge_a / 2));
+			};
+		}
+		else if(anim_type = 2 | anim_type = 3) {
+			inv := 1.0 - progress;
+			blur_a := (40.0 * inv)->As(Int);
+
+			if(blur_a > 0) {
+				# edge darkening on the sweep side
+				if(anim_type = 2) {
+					@renderer->BoxColor(330, 7, 429, 310, Color->New(0, 0, 0, blur_a));
+					@renderer->BoxColor(15, 7, 55, 310, Color->New(0, 0, 0, blur_a / 3));
+				}
+				else {
+					@renderer->BoxColor(15, 7, 114, 310, Color->New(0, 0, 0, blur_a));
+					@renderer->BoxColor(389, 7, 429, 310, Color->New(0, 0, 0, blur_a / 3));
+				};
+			};
+
+			# wall-rush stone streaks (vertical lines sweeping across viewport)
+			if(inv > 0.1) {
+				streak_a := (inv * 120.0)->As(Int);
+				if(streak_a > 100) { streak_a := 100; };
+				streak_col := Color->New(90, 80, 65, streak_a);
+				streak_hi := Color->New(120, 110, 90, streak_a / 2);
+
+				# multiple streaks at different positions sweeping across
+				for(s := 0; s < 5; s += 1;) {
+					# each streak at a different phase of the sweep
+					phase := s->As(Float) / 5.0;
+					sx : Int;
+					if(anim_type = 2) {
+						# turning left: streaks sweep right to left
+						sx := 429 - ((progress + phase) * 414.0)->As(Int) % 414;
+					}
+					else {
+						# turning right: streaks sweep left to right
+						sx := 15 + ((progress + phase) * 414.0)->As(Int) % 414;
+					};
+					# only draw if within viewport
+					if(sx > 20 & sx < 425) {
+						# stone-textured vertical streak
+						@renderer->ThickLineColor(sx, 15, sx, 305, 2, streak_col);
+						@renderer->ThickLineColor(sx + 3, 20, sx + 3, 300, 1, streak_hi);
+						# mortar line gaps
+						@renderer->HLineColor(sx - 2, sx + 5, 80, streak_col);
+						@renderer->HLineColor(sx - 2, sx + 5, 160, streak_col);
+						@renderer->HLineColor(sx - 2, sx + 5, 240, streak_col);
+					};
+				};
+			};
+
+			# overall darkening during mid-turn
+			mid_dark := (Float->Sin(progress * 3.14) * 20.0)->As(Int);
+			if(mid_dark > 0) {
+				@renderer->BoxColor(15, 7, 429, 310, Color->New(0, 0, 0, mid_dark));
+			};
+		};
+	}
+
+	# Render slope visual effect - draws tilted floor/ceiling ramp surfaces
+	method : public : RenderSlopeEffect(tile_type : Int, fi : Int) ~ Nil {
+		if(tile_type = MapManager->Type->SLOPE_UP) {
+			# --- SLOPE UP: floor rises toward you, fills more of the view ---
+			# You're looking UP a ramp. The floor surface tilts toward you,
+			# taking up most of the lower viewport. Ceiling presses down at far end.
+
+			# the ramp rises from normal floor at near to upper-center at far
+			far_top := T(3) + (B(3) - T(3)) / 4;
+
+			# bright ramp surface (lit because it faces you)
+			ramp_col := Color->New(Br(@flr_r[fi] + 12, 0), Br(@flr_g[fi] + 12, 0), Br(@flr_b[fi] + 12, 0));
+			@vx[0] := L(0);  @vy[0] := B(0);
+			@vx[1] := R(0);  @vy[1] := B(0);
+			@vx[2] := R(3);  @vy[2] := far_top;
+			@vx[3] := L(3);  @vy[3] := far_top;
+			@renderer->FilledPolygonColor(@vx, @vy, ramp_col);
+
+			# stone step lines receding up the ramp
+			for(i := 0; i < 10; i += 1;) {
+				t := (i + 1)->As(Float) / 11.0;
+				lx := L(0) + ((L(3) - L(0))->As(Float) * t)->As(Int);
+				rx := R(0) + ((R(3) - R(0))->As(Float) * t)->As(Int);
+				ly := B(0) + ((far_top - B(0))->As(Float) * t)->As(Int);
+				d_idx := (t * 3.0)->As(Int);
+				if(d_idx > 3) { d_idx := 3; };
+				edge_col := Color->New(Br(@flr_r[fi] - 10, d_idx), Br(@flr_g[fi] - 10, d_idx), Br(@flr_b[fi] - 10, d_idx));
+				@renderer->LineColor(lx, ly, rx, ly, edge_col);
+			};
+
+			# vanishing guide lines up the ramp
+			mid_x := (L(0) + R(0)) / 2;
+			far_mid_x := (L(3) + R(3)) / 2;
+			guide_col := Color->New(Br(@flr_r[fi] - 5, 1), Br(@flr_g[fi] - 5, 1), Br(@flr_b[fi] - 5, 1));
+			@renderer->LineColor(mid_x - 25, B(0), far_mid_x - 3, far_top, guide_col);
+			@renderer->LineColor(mid_x + 25, B(0), far_mid_x + 3, far_top, guide_col);
+
+			# ceiling presses DOWN at far end (tunnel narrows going uphill)
+			ceil_col := CeilCol(fi, 1);
+			ceil_far := far_top - 20;
+			@vx[0] := L(1);  @vy[0] := T(1);
+			@vx[1] := R(1);  @vy[1] := T(1);
+			@vx[2] := R(3);  @vy[2] := ceil_far;
+			@vx[3] := L(3);  @vy[3] := ceil_far;
+			@renderer->FilledPolygonColor(@vx, @vy, ceil_col);
+
+			# wall incline markers
+			slope_col := Color->New(Br(@wall_r[fi] - 15, 1), Br(@wall_g[fi] - 15, 1), Br(@wall_b[fi] - 15, 1));
+			@renderer->ThickLineColor(L(0) + 12, B(0), L(2) + 4, B(2) - 35, 2, slope_col);
+			@renderer->ThickLineColor(R(0) - 12, B(0), R(2) - 4, B(2) - 35, 2, slope_col);
+		}
+		else if(tile_type = MapManager->Type->SLOPE_DOWN) {
+			# --- SLOPE DOWN: floor drops away, revealing void below ---
+			# You're looking DOWN. The floor near you is normal, then there's
+			# a visible edge/lip and the ground falls away into darkness.
+
+			# near floor is normal (short strip at feet)
+			near_col := FloorCol(fi, 0);
+			@vx[0] := L(0);  @vy[0] := B(0);
+			@vx[1] := R(0);  @vy[1] := B(0);
+			@vx[2] := R(1);  @vy[2] := B(1);
+			@vx[3] := L(1);  @vy[3] := B(1);
+			@renderer->FilledPolygonColor(@vx, @vy, near_col);
+
+			# the edge/lip of the drop-off (bright highlight line)
+			edge_col := Color->New(Br(@flr_r[fi] + 15, 0), Br(@flr_g[fi] + 15, 0), Br(@flr_b[fi] + 15, 0));
+			@renderer->ThickLineColor(L(1), B(1), R(1), B(1), 2, edge_col);
+
+			# the descending ramp surface visible below the lip
+			# goes from the edge downward toward the far bottom
+			far_bottom := B(3) + 25;
+			dark_ramp := Color->New(Br(@flr_r[fi] - 15, 1), Br(@flr_g[fi] - 15, 1), Br(@flr_b[fi] - 15, 1));
+			@vx[0] := L(1);  @vy[0] := B(1);
+			@vx[1] := R(1);  @vy[1] := B(1);
+			@vx[2] := R(3);  @vy[2] := far_bottom;
+			@vx[3] := L(3);  @vy[3] := far_bottom;
+			@renderer->FilledPolygonColor(@vx, @vy, dark_ramp);
+
+			# stone lines on the descending surface
+			for(i := 0; i < 7; i += 1;) {
+				t := (i + 1)->As(Float) / 8.0;
+				lx := L(1) + ((L(3) - L(1))->As(Float) * t)->As(Int);
+				rx := R(1) + ((R(3) - R(1))->As(Float) * t)->As(Int);
+				ly := B(1) + ((far_bottom - B(1))->As(Float) * t)->As(Int);
+				d_idx := (t * 3.0)->As(Int);
+				if(d_idx > 3) { d_idx := 3; };
+				line_col := Color->New(Br(@flr_r[fi] - 25, d_idx), Br(@flr_g[fi] - 25, d_idx), Br(@flr_b[fi] - 25, d_idx));
+				@renderer->LineColor(lx, ly, rx, ly, line_col);
+			};
+
+			# deep darkness at the far bottom
+			@renderer->BoxColor(L(2), far_bottom - 15, R(2), far_bottom + 5, Color->New(0, 0, 0, 50));
+			@renderer->BoxColor(L(3), far_bottom - 5, R(3), far_bottom + 15, Color->New(0, 0, 0, 80));
+			@renderer->BoxColor(L(4), far_bottom + 5, R(4), far_bottom + 20, Color->New(0, 0, 0, 120));
+
+			# ceiling opens up (rises) to show more space above
+			open_ceil := CeilCol(fi, 0);
+			@vx[0] := L(1);  @vy[0] := T(1);
+			@vx[1] := R(1);  @vy[1] := T(1);
+			@vx[2] := R(3);  @vy[2] := T(3) - 20;
+			@vx[3] := L(3);  @vy[3] := T(3) - 20;
+			@renderer->FilledPolygonColor(@vx, @vy, open_ceil);
+
+			# wall decline markers
+			slope_col := Color->New(Br(@wall_r[fi] - 15, 1), Br(@wall_g[fi] - 15, 1), Br(@wall_b[fi] - 15, 1));
+			@renderer->ThickLineColor(L(0) + 12, B(0) - 15, L(2) + 4, B(2) + 20, 2, slope_col);
+			@renderer->ThickLineColor(R(0) - 12, B(0) - 15, R(2) - 4, B(2) + 20, 2, slope_col);
+		};
+	}
+
 	method : IsOpen(tile : Int) ~ Bool {
-		return tile >= MapManager->Type->OPEN & tile <> MapManager->Type->NONE & tile <> MapManager->Type->BLOCKED;
+		return tile >= MapManager->Type->OPEN & tile <> MapManager->Type->NONE &
+			tile <> MapManager->Type->BLOCKED & tile <> MapManager->Type->SECRET_WALL &
+			tile <> MapManager->Type->PLAQUE;
 	}
 
 	method : Br(base : Int, depth : Int) ~ Int {
@@ -784,11 +1267,31 @@ class DungeonRenderer {
 			# front wall (depth 1+ only; depth 0 is player position)
 			if(d > 0 & <>IsOpen(mid)) {
 				DrawFrontWall(d, fi);
+				# wall-mounted plaque decoration
+				if(mid = MapManager->Type->PLAQUE) {
+					DrawWallPlaque(d, fi);
+				};
 			};
 
 			# environmental decorations on the corridor walls/floor at this depth
 			if(IsEnvTile(mid)) {
 				DrawEnvFeature(d, mid, fi, frame);
+			};
+
+			# iron bars on some side walls (alcove grates)
+			# use left/right tile values as deterministic hash for consistency
+			if(d > 0 & d < 4) {
+				if(<>IsOpen(left) & left = MapManager->Type->BLOCKED) {
+					# hash: show bars ~15% of walls based on position
+					if((left * 7 + d * 13 + fi * 3) % 20 = 0) {
+						DrawSideWallBars(d, fi, true);
+					};
+				};
+				if(<>IsOpen(right) & right = MapManager->Type->BLOCKED) {
+					if((right * 11 + d * 17 + fi * 5) % 20 = 0) {
+						DrawSideWallBars(d, fi, false);
+					};
+				};
 			};
 		};
 
@@ -941,6 +1444,113 @@ class DungeonRenderer {
 		@renderer->FilledCircleColor(mid_x, mid_y - sc, glow_r, Color->New(255, 140, 40, 8));
 	}
 
+	# Draw a stone plaque mounted on a front wall
+	method : DrawWallPlaque(d : Int, fi : Int) ~ Nil {
+		cx := (L(d) + R(d)) / 2;
+		cy := (T(d) + B(d)) / 2;
+		wall_w := (R(d) - L(d)) / 2;
+		wall_h := (B(d) - T(d)) / 2;
+
+		# scale plaque to wall size
+		pw := wall_w / 2;
+		ph := wall_h / 3;
+		if(pw < 10) { pw := 10; };
+		if(ph < 6) { ph := 6; };
+
+		# stone tablet background
+		@renderer->BoxColor(cx - pw, cy - ph, cx + pw, cy + ph, Color->New(Br(150, d), Br(145, d), Br(130, d)));
+		# border
+		@renderer->RectangleColor(cx - pw, cy - ph, cx + pw, cy + ph, Color->New(Br(100, d), Br(95, d), Br(80, d)));
+		# inner text area
+		@renderer->BoxColor(cx - pw + 3, cy - ph + 3, cx + pw - 3, cy + ph - 3, Color->New(Br(120, d), Br(115, d), Br(100, d)));
+		# carved text lines
+		if(pw > 12) {
+			for(i := 0; i < 3; i += 1;) {
+				ly := cy - ph + 6 + i * (ph * 2 / 4);
+				lw := pw - 6 - i * 2;
+				if(lw > 4) {
+					@renderer->HLineColor(cx - lw, cx + lw, ly, Color->New(Br(85, d), Br(80, d), Br(65, d)));
+				};
+			};
+		};
+		# corner rivets
+		@renderer->FilledCircleColor(cx - pw + 3, cy - ph + 3, 2, Color->New(Br(160, d), Br(155, d), Br(140, d)));
+		@renderer->FilledCircleColor(cx + pw - 3, cy - ph + 3, 2, Color->New(Br(160, d), Br(155, d), Br(140, d)));
+		@renderer->FilledCircleColor(cx - pw + 3, cy + ph - 3, 2, Color->New(Br(160, d), Br(155, d), Br(140, d)));
+		@renderer->FilledCircleColor(cx + pw - 3, cy + ph - 3, 2, Color->New(Br(160, d), Br(155, d), Br(140, d)));
+	}
+
+	# Draw iron bars on a side wall (alcove grate effect)
+	method : DrawSideWallBars(d : Int, fi : Int, is_left : Bool) ~ Nil {
+		top := (T(d) + T(d+1)) / 2 + 5;
+		bot := (B(d) + B(d+1)) / 2 - 5;
+		side_x : Int;
+		width : Int;
+
+		if(is_left) {
+			side_x := (L(d) + L(d+1)) / 2;
+			width := 12 - d * 2;
+		}
+		else {
+			side_x := (R(d) + R(d+1)) / 2;
+			width := 12 - d * 2;
+		};
+		if(width < 4) { width := 4; };
+
+		iron := Color->New(Br(65, d), Br(60, d), Br(55, d));
+		iron_hi := Color->New(Br(90, d), Br(85, d), Br(78, d));
+
+		# horizontal bars (top and bottom)
+		@renderer->ThickLineColor(side_x - width / 2, top, side_x + width / 2, top, 2, iron);
+		@renderer->ThickLineColor(side_x - width / 2, bot, side_x + width / 2, bot, 2, iron);
+
+		# vertical bars
+		num_bars := 3 - d / 2;
+		if(num_bars < 2) { num_bars := 2; };
+		bar_space := width / (num_bars + 1);
+		for(i := 1; i <= num_bars; i += 1;) {
+			bx := side_x - width / 2 + i * bar_space;
+			@renderer->ThickLineColor(bx, top, bx, bot, 2, iron);
+			@renderer->LineColor(bx - 1, top + 2, bx - 1, bot - 2, iron_hi);
+		};
+	}
+
+	# Draw iron bars across a front wall opening
+	method : public : DrawWallBars(d : Int, fi : Int, frame : Int) ~ Nil {
+		left := L(d);
+		right := R(d);
+		top := T(d);
+		bot := B(d);
+		wall_w := right - left;
+		wall_h := bot - top;
+
+		iron := Color->New(Br(70, d), Br(65, d), Br(60, d));
+		iron_hi := Color->New(Br(100, d), Br(95, d), Br(88, d));
+
+		# horizontal bars (top and bottom frame)
+		@renderer->ThickLineColor(left + 5, top + 8, right - 5, top + 8, 3, iron);
+		@renderer->ThickLineColor(left + 5, bot - 8, right - 5, bot - 8, 3, iron);
+
+		# vertical bars
+		num_bars := 5 - d;
+		if(num_bars < 2) { num_bars := 2; };
+		spacing := wall_w / (num_bars + 1);
+		for(i := 1; i <= num_bars; i += 1;) {
+			bx := left + i * spacing;
+			@renderer->ThickLineColor(bx, top + 8, bx, bot - 8, 2, iron);
+			# highlight on left side of bar
+			@renderer->LineColor(bx - 1, top + 10, bx - 1, bot - 10, iron_hi);
+		};
+
+		# rust spots
+		if(d < 3) {
+			rx := left + wall_w / 3;
+			ry := top + wall_h / 2;
+			@renderer->FilledCircleColor(rx, ry, 3, Color->New(Br(120, d), Br(60, d), Br(30, d), 100));
+			@renderer->FilledCircleColor(rx + spacing, ry + 10, 2, Color->New(Br(110, d), Br(55, d), Br(25, d), 80));
+		};
+	}
+
 	method : DrawTorchGlow(fi : Int, frame : Int) ~ Nil {
 		flicker := (Float->Sin(frame->As(Float) * 0.15) * 8.0)->As(Int);
 		alpha := 18 + flicker;
@@ -1081,6 +1691,157 @@ class DungeonRenderer {
 			@renderer->BoxColor(cx - sz, cy - sz * 5, cx + sz, cy + sz + 4, Color->New(100, 95, 88, 200));
 			@renderer->BoxColor(cx - sz - 3, cy - sz * 5 - 3, cx + sz + 3, cy - sz * 5 + 3, Color->New(115, 110, 100, 200));
 			@renderer->BoxColor(cx - sz - 3, cy + sz + 1, cx + sz + 3, cy + sz + 7, Color->New(115, 110, 100, 200));
+		}
+		else if(tile_type = MapManager->Type->RUNE_DOOR) {
+			# rune-inscribed stone door with glowing symbols
+			sz := 25 - d * 5;
+			if(sz < 8) { sz := 8; };
+			# door frame
+			@renderer->BoxColor(cx - sz - 3, cy - sz * 2 - 3, cx + sz + 3, cy + sz / 2 + 3, Color->New(70, 65, 55, 220));
+			# door body
+			@renderer->BoxColor(cx - sz, cy - sz * 2, cx + sz, cy + sz / 2, Color->New(90, 80, 65, 220));
+			# rune glow circles
+			@renderer->FilledCircleColor(cx - sz / 2, cy - sz, 4, Color->New(100, 180, 255, 200));
+			@renderer->FilledCircleColor(cx + sz / 2, cy - sz, 4, Color->New(100, 180, 255, 200));
+			@renderer->FilledCircleColor(cx, cy - sz * 3 / 2, 4, Color->New(100, 180, 255, 200));
+			# rune lines
+			@renderer->LineColor(cx - sz / 2, cy - sz, cx + sz / 2, cy - sz, Color->New(80, 150, 220, 160));
+			@renderer->LineColor(cx, cy - sz * 3 / 2, cx - sz / 2, cy - sz, Color->New(80, 150, 220, 160));
+			@renderer->LineColor(cx, cy - sz * 3 / 2, cx + sz / 2, cy - sz, Color->New(80, 150, 220, 160));
+		}
+		else if(tile_type = MapManager->Type->SPELL_DOOR) {
+			# elemental seal door with swirling energy
+			sz := 25 - d * 5;
+			if(sz < 8) { sz := 8; };
+			# door frame
+			@renderer->BoxColor(cx - sz - 3, cy - sz * 2 - 3, cx + sz + 3, cy + sz / 2 + 3, Color->New(55, 50, 65, 220));
+			# door body
+			@renderer->BoxColor(cx - sz, cy - sz * 2, cx + sz, cy + sz / 2, Color->New(70, 60, 80, 220));
+			# elemental orb in center
+			@renderer->FilledCircleColor(cx, cy - sz, sz / 2 + 3, Color->New(255, 120, 40, 180));
+			@renderer->FilledCircleColor(cx, cy - sz, sz / 3 + 1, Color->New(255, 200, 80, 220));
+			# element rays
+			@renderer->LineColor(cx, cy - sz - sz / 2, cx, cy - sz * 2, Color->New(255, 140, 50, 140));
+			@renderer->LineColor(cx - sz / 2, cy - sz, cx - sz, cy - sz, Color->New(255, 140, 50, 140));
+			@renderer->LineColor(cx + sz / 2, cy - sz, cx + sz, cy - sz, Color->New(255, 140, 50, 140));
+		}
+		else if(tile_type = MapManager->Type->KEY_DOOR) {
+			# heavy iron-banded door with prominent lock
+			sz := 25 - d * 5;
+			if(sz < 8) { sz := 8; };
+			# door frame
+			@renderer->BoxColor(cx - sz - 3, cy - sz * 2 - 3, cx + sz + 3, cy + sz / 2 + 3, Color->New(50, 40, 30, 220));
+			# door body
+			@renderer->BoxColor(cx - sz, cy - sz * 2, cx + sz, cy + sz / 2, Color->New(80, 60, 40, 220));
+			# iron bands
+			@renderer->ThickLineColor(cx - sz, cy - sz * 3 / 2, cx + sz, cy - sz * 3 / 2, 2, Color->New(100, 90, 75, 200));
+			@renderer->ThickLineColor(cx - sz, cy - sz / 2, cx + sz, cy - sz / 2, 2, Color->New(100, 90, 75, 200));
+			# large lock
+			@renderer->FilledCircleColor(cx, cy - sz + 2, 6, Color->New(200, 170, 40, 240));
+			@renderer->FilledCircleColor(cx, cy - sz + 2, 3, Color->New(80, 55, 10, 220));
+			@renderer->VlineColor(cx, cy - sz + 4, cy - sz + 8, Color->New(40, 30, 5, 200));
+		}
+		else if(tile_type = MapManager->Type->DUNGEON_KEY) {
+			# glowing key on the ground
+			sz := 12 - d * 2;
+			if(sz < 4) { sz := 4; };
+			# key shaft
+			@renderer->ThickLineColor(cx - sz, cy, cx + sz / 2, cy, 2, Color->New(220, 190, 50, 220));
+			# key head (ring)
+			@renderer->CircleColor(cx - sz - 3, cy, 4, Color->New(220, 190, 50, 230));
+			# key teeth
+			@renderer->VlineColor(cx + sz / 2 - 2, cy, cy + 4, Color->New(220, 190, 50, 200));
+			@renderer->VlineColor(cx + sz / 2, cy, cy + 3, Color->New(220, 190, 50, 200));
+			# glow
+			@renderer->FilledCircleColor(cx, cy, sz + 6, Color->New(255, 220, 60, 30));
+		}
+		else if(tile_type = MapManager->Type->MERCHANT) {
+			# hooded merchant figure with lantern
+			sz := 20 - d * 4;
+			if(sz < 6) { sz := 6; };
+			# robe body
+			@renderer->FilledEllipseColor(cx, cy, sz, sz + sz / 2, Color->New(70, 55, 90, 220));
+			# hood
+			@renderer->FilledCircleColor(cx, cy - sz - 2, sz / 2 + 4, Color->New(60, 45, 80, 220));
+			# face shadow
+			@renderer->FilledCircleColor(cx, cy - sz, sz / 3 + 1, Color->New(20, 15, 15, 200));
+			# eyes (two small glowing dots)
+			@renderer->FilledCircleColor(cx - 3, cy - sz - 1, 1, Color->New(200, 200, 150, 220));
+			@renderer->FilledCircleColor(cx + 3, cy - sz - 1, 1, Color->New(200, 200, 150, 220));
+			# lantern on right
+			@renderer->BoxColor(cx + sz / 2 + 2, cy - sz / 2 - 3, cx + sz / 2 + 6, cy - sz / 2 + 3, Color->New(160, 130, 40, 200));
+			@renderer->FilledCircleColor(cx + sz / 2 + 4, cy - sz / 2, 3, Color->New(255, 200, 60, 180));
+			# glow
+			@renderer->FilledCircleColor(cx + sz / 2 + 4, cy - sz / 2, sz, Color->New(255, 200, 60, 20));
+		}
+		else if(tile_type = MapManager->Type->MINI_BOSS) {
+			# skull and crossbones warning
+			sz := 16 - d * 3;
+			if(sz < 5) { sz := 5; };
+			# dark aura
+			@renderer->FilledCircleColor(cx, cy - sz / 2, sz + 8, Color->New(180, 30, 30, 30));
+			# skull
+			@renderer->FilledCircleColor(cx, cy - sz / 2, sz / 2 + 3, Color->New(200, 195, 185, 200));
+			@renderer->FilledEllipseColor(cx, cy + 2, sz / 2, sz / 4, Color->New(190, 185, 175, 200));
+			# eye sockets
+			@renderer->FilledCircleColor(cx - 3, cy - sz / 2 - 1, 2, Color->New(20, 10, 10, 220));
+			@renderer->FilledCircleColor(cx + 3, cy - sz / 2 - 1, 2, Color->New(20, 10, 10, 220));
+			# crossbones
+			@renderer->ThickLineColor(cx - sz, cy + 4, cx + sz, cy - sz + 2, 2, Color->New(200, 195, 185, 180));
+			@renderer->ThickLineColor(cx - sz, cy - sz + 2, cx + sz, cy + 4, 2, Color->New(200, 195, 185, 180));
+		}
+		else if(tile_type = MapManager->Type->PLAQUE) {
+			# stone plaque mounted on wall
+			sz := 22 - d * 4;
+			if(sz < 7) { sz := 7; };
+			h := sz * 2 / 3;
+			# stone tablet
+			@renderer->BoxColor(cx - sz, cy - h, cx + sz, cy + h, Color->New(140, 135, 120, 220));
+			# border
+			@renderer->RectangleColor(cx - sz, cy - h, cx + sz, cy + h, Color->New(100, 95, 80, 200));
+			# inner darker area (text area)
+			@renderer->BoxColor(cx - sz + 3, cy - h + 3, cx + sz - 3, cy + h - 3, Color->New(110, 105, 90, 200));
+			# decorative carved lines (simulating text)
+			for(i := 0; i < 3; i += 1;) {
+				ly := cy - h + 6 + i * (h / 2);
+				lw := sz - 5 - i * 2;
+				@renderer->HLineColor(cx - lw, cx + lw, ly, Color->New(80, 75, 60, 180));
+			};
+			# small ornament at top
+			@renderer->FilledCircleColor(cx, cy - h - 2, 3, Color->New(160, 150, 130, 200));
+		}
+		else if(tile_type = MapManager->Type->SLOPE_UP) {
+			# upward slope indicator - angled floor lines
+			sz := 20 - d * 4;
+			if(sz < 6) { sz := 6; };
+			# arrow pointing up carved into floor
+			@renderer->ThickLineColor(cx, cy + sz, cx, cy - sz, 2, Color->New(140, 130, 100, 160));
+			@renderer->ThickLineColor(cx - sz / 2, cy - sz / 2, cx, cy - sz, 2, Color->New(140, 130, 100, 160));
+			@renderer->ThickLineColor(cx + sz / 2, cy - sz / 2, cx, cy - sz, 2, Color->New(140, 130, 100, 160));
+		}
+		else if(tile_type = MapManager->Type->SLOPE_DOWN) {
+			# downward slope indicator
+			sz := 20 - d * 4;
+			if(sz < 6) { sz := 6; };
+			@renderer->ThickLineColor(cx, cy - sz, cx, cy + sz, 2, Color->New(100, 90, 70, 160));
+			@renderer->ThickLineColor(cx - sz / 2, cy + sz / 2, cx, cy + sz, 2, Color->New(100, 90, 70, 160));
+			@renderer->ThickLineColor(cx + sz / 2, cy + sz / 2, cx, cy + sz, 2, Color->New(100, 90, 70, 160));
+		}
+		else if(tile_type = MapManager->Type->SAFE_ROOM) {
+			# campfire / safe haven glow
+			sz := 16 - d * 3;
+			if(sz < 5) { sz := 5; };
+			# warm glow on floor
+			@renderer->FilledCircleColor(cx, cy + 4, sz + 10, Color->New(255, 180, 60, 25));
+			@renderer->FilledCircleColor(cx, cy + 4, sz + 5, Color->New(255, 200, 80, 35));
+			# campfire base (stones)
+			@renderer->FilledCircleColor(cx - sz / 2, cy + sz / 2 + 2, 3, Color->New(100, 90, 75, 200));
+			@renderer->FilledCircleColor(cx + sz / 2, cy + sz / 2 + 2, 3, Color->New(100, 90, 75, 200));
+			@renderer->FilledCircleColor(cx, cy + sz / 2 + 4, 3, Color->New(90, 80, 65, 200));
+			# fire
+			@renderer->FilledEllipseColor(cx, cy, sz / 2 + 2, sz / 2 + 4, Color->New(255, 120, 20, 180));
+			@renderer->FilledEllipseColor(cx, cy - 2, sz / 3 + 1, sz / 2 + 2, Color->New(255, 200, 60, 200));
+			@renderer->FilledCircleColor(cx, cy - 4, sz / 4 + 1, Color->New(255, 240, 150, 220));
 		};
 	}
 
@@ -1155,6 +1916,122 @@ class DungeonRenderer {
 
 	method : public : RenderMonsterHit() ~ Nil {
 		@renderer->BoxColor(15, 7, 429, 310, Color->New(220, 220, 220, 40));
+	}
+
+	#~
+	Class-based attack animations drawn over the viewport.
+	anim_type: 1=Knight slash, 2=Cleric smite, 3=Mage bolt, 4=Ninja cut
+	anim_frame: countdown from start value to 0
+	~#
+	method : public : RenderAttackAnim(anim_type : Int, anim_frame : Int, max_frame : Int) ~ Nil {
+		t := 1.0 - anim_frame->As(Float) / max_frame->As(Float);
+		cx := 222; cy := 200;
+
+		if(anim_type = 1) {
+			# Knight: heavy horizontal slash - sweeps from right to left
+			slash_x := (cx + 120 - t * 240.0)->As(Int);
+			slash_y := cy - 30 + (Float->Sin(t * 3.14) * 40.0)->As(Int);
+			alpha := (255.0 * (1.0 - t))->As(Int);
+			if(alpha < 0) { alpha := 0; };
+			# blade trail
+			trail_w := (60.0 * (1.0 - t * 0.5))->As(Int);
+			@renderer->ThickLineColor(slash_x + trail_w, slash_y - 15, slash_x - trail_w, slash_y + 15, 4, Color->New(200, 210, 230, alpha));
+			@renderer->ThickLineColor(slash_x + trail_w - 5, slash_y - 20, slash_x - trail_w + 5, slash_y + 10, 2, Color->New(255, 255, 255, alpha / 2));
+			# slash arc
+			arc_a := (alpha * 3 / 4);
+			if(arc_a > 255) { arc_a := 255; };
+			@renderer->ThickLineColor(slash_x + 40, slash_y - 30, slash_x - 40, slash_y + 30, 3, Color->New(180, 190, 210, arc_a));
+			# sparks at leading edge
+			if(t < 0.6) {
+				@renderer->FilledCircleColor(slash_x - trail_w, slash_y + 15, 4, Color->New(255, 240, 180, alpha));
+				@renderer->FilledCircleColor(slash_x - trail_w + 5, slash_y + 20, 2, Color->New(255, 255, 200, alpha));
+			};
+		}
+		else if(anim_type = 2) {
+			# Cleric: overhead holy smite - golden beam drops from above
+			beam_y := (cy - 150 + t * 200.0)->As(Int);
+			alpha := (255.0 * (1.0 - t * 0.7))->As(Int);
+			if(alpha < 0) { alpha := 0; };
+			# holy beam
+			@renderer->ThickLineColor(cx - 3, 15, cx - 3, beam_y, 3, Color->New(255, 220, 80, alpha));
+			@renderer->ThickLineColor(cx + 3, 15, cx + 3, beam_y, 3, Color->New(255, 220, 80, alpha));
+			# impact glow
+			if(t > 0.4) {
+				glow_r := ((t - 0.4) * 80.0)->As(Int);
+				if(glow_r > 50) { glow_r := 50; };
+				@renderer->FilledCircleColor(cx, beam_y, glow_r, Color->New(255, 240, 120, alpha / 3));
+				@renderer->FilledCircleColor(cx, beam_y, glow_r / 2, Color->New(255, 255, 200, alpha / 2));
+			};
+			# radiant cross at impact
+			if(t > 0.6) {
+				cross_a := (alpha * 2 / 3);
+				if(cross_a > 255) { cross_a := 255; };
+				cross_sz := ((t - 0.6) * 60.0)->As(Int);
+				@renderer->ThickLineColor(cx - cross_sz, beam_y, cx + cross_sz, beam_y, 2, Color->New(255, 230, 100, cross_a));
+				@renderer->ThickLineColor(cx, beam_y - cross_sz, cx, beam_y + cross_sz, 2, Color->New(255, 230, 100, cross_a));
+			};
+		}
+		else if(anim_type = 3) {
+			# Mage: arcane bolt burst - energy projectile from bottom-center outward
+			bolt_x := cx;
+			bolt_y := (cy + 80 - t * 130.0)->As(Int);
+			alpha := (255.0 * (1.0 - t * 0.5))->As(Int);
+			if(alpha < 0) { alpha := 0; };
+			# bolt trail
+			trail_len := (40.0 * (1.0 - t))->As(Int);
+			@renderer->ThickLineColor(bolt_x, bolt_y + trail_len, bolt_x, bolt_y, 3, Color->New(120, 80, 255, alpha / 2));
+			# bolt head
+			bolt_r := 8 - (t * 4.0)->As(Int);
+			if(bolt_r < 2) { bolt_r := 2; };
+			@renderer->FilledCircleColor(bolt_x, bolt_y, bolt_r + 4, Color->New(100, 60, 220, alpha / 3));
+			@renderer->FilledCircleColor(bolt_x, bolt_y, bolt_r, Color->New(180, 140, 255, alpha));
+			@renderer->FilledCircleColor(bolt_x, bolt_y, bolt_r / 2 + 1, Color->New(230, 220, 255, alpha));
+			# impact burst
+			if(t > 0.7) {
+				burst_r := ((t - 0.7) * 100.0)->As(Int);
+				burst_a := ((1.0 - t) * 400.0)->As(Int);
+				if(burst_a > 255) { burst_a := 255; };
+				if(burst_a < 0) { burst_a := 0; };
+				@renderer->FilledCircleColor(bolt_x, bolt_y, burst_r, Color->New(150, 100, 255, burst_a / 4));
+				# arcane particles
+				@renderer->FilledCircleColor(bolt_x - burst_r / 2, bolt_y - burst_r / 3, 3, Color->New(200, 160, 255, burst_a));
+				@renderer->FilledCircleColor(bolt_x + burst_r / 2, bolt_y + burst_r / 4, 2, Color->New(200, 160, 255, burst_a));
+			};
+		}
+		else if(anim_type = 4) {
+			# Ninja: quick upward slide cut - fast diagonal slash bottom-right to top-left
+			# two-phase: slide up then fade
+			if(t < 0.5) {
+				# slide phase
+				st := t * 2.0;
+				sx := (cx + 60 - st * 120.0)->As(Int);
+				sy := (cy + 60 - st * 120.0)->As(Int);
+				ex := sx - 30;
+				ey := sy - 30;
+				alpha := 255;
+				# main cut line
+				@renderer->ThickLineColor(sx, sy, ex, ey, 3, Color->New(230, 230, 250, alpha));
+				# speed lines
+				@renderer->LineColor(sx + 15, sy + 10, ex + 15, ey + 10, Color->New(200, 200, 230, alpha / 2));
+				@renderer->LineColor(sx - 10, sy + 15, ex - 10, ey + 15, Color->New(200, 200, 230, alpha / 2));
+			}
+			else {
+				# fade phase - afterimage of the full cut
+				ft := (t - 0.5) * 2.0;
+				alpha := (255.0 * (1.0 - ft))->As(Int);
+				if(alpha < 0) { alpha := 0; };
+				# full cut trail
+				@renderer->ThickLineColor(cx + 60, cy + 60, cx - 60, cy - 60, 2, Color->New(230, 230, 250, alpha));
+				# secondary cut (cross slash)
+				@renderer->ThickLineColor(cx - 40, cy + 40, cx + 40, cy - 40, 2, Color->New(200, 200, 240, alpha / 2));
+				# impact flash
+				if(ft < 0.3) {
+					flash_a := (255.0 * (1.0 - ft / 0.3))->As(Int);
+					if(flash_a > 255) { flash_a := 255; };
+					@renderer->FilledCircleColor(cx, cy, 15, Color->New(255, 255, 255, flash_a / 3));
+				};
+			};
+		};
 	}
 }
 
