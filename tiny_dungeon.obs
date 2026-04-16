@@ -68,6 +68,11 @@ class TinyDungeon {
 	@flavor_timer : Int;
 	@quest_text : TextSprite;
 
+	# FPS counter (profiling; renderer cost only, not frame-capped sleep)
+	@fps_text : TextSprite;
+	@fps_ema : Float;
+	@fps_ticks : Int;
+
 	# --- Merchant ---
 	@merchant_option : Int;
 
@@ -290,7 +295,28 @@ class TinyDungeon {
 				    };
 				};
 
+				render_start := Timer->GetTicks();
 				Render(frame_count);
+				render_ms := Timer->GetTicks() - render_start;
+
+				# EMA-smoothed implied fps (render cost only; inverse of ms)
+				inst_fps := 1000.0;
+				if(render_ms > 0) {
+					inst_fps := 1000.0 / render_ms->As(Float);
+				};
+				if(@fps_ema = 0.0) {
+					@fps_ema := inst_fps;
+				}
+				else {
+					@fps_ema := @fps_ema * 0.9 + inst_fps * 0.1;
+				};
+				@fps_ticks += 1;
+				if(@fps_ticks >= 15) {
+					@fps_ticks := 0;
+					fps_int := @fps_ema->As(Int);
+					fps_label := "{$fps_int} fps ({$render_ms}ms)";
+					@fps_text->RenderedText(fps_label, Color->New(120, 180, 120));
+				};
 
 				@framework->FrameEnd();
 
@@ -369,6 +395,11 @@ class TinyDungeon {
 		# floor indicator
 		@floor_text := @framework->AddTextSprite();
 		@floor_text->RenderedText("Floor 1", Color->New(220, 200, 140));
+
+		# FPS counter (renderer budget, not frame-cap)
+		@fps_text := @framework->AddTextSprite();
+		@fps_text->RenderedText("-- fps", Color->New(120, 180, 120));
+		@fps_ema := 0.0;
 
 		# flavor texts
 		@flavor_texts := String->New[12];
@@ -1840,21 +1871,12 @@ class TinyDungeon {
 		# dungeon view
 		RenderDungeon(frame_count);
 
-		# slope visual effect when on or looking at slope tiles
-		if(@view_type = MapManager->Type->SLOPE_UP | @view_type = MapManager->Type->SLOPE_DOWN) {
-			@dungeon_renderer->RenderSlopeEffect(@view_type, @current_floor);
-		}
-		else if(@view_forward_type = MapManager->Type->SLOPE_UP | @view_forward_type = MapManager->Type->SLOPE_DOWN) {
-			@dungeon_renderer->RenderSlopeEffect(@view_forward_type, @current_floor);
-		};
-
 		# movement transition overlay
 		if(@anim_counter > 0) {
 			progress := 1.0 - @anim_counter->As(Float) / @anim_max_frames->As(Float);
 
 			# 45-degree corner view during turns (strongest at mid-turn)
-			if(@anim_type = 2 | @anim_type = 3) {
-				# bell curve intensity: peaks at progress=0.5
+			if((@anim_type = 2) | (@anim_type = 3)) {
 				corner_intensity := Float->Sin(progress * 3.14);
 				if(corner_intensity > 0.15) {
 					fi := @current_floor - 1;
@@ -1916,6 +1938,9 @@ class TinyDungeon {
 		@compass_text->Render(448, 300);
 		@floor_text->Render(490, 300);
 
+		# FPS / render-time readout (top-right of viewport)
+		@fps_text->Render(360, 12);
+
 		# stat box
 		@stat_box->Render(15, 322);
 		each(i : @stat_box_texts) {
@@ -1969,17 +1994,27 @@ class TinyDungeon {
 		# plaque inscription overlay
 		if(@plaque_timer > 0) {
 			renderer := @framework->GetRenderer();
+			# tablet auto-sizes to text width with 24px side padding, 12-pixel corner insets
+			plq_tw := @plaque_text_sprite->GetWidth();
+			plq_th := @plaque_text_sprite->GetHeight();
+			plq_w := plq_tw + 48;
+			if(plq_w < 320) { plq_w := 320; };
+			plq_cx := 222;  # roughly centered in the 15..429 viewport
+			plq_x0 := plq_cx - plq_w / 2;
+			plq_x1 := plq_cx + plq_w / 2;
+			plq_y0 := 120;
+			plq_y1 := plq_y0 + plq_th + 28;
 			# stone tablet background
-			renderer->BoxColor(40, 120, 400, 175, Color->New(110, 105, 90, 220));
-			renderer->RectangleColor(40, 120, 400, 175, Color->New(80, 75, 60));
-			renderer->RectangleColor(43, 123, 397, 172, Color->New(130, 125, 110, 150));
+			renderer->BoxColor(plq_x0, plq_y0, plq_x1, plq_y1, Color->New(110, 105, 90, 220));
+			renderer->RectangleColor(plq_x0, plq_y0, plq_x1, plq_y1, Color->New(80, 75, 60));
+			renderer->RectangleColor(plq_x0 + 3, plq_y0 + 3, plq_x1 - 3, plq_y1 - 3, Color->New(130, 125, 110, 150));
 			# decorative corners
-			renderer->FilledCircleColor(48, 128, 3, Color->New(140, 135, 120));
-			renderer->FilledCircleColor(392, 128, 3, Color->New(140, 135, 120));
-			renderer->FilledCircleColor(48, 167, 3, Color->New(140, 135, 120));
-			renderer->FilledCircleColor(392, 167, 3, Color->New(140, 135, 120));
-			# inscription text
-			@plaque_text_sprite->Render(55, 140);
+			renderer->FilledCircleColor(plq_x0 + 8, plq_y0 + 8, 3, Color->New(140, 135, 120));
+			renderer->FilledCircleColor(plq_x1 - 8, plq_y0 + 8, 3, Color->New(140, 135, 120));
+			renderer->FilledCircleColor(plq_x0 + 8, plq_y1 - 8, 3, Color->New(140, 135, 120));
+			renderer->FilledCircleColor(plq_x1 - 8, plq_y1 - 8, 3, Color->New(140, 135, 120));
+			# inscription text, centered
+			@plaque_text_sprite->Render(plq_cx - plq_tw / 2, plq_y0 + (plq_y1 - plq_y0 - plq_th) / 2);
 			@plaque_timer -= 1;
 		};
 

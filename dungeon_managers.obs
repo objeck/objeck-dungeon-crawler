@@ -847,6 +847,9 @@ class DungeonRenderer {
 	@vx : Int[];
 	@vy : Int[];
 
+	# per-boundary Y shift (accumulates across slopes in the forward view)
+	@shift : Int[];
+
 	# animation offset
 	@anim_ox : Int;
 	@anim_oy : Int;
@@ -858,6 +861,8 @@ class DungeonRenderer {
 
 		@vx := Int->New[4];
 		@vy := Int->New[4];
+
+		@shift := Int->New[6];
 
 		# 6 depth levels (viewport shrinks toward vanishing point)
 		@dl := Int->New[6]; @dr := Int->New[6];
@@ -1074,116 +1079,6 @@ class DungeonRenderer {
 		};
 	}
 
-	# Render slope visual effect - draws tilted floor/ceiling ramp surfaces
-	method : public : RenderSlopeEffect(tile_type : Int, fi : Int) ~ Nil {
-		if(tile_type = MapManager->Type->SLOPE_UP) {
-			# --- SLOPE UP: floor rises toward you, fills more of the view ---
-			# You're looking UP a ramp. The floor surface tilts toward you,
-			# taking up most of the lower viewport. Ceiling presses down at far end.
-
-			# the ramp rises from normal floor at near to upper-center at far
-			far_top := T(3) + (B(3) - T(3)) / 4;
-
-			# bright ramp surface (lit because it faces you)
-			ramp_col := Color->New(Br(@flr_r[fi] + 12, 0), Br(@flr_g[fi] + 12, 0), Br(@flr_b[fi] + 12, 0));
-			@vx[0] := L(0);  @vy[0] := B(0);
-			@vx[1] := R(0);  @vy[1] := B(0);
-			@vx[2] := R(3);  @vy[2] := far_top;
-			@vx[3] := L(3);  @vy[3] := far_top;
-			@renderer->FilledPolygonColor(@vx, @vy, ramp_col);
-
-			# stone step lines receding up the ramp
-			for(i := 0; i < 10; i += 1;) {
-				t := (i + 1)->As(Float) / 11.0;
-				lx := L(0) + ((L(3) - L(0))->As(Float) * t)->As(Int);
-				rx := R(0) + ((R(3) - R(0))->As(Float) * t)->As(Int);
-				ly := B(0) + ((far_top - B(0))->As(Float) * t)->As(Int);
-				d_idx := (t * 3.0)->As(Int);
-				if(d_idx > 3) { d_idx := 3; };
-				edge_col := Color->New(Br(@flr_r[fi] - 10, d_idx), Br(@flr_g[fi] - 10, d_idx), Br(@flr_b[fi] - 10, d_idx));
-				@renderer->LineColor(lx, ly, rx, ly, edge_col);
-			};
-
-			# vanishing guide lines up the ramp
-			mid_x := (L(0) + R(0)) / 2;
-			far_mid_x := (L(3) + R(3)) / 2;
-			guide_col := Color->New(Br(@flr_r[fi] - 5, 1), Br(@flr_g[fi] - 5, 1), Br(@flr_b[fi] - 5, 1));
-			@renderer->LineColor(mid_x - 25, B(0), far_mid_x - 3, far_top, guide_col);
-			@renderer->LineColor(mid_x + 25, B(0), far_mid_x + 3, far_top, guide_col);
-
-			# ceiling presses DOWN at far end (tunnel narrows going uphill)
-			ceil_col := CeilCol(fi, 1);
-			ceil_far := far_top - 20;
-			@vx[0] := L(1);  @vy[0] := T(1);
-			@vx[1] := R(1);  @vy[1] := T(1);
-			@vx[2] := R(3);  @vy[2] := ceil_far;
-			@vx[3] := L(3);  @vy[3] := ceil_far;
-			@renderer->FilledPolygonColor(@vx, @vy, ceil_col);
-
-			# wall incline markers
-			slope_col := Color->New(Br(@wall_r[fi] - 15, 1), Br(@wall_g[fi] - 15, 1), Br(@wall_b[fi] - 15, 1));
-			@renderer->ThickLineColor(L(0) + 12, B(0), L(2) + 4, B(2) - 35, 2, slope_col);
-			@renderer->ThickLineColor(R(0) - 12, B(0), R(2) - 4, B(2) - 35, 2, slope_col);
-		}
-		else if(tile_type = MapManager->Type->SLOPE_DOWN) {
-			# --- SLOPE DOWN: floor drops away, revealing void below ---
-			# You're looking DOWN. The floor near you is normal, then there's
-			# a visible edge/lip and the ground falls away into darkness.
-
-			# near floor is normal (short strip at feet)
-			near_col := FloorCol(fi, 0);
-			@vx[0] := L(0);  @vy[0] := B(0);
-			@vx[1] := R(0);  @vy[1] := B(0);
-			@vx[2] := R(1);  @vy[2] := B(1);
-			@vx[3] := L(1);  @vy[3] := B(1);
-			@renderer->FilledPolygonColor(@vx, @vy, near_col);
-
-			# the edge/lip of the drop-off (bright highlight line)
-			edge_col := Color->New(Br(@flr_r[fi] + 15, 0), Br(@flr_g[fi] + 15, 0), Br(@flr_b[fi] + 15, 0));
-			@renderer->ThickLineColor(L(1), B(1), R(1), B(1), 2, edge_col);
-
-			# the descending ramp surface visible below the lip
-			# goes from the edge downward toward the far bottom
-			far_bottom := B(3) + 25;
-			dark_ramp := Color->New(Br(@flr_r[fi] - 15, 1), Br(@flr_g[fi] - 15, 1), Br(@flr_b[fi] - 15, 1));
-			@vx[0] := L(1);  @vy[0] := B(1);
-			@vx[1] := R(1);  @vy[1] := B(1);
-			@vx[2] := R(3);  @vy[2] := far_bottom;
-			@vx[3] := L(3);  @vy[3] := far_bottom;
-			@renderer->FilledPolygonColor(@vx, @vy, dark_ramp);
-
-			# stone lines on the descending surface
-			for(i := 0; i < 7; i += 1;) {
-				t := (i + 1)->As(Float) / 8.0;
-				lx := L(1) + ((L(3) - L(1))->As(Float) * t)->As(Int);
-				rx := R(1) + ((R(3) - R(1))->As(Float) * t)->As(Int);
-				ly := B(1) + ((far_bottom - B(1))->As(Float) * t)->As(Int);
-				d_idx := (t * 3.0)->As(Int);
-				if(d_idx > 3) { d_idx := 3; };
-				line_col := Color->New(Br(@flr_r[fi] - 25, d_idx), Br(@flr_g[fi] - 25, d_idx), Br(@flr_b[fi] - 25, d_idx));
-				@renderer->LineColor(lx, ly, rx, ly, line_col);
-			};
-
-			# deep darkness at the far bottom
-			@renderer->BoxColor(L(2), far_bottom - 15, R(2), far_bottom + 5, Color->New(0, 0, 0, 50));
-			@renderer->BoxColor(L(3), far_bottom - 5, R(3), far_bottom + 15, Color->New(0, 0, 0, 80));
-			@renderer->BoxColor(L(4), far_bottom + 5, R(4), far_bottom + 20, Color->New(0, 0, 0, 120));
-
-			# ceiling opens up (rises) to show more space above
-			open_ceil := CeilCol(fi, 0);
-			@vx[0] := L(1);  @vy[0] := T(1);
-			@vx[1] := R(1);  @vy[1] := T(1);
-			@vx[2] := R(3);  @vy[2] := T(3) - 20;
-			@vx[3] := L(3);  @vy[3] := T(3) - 20;
-			@renderer->FilledPolygonColor(@vx, @vy, open_ceil);
-
-			# wall decline markers
-			slope_col := Color->New(Br(@wall_r[fi] - 15, 1), Br(@wall_g[fi] - 15, 1), Br(@wall_b[fi] - 15, 1));
-			@renderer->ThickLineColor(L(0) + 12, B(0) - 15, L(2) + 4, B(2) + 20, 2, slope_col);
-			@renderer->ThickLineColor(R(0) - 12, B(0) - 15, R(2) - 4, B(2) + 20, 2, slope_col);
-		};
-	}
-
 	method : IsOpen(tile : Int) ~ Bool {
 		return tile >= MapManager->Type->OPEN & tile <> MapManager->Type->NONE &
 			tile <> MapManager->Type->BLOCKED & tile <> MapManager->Type->SECRET_WALL &
@@ -1243,6 +1138,22 @@ class DungeonRenderer {
 		@renderer->SetDrawColor(Br(@ceil_r[fi], 4), Br(@ceil_g[fi], 4), Br(@ceil_b[fi], 4), 255);
 		@renderer->FillRect(Rect->New(15, 7, 414, 303));
 
+		# per-boundary floor/ceiling Y offset: ramps in the forward view lift
+		# or drop the tunnel behind the slope, so depths beyond a slope slice
+		# render at the new elevation.  shift[0] is always 0 (near edge of the
+		# nearest slice is the viewport bottom/top).
+		@shift[0] := 0;
+		for(sd := 0; sd < 5; sd += 1;) {
+			delta := 0;
+			if(view[sd, 1] = MapManager->Type->SLOPE_UP) {
+				delta := -20;
+			}
+			else if(view[sd, 1] = MapManager->Type->SLOPE_DOWN) {
+				delta := 30;
+			};
+			@shift[sd + 1] := @shift[sd] + delta;
+		};
+
 		# draw from back (depth 4) to front (depth 0)
 		for(d := 4; d >= 0; d -= 1;) {
 			mid := view[d, 1];
@@ -1255,13 +1166,21 @@ class DungeonRenderer {
 			# floor band
 			DrawFloor(d, fi);
 
-			# side walls where blocked
+			# side walls where blocked; "opening" fill when the adjacent tile
+			# is open (corridor intersections, rooms) so players see a visible
+			# lateral extent of floor/ceiling instead of a dark strip
 			if(<>IsOpen(left)) {
 				DrawLeftWall(d, fi);
+			}
+			else {
+				DrawLeftOpening(d, fi);
 			};
 
 			if(<>IsOpen(right)) {
 				DrawRightWall(d, fi);
+			}
+			else {
+				DrawRightOpening(d, fi);
 			};
 
 			# front wall (depth 1+ only; depth 0 is player position)
@@ -1309,28 +1228,31 @@ class DungeonRenderer {
 
 	method : DrawCeiling(d : Int, fi : Int) ~ Nil {
 		color := CeilCol(fi, d);
-		@vx[0] := L(d);   @vy[0] := T(d);
-		@vx[1] := R(d);   @vy[1] := T(d);
-		@vx[2] := R(d+1); @vy[2] := T(d+1);
-		@vx[3] := L(d+1); @vy[3] := T(d+1);
+		sn := @shift[d]; sf := @shift[d+1];
+		@vx[0] := L(d);   @vy[0] := T(d) + sn;
+		@vx[1] := R(d);   @vy[1] := T(d) + sn;
+		@vx[2] := R(d+1); @vy[2] := T(d+1) + sf;
+		@vx[3] := L(d+1); @vy[3] := T(d+1) + sf;
 		@renderer->FilledPolygonColor(@vx, @vy, color);
 	}
 
 	method : DrawFloor(d : Int, fi : Int) ~ Nil {
 		color := FloorCol(fi, d);
-		@vx[0] := L(d);   @vy[0] := B(d);
-		@vx[1] := R(d);   @vy[1] := B(d);
-		@vx[2] := R(d+1); @vy[2] := B(d+1);
-		@vx[3] := L(d+1); @vy[3] := B(d+1);
+		sn := @shift[d]; sf := @shift[d+1];
+		@vx[0] := L(d);   @vy[0] := B(d) + sn;
+		@vx[1] := R(d);   @vy[1] := B(d) + sn;
+		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
+		@vx[3] := L(d+1); @vy[3] := B(d+1) + sf;
 		@renderer->FilledPolygonColor(@vx, @vy, color);
 	}
 
 	method : DrawLeftWall(d : Int, fi : Int) ~ Nil {
 		color := WallCol(fi, d);
-		@vx[0] := L(d);   @vy[0] := T(d);
-		@vx[1] := L(d+1); @vy[1] := T(d+1);
-		@vx[2] := L(d+1); @vy[2] := B(d+1);
-		@vx[3] := L(d);   @vy[3] := B(d);
+		sn := @shift[d]; sf := @shift[d+1];
+		@vx[0] := L(d);   @vy[0] := T(d) + sn;
+		@vx[1] := L(d+1); @vy[1] := T(d+1) + sf;
+		@vx[2] := L(d+1); @vy[2] := B(d+1) + sf;
+		@vx[3] := L(d);   @vy[3] := B(d) + sn;
 		@renderer->FilledPolygonColor(@vx, @vy, color);
 
 		# mortar lines
@@ -1342,12 +1264,57 @@ class DungeonRenderer {
 		};
 	}
 
+	# Fill the slanted side-wall trapezoid with ceiling on top half and floor
+	# on bottom half, to suggest the space continues laterally when the
+	# adjacent tile is open.  Used in rooms and at corridor intersections
+	# instead of leaving the side as a dark strip.
+	method : DrawLeftOpening(d : Int, fi : Int) ~ Nil {
+		sn := @shift[d]; sf := @shift[d+1];
+		near_mid_y := (T(d) + B(d)) / 2 + sn;
+		far_mid_y  := (T(d+1) + B(d+1)) / 2 + sf;
+
+		# ceiling half
+		@vx[0] := L(d);   @vy[0] := T(d) + sn;
+		@vx[1] := L(d+1); @vy[1] := T(d+1) + sf;
+		@vx[2] := L(d+1); @vy[2] := far_mid_y;
+		@vx[3] := L(d);   @vy[3] := near_mid_y;
+		@renderer->FilledPolygonColor(@vx, @vy, CeilCol(fi, d));
+
+		# floor half
+		@vx[0] := L(d);   @vy[0] := near_mid_y;
+		@vx[1] := L(d+1); @vy[1] := far_mid_y;
+		@vx[2] := L(d+1); @vy[2] := B(d+1) + sf;
+		@vx[3] := L(d);   @vy[3] := B(d) + sn;
+		@renderer->FilledPolygonColor(@vx, @vy, FloorCol(fi, d));
+	}
+
+	method : DrawRightOpening(d : Int, fi : Int) ~ Nil {
+		sn := @shift[d]; sf := @shift[d+1];
+		near_mid_y := (T(d) + B(d)) / 2 + sn;
+		far_mid_y  := (T(d+1) + B(d+1)) / 2 + sf;
+
+		# ceiling half
+		@vx[0] := R(d);   @vy[0] := T(d) + sn;
+		@vx[1] := R(d+1); @vy[1] := T(d+1) + sf;
+		@vx[2] := R(d+1); @vy[2] := far_mid_y;
+		@vx[3] := R(d);   @vy[3] := near_mid_y;
+		@renderer->FilledPolygonColor(@vx, @vy, CeilCol(fi, d));
+
+		# floor half
+		@vx[0] := R(d);   @vy[0] := near_mid_y;
+		@vx[1] := R(d+1); @vy[1] := far_mid_y;
+		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
+		@vx[3] := R(d);   @vy[3] := B(d) + sn;
+		@renderer->FilledPolygonColor(@vx, @vy, FloorCol(fi, d));
+	}
+
 	method : DrawRightWall(d : Int, fi : Int) ~ Nil {
 		color := WallCol(fi, d);
-		@vx[0] := R(d);   @vy[0] := T(d);
-		@vx[1] := R(d+1); @vy[1] := T(d+1);
-		@vx[2] := R(d+1); @vy[2] := B(d+1);
-		@vx[3] := R(d);   @vy[3] := B(d);
+		sn := @shift[d]; sf := @shift[d+1];
+		@vx[0] := R(d);   @vy[0] := T(d) + sn;
+		@vx[1] := R(d+1); @vy[1] := T(d+1) + sf;
+		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
+		@vx[3] := R(d);   @vy[3] := B(d) + sn;
 		@renderer->FilledPolygonColor(@vx, @vy, color);
 
 		# mortar lines
@@ -1361,7 +1328,8 @@ class DungeonRenderer {
 
 	method : DrawFrontWall(d : Int, fi : Int) ~ Nil {
 		color := WallCol(fi, d);
-		@renderer->BoxColor(L(d), T(d), R(d), B(d), color);
+		sn := @shift[d];
+		@renderer->BoxColor(L(d), T(d) + sn, R(d), B(d) + sn, color);
 
 		dark := WallDark(fi, d);
 		wall_h := B(d) - T(d);
@@ -1371,7 +1339,7 @@ class DungeonRenderer {
 		rows := 4;
 		row_sp := wall_h / (rows + 1);
 		for(i := 1; i <= rows; i += 1;) {
-			y := T(d) + row_sp * i;
+			y := T(d) + sn + row_sp * i;
 			@renderer->HLineColor(L(d) + 2, R(d) - 2, y, dark);
 		};
 
@@ -1380,9 +1348,9 @@ class DungeonRenderer {
 		col_sp := wall_w / (cols + 1);
 		for(i := 1; i <= cols; i += 1;) {
 			for(j := 0; j <= rows; j += 1;) {
-				y_s := T(d) + row_sp * j;
-				y_e := T(d) + row_sp * (j + 1);
-				if(y_e > B(d)) { y_e := B(d); };
+				y_s := T(d) + sn + row_sp * j;
+				y_e := T(d) + sn + row_sp * (j + 1);
+				if(y_e > B(d) + sn) { y_e := B(d) + sn; };
 
 				offset := 0;
 				if(j % 2 = 1) { offset := col_sp / 2; };
@@ -1395,7 +1363,7 @@ class DungeonRenderer {
 
 		# highlight on top edge
 		light := WallLight(fi, d);
-		@renderer->HLineColor(L(d), R(d), T(d) + 1, light);
+		@renderer->HLineColor(L(d), R(d), T(d) + sn + 1, light);
 	}
 
 	method : DrawSideTexture(d : Int, fi : Int, is_left : Bool) ~ Nil {
