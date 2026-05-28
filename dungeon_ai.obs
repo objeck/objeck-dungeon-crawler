@@ -417,6 +417,46 @@ class DungeonAI {
         };
         return Int->Random(99);
     }
+
+    function : MonsterBattleCry(monster_name : String, player_class : String) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "A {$monster_name} lunges at a {$player_class} in a dark dungeon. Write ONE menacing battle cry, max 9 words. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.95)));
+    }
+
+    function : LevelUpQuip(class_name : String, level : Int) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "A dungeon {$class_name} just reached level {$level}. Write ONE short triumphant line, max 8 words. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.9)));
+    }
+
+    function : VictoryEpilogue(class_name : String, kills : Int, gold : Int) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "A {$class_name} just defeated an ancient demon lord in a dark dungeon after slaying {$kills} monsters and collecting {$gold} gold. Write a triumphant two-sentence epilogue describing their legend. No quotes.";
+        response := Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85));
+        if(response = Nil) { return Nil; };
+        think_end := response->Find("</think>");
+        if(think_end >= 0) {
+            after := think_end + 8;
+            if(response->Size() - after > 0) { response := response->SubString(after, response->Size() - after)->Trim(); }
+            else { return Nil; };
+        }
+        else {
+            response := response->Trim();
+        };
+        if(response = Nil | response->IsEmpty()) { return Nil; };
+        if(response->Size() > 160) {
+            response := response->SubString(0, 157);
+            response->Append("...");
+        };
+        return response;
+    }
+
+    function : DeathEulogy(class_name : String, floor : Int, kills : Int) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "A {$class_name} died on floor {$floor} of a dark dungeon after slaying {$kills} monsters. Write a somber one-sentence epitaph for their tomb. No quotes. Max 14 words.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.8)));
+    }
 }
 
 class ThemeLoaderThread from Thread {

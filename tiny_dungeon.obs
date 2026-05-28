@@ -132,6 +132,7 @@ class TinyDungeon {
 	# --- Terminal screen texts ---
 	@terminal_title : TextSprite;
 	@terminal_stats : TextSprite[];
+	@terminal_epilogue : TextSprite;
 
 	# --- Title Screen ---
 	@title_text : TextSprite;
@@ -419,6 +420,7 @@ class TinyDungeon {
 
 		# terminal screen texts
 		@terminal_title := @framework->AddTextSprite();
+		@terminal_epilogue := @framework->AddTextSprite();
 		@terminal_stats := TextSprite->New[7];
 		each(i : @terminal_stats) {
 			@terminal_stats[i] := @framework->AddTextSprite();
@@ -1328,6 +1330,13 @@ class TinyDungeon {
 								new_level := @player->GetLevel();
 								@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
 								@levelup_timer := 90;
+								if(DungeonAI->IsReady() & @ai_timer = 0) {
+									quip := DungeonAI->LevelUpQuip(GetPlayerClassName(), new_level);
+									if(quip <> Nil) {
+										@ai_text->RenderedText(quip, Color->New(220, 220, 80));
+										@ai_timer := 130;
+									};
+								};
 							};
 
 							# check boss victory
@@ -1786,6 +1795,13 @@ class TinyDungeon {
 						new_level := @player->GetLevel();
 						@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
 						@levelup_timer := 90;
+						if(DungeonAI->IsReady() & @ai_timer = 0) {
+							quip := DungeonAI->LevelUpQuip(GetPlayerClassName(), new_level);
+							if(quip <> Nil) {
+								@ai_text->RenderedText(quip, Color->New(220, 220, 80));
+								@ai_timer := 130;
+							};
+						};
 					};
 					if(was_boss) { @game_state := 2; ShowTerminalScreen(); };
 					DungeonAI->EndFight();
@@ -2290,6 +2306,13 @@ class TinyDungeon {
 			@terminal_stats[4]->RenderedText("", @text_color);
 			@terminal_stats[5]->RenderedText("", @text_color);
 			@terminal_stats[6]->RenderedText("Press ESC to exit", Color->New(150, 130, 100));
+			epitaph := DungeonAI->DeathEulogy(class_name, player_floor, player_kills);
+			if(epitaph <> Nil) {
+				@terminal_epilogue->RenderedText(epitaph, Color->New(180, 100, 80));
+			}
+			else {
+				@terminal_epilogue->RenderedText("", @text_color);
+			};
 		}
 		else if(@game_state = 2) {
 			@terminal_title->RenderedText("GREYHOLD IS CLEARED!", Color->New(255, 220, 60));
@@ -2300,6 +2323,13 @@ class TinyDungeon {
 			@terminal_stats[4]->RenderedText("{$wpn_name}  |  {$arm_name}", Color->New(160, 150, 130));
 			@terminal_stats[5]->RenderedText("", @text_color);
 			@terminal_stats[6]->RenderedText("Press ESC to exit", Color->New(150, 130, 100));
+			epilogue := DungeonAI->VictoryEpilogue(class_name, player_kills, player_gold);
+			if(epilogue <> Nil) {
+				@terminal_epilogue->RenderedText(epilogue, Color->New(200, 180, 90));
+			}
+			else {
+				@terminal_epilogue->RenderedText("", @text_color);
+			};
 			# clear save — the run is complete
 			FileWriter->WriteFile("save.json", "");
 			@title_has_save := false;
@@ -2487,6 +2517,15 @@ class TinyDungeon {
 			# show monster name
 			monster_name := @monster->GetName();
 			@monster_name_text->RenderedText(monster_name, Color->New(255, 200, 200));
+
+			# AI battle cry (30% chance)
+			if(DungeonAI->IsReady() & @ai_timer = 0 & Int->Random(9) < 3) {
+				cry := DungeonAI->MonsterBattleCry(monster_name, GetPlayerClassName());
+				if(cry <> Nil) {
+					@ai_text->RenderedText(cry, Color->New(255, 140, 100));
+					@ai_timer := 120;
+				};
+			};
 		};
 	}
 
@@ -3091,6 +3130,20 @@ class TinyDungeon {
 			};
 		};
 
+		# AI epilogue / epitaph
+		ew := @terminal_epilogue->GetWidth();
+		if(ew > 0) {
+			if(@game_state = 1) {
+				renderer->HLineColor(cx - 160, cx + 160, stat_y + 4, Color->New(100, 30, 30));
+			}
+			else {
+				renderer->HLineColor(cx - 160, cx + 160, stat_y + 4, Color->New(140, 100, 20));
+			};
+			ex := cx - ew / 2;
+			if(ex < 20) { ex := 20; };
+			@terminal_epilogue->Render(ex, stat_y + 12);
+		};
+
 		@framework->Show();
 	}
 
@@ -3152,30 +3205,39 @@ class TinyDungeon {
 			y_offset := 15;
 			for(j := 0; j < MapManager->Type->MAP_SIZE; j += 1;) {
 				if(@player_location[1] = i & @player_location[0] = j) {
+					# player tile: bright background + direction arrow
+					renderer->BoxColor(x_offset, y_offset, x_offset + 13, y_offset + 13, Color->New(30, 55, 30));
+					acx := x_offset + 7; acy := y_offset + 7;
 					select(@player_direction) {
 						label MapManager->Direction->NORTH {
-							@sprite_manager->RenderMapSprite(2, y_offset, x_offset);
+							@tri_vx[0] := acx;     @tri_vy[0] := acy - 5;
+							@tri_vx[1] := acx - 4; @tri_vy[1] := acy + 4;
+							@tri_vx[2] := acx + 4; @tri_vy[2] := acy + 4;
 						}
-
 						label MapManager->Direction->SOUTH {
-							@sprite_manager->RenderMapSprite(4, y_offset, x_offset);
+							@tri_vx[0] := acx;     @tri_vy[0] := acy + 5;
+							@tri_vx[1] := acx - 4; @tri_vy[1] := acy - 4;
+							@tri_vx[2] := acx + 4; @tri_vy[2] := acy - 4;
 						}
-
 						label MapManager->Direction->EAST {
-							@sprite_manager->RenderMapSprite(3, y_offset, x_offset);
+							@tri_vx[0] := acx + 5; @tri_vy[0] := acy;
+							@tri_vx[1] := acx - 4; @tri_vy[1] := acy - 4;
+							@tri_vx[2] := acx - 4; @tri_vy[2] := acy + 4;
 						}
-
 						label MapManager->Direction->WEST {
-							@sprite_manager->RenderMapSprite(5, y_offset, x_offset);
+							@tri_vx[0] := acx - 5; @tri_vy[0] := acy;
+							@tri_vx[1] := acx + 4; @tri_vy[1] := acy - 4;
+							@tri_vx[2] := acx + 4; @tri_vy[2] := acy + 4;
 						}
 					};
+					renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(80, 220, 80));
 				}
 				else {
 					if(@player_nav_map[j, i] = 0) {
-						@sprite_manager->RenderMapSprite(0, y_offset, x_offset);
+						renderer->BoxColor(x_offset, y_offset, x_offset + 13, y_offset + 13, Color->New(14, 11, 8));
 					}
 					else {
-						@sprite_manager->RenderMapSprite(1, y_offset, x_offset);
+						renderer->BoxColor(x_offset, y_offset, x_offset + 13, y_offset + 13, Color->New(52, 44, 34));
 
 						# draw item/feature indicators on explored tiles
 						tile := @map_manager->GetType(j, i);

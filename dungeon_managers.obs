@@ -2013,59 +2013,15 @@ class DungeonRenderer {
 Sprite helper for monster and map tile rendering (temporary - will be replaced by procedural art)
 ~#
 class SpriteManager from Manager {
-	@framework : GameFramework;
-	@map_sprites : AnimatedImageSprite;
-	@monster_sprites : AnimatedImageSprite;
-
 	New(path : String, framework : GameFramework) {
 		Parent();
-		@framework := framework;
-		@map_sprites := @framework->AddAnimatedImageSprite("{$path}/map_0.png");
-		@monster_sprites := @framework->AddAnimatedImageSprite("{$path}/monsters_1.png");
 	}
 
 	method : public : Load() ~ Bool {
-		# map sprites
-		if(<>@map_sprites->IsOk()) {
-			"--- Unable to load map sprites! ---"->ErrorLine();
-			return false;
-		};
-		@map_sprites->AddClips(Clips->MAP_X_CLIPS, 14, Clips->MAP_Y_CLIPS, 14);
-
-		# monster sprites
-		if(<>@monster_sprites->IsOk()) {
-			"--- Unable to load monster sprites! ---"->ErrorLine();
-			return false;
-		};
-		@monster_sprites->AddClips(Clips->MONSTER_X_CLIPS, 188, Clips->MONSTER_Y_CLIPS, 224);
-
 		return true;
 	}
 
-	method : public : RenderMapSprite(image_index : Int, top : Int, left : Int) ~ Nil {
-		if(image_index > -1 & image_index < Clips->MAP_X_CLIPS) {
-			@map_sprites->SetTop(top);
-			@map_sprites->SetLeft(left);
-			@map_sprites->Render(image_index);
-		};
-	}
-
-	method : public : RenderMonsterSprite(image_index : Int, top : Int, left : Int) ~ Nil {
-		if(image_index > -1) {
-			@monster_sprites->SetTop(top);
-			@monster_sprites->SetLeft(left);
-			@monster_sprites->Render(image_index);
-		};
-	}
-
 	method : public : Unload() ~ Nil {
-	}
-
-	consts Clips {
-		MAP_X_CLIPS := 8,
-		MAP_Y_CLIPS := 1,
-		MONSTER_X_CLIPS := 4,
-		MONSTER_Y_CLIPS := 3
 	}
 }
 
