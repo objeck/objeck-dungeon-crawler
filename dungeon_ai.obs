@@ -1,9 +1,95 @@
 use API.Ollama, Collection, System.Concurrency;
 
+class AIRequest {
+    @key    : String;
+    @prompt : String;
+
+    New(k : String, p : String) {
+        @key := k; @prompt := p;
+    }
+
+    method : public : GetKey()    ~ String { return @key; }
+    method : public : GetPrompt() ~ String { return @prompt; }
+}
+
+class AIWorker from Thread {
+    @queue  : static : Queue<AIRequest>;
+    @cache  : static : Hash<String, String>;
+    @mutex  : static : ThreadMutex;
+    @model  : static : String;
+    @active : static : Bool;
+
+    New() { Parent("ai-worker"); }
+
+    function : Init(model_name : String) ~ Nil {
+        @queue  := Queue->New()<AIRequest>;
+        @cache  := Hash->New()<String, String>;
+        @mutex  := ThreadMutex->New("ai-cache");
+        @model  := model_name;
+        @active := false;
+    }
+
+    function : Post(key : String, prompt : String) ~ Nil {
+        if(@queue = Nil | @mutex = Nil) { return; };
+        critical(@mutex) {
+            @queue->AddBack(AIRequest->New(key, prompt));
+        };
+    }
+
+    function : GetCached(key : String) ~ String {
+        if(@cache = Nil | @mutex = Nil) { return Nil; };
+        result : String;
+        critical(@mutex) {
+            result := @cache->Find(key);
+        };
+        return result;
+    }
+
+    function : HasCached(key : String) ~ Bool {
+        if(@cache = Nil | @mutex = Nil) { return false; };
+        found : Bool;
+        critical(@mutex) { found := @cache->Has(key); };
+        return found;
+    }
+
+    method : public : Run(data : Base) ~ Nil {
+        @active := true;
+        while(@active) {
+            entry : AIRequest;
+            critical(@mutex) {
+                if(<>@queue->IsEmpty()) {
+                    entry := @queue->RemoveFront();
+                };
+            };
+
+            if(entry <> Nil) {
+                key := entry->GetKey();
+                already : Bool;
+                critical(@mutex) { already := @cache->Has(key); };
+                if(<>already) {
+                    result := Completion->Generate(@model, entry->GetPrompt(), Options->New()->SetTemperature(0.9));
+                    if(result <> Nil) {
+                        clipped := DungeonAI->Clip(result);
+                        if(clipped <> Nil) {
+                            critical(@mutex) {
+                                @cache->Insert(key, clipped);
+                            };
+                        };
+                    };
+                };
+            }
+            else {
+                Thread->Sleep(10);
+            };
+        };
+    }
+}
+
 class DungeonAI {
     @model : static : String;
     @is_ready : static : Bool;
     @boss_round : static : Int;
+    @worker : static : AIWorker;
 
     # --- Q-Learning Combat AI ---
     @q_table   : static : Float[];  # 9 states x 3 actions = 27 values
@@ -67,9 +153,14 @@ class DungeonAI {
         };
 
         @model := mp->GetName();
-        @is_ready := true;
         @boss_round := 0;
         InitQTable();
+        # Start async worker before setting @is_ready so callers see a consistent state
+        AIWorker->Init(@model);
+        w := AIWorker->New();
+        w->Execute(Nil);
+        @worker := w;
+        @is_ready := true;
         return @model;
     }
 
@@ -85,6 +176,56 @@ class DungeonAI {
 
     function : GetModelName() ~ String {
         return @model;
+    }
+
+    # --- Async worker interface ---
+
+    function : PostRequest(key : String, prompt : String) ~ Nil {
+        if(@worker = Nil | <>@is_ready) { return; };
+        if(<>AIWorker->HasCached(key)) {
+            AIWorker->Post(key, prompt);
+        };
+    }
+
+    function : GetCached(key : String) ~ String {
+        if(@worker = Nil) { return Nil; };
+        return AIWorker->GetCached(key);
+    }
+
+    function : PostFloorBattleCries(floor : Int, class_name : String) ~ Nil {
+        if(@worker = Nil | <>@is_ready) { return; };
+        PostCry("Mimic", class_name);
+        if(floor = 1) {
+            PostCry("Giant Rat", class_name);    PostCry("Cave Bat", class_name);
+            PostCry("Skeleton", class_name);     PostCry("Dungeon Spider", class_name);
+            PostCry("Zombie", class_name);       PostCry("Mushroom Fiend", class_name);
+            PostCry("Kobold", class_name);
+        }
+        else if(floor = 2) {
+            PostCry("Ghost", class_name);        PostCry("Shadow", class_name);
+            PostCry("Ghoul", class_name);        PostCry("Wraith", class_name);
+            PostCry("Dark Priest", class_name);  PostCry("Vampire", class_name);
+            PostCry("Banshee", class_name);
+        }
+        else if(floor = 3) {
+            PostCry("Ogre", class_name);         PostCry("Troll", class_name);
+            PostCry("Dark Knight", class_name);  PostCry("Gargoyle", class_name);
+            PostCry("Lich", class_name);         PostCry("Stone Golem", class_name);
+            PostCry("Werewolf", class_name);     PostCry("Medusa", class_name);
+        }
+        else {
+            PostCry("Demon", class_name);        PostCry("Hellhound", class_name);
+            PostCry("Dark Sorcerer", class_name); PostCry("Dragon", class_name);
+            PostCry("Balor", class_name);        PostCry("Eye Tyrant", class_name);
+            PostCry("Nightmare", class_name);
+        };
+    }
+
+    function : PostCry(monster_name : String, class_name : String) ~ Nil {
+        key := "cry:{$monster_name}";
+        if(AIWorker->HasCached(key)) { return; };
+        prompt := "A {$monster_name} lunges at a {$class_name} in a dark dungeon. ONE menacing battle cry, max 9 words. No quotes.";
+        AIWorker->Post(key, prompt);
     }
 
     function : Clip(text : String) ~ String {
@@ -460,16 +601,27 @@ class DungeonAI {
         @world_ready := true;
     }
 
+    # Non-blocking: returns cached result instantly; posts to worker if not yet cached.
+    # Call site should also poll GetCached(key) each render frame.
     function : MonsterBattleCry(monster_name : String, player_class : String) ~ String {
-        if(<>@is_ready) { return Nil; };
+        if(<>@is_ready | @worker = Nil) { return Nil; };
+        key := "cry:{$monster_name}";
+        cached := AIWorker->GetCached(key);
+        if(cached <> Nil) { return cached; };
         prompt := "A {$monster_name} lunges at a {$player_class} in a dark dungeon. Write ONE menacing battle cry, max 9 words. No quotes.";
-        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.95)));
+        AIWorker->Post(key, prompt);
+        return Nil;
     }
 
+    # Non-blocking: returns cached result instantly; posts to worker if not yet cached.
     function : LevelUpQuip(class_name : String, level : Int) ~ String {
-        if(<>@is_ready) { return Nil; };
+        if(<>@is_ready | @worker = Nil) { return Nil; };
+        key := "quip:{$level}";
+        cached := AIWorker->GetCached(key);
+        if(cached <> Nil) { return cached; };
         prompt := "A dungeon {$class_name} just reached level {$level}. Write ONE short triumphant line, max 8 words. No quotes.";
-        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.9)));
+        AIWorker->Post(key, prompt);
+        return Nil;
     }
 
     function : VictoryEpilogue(class_name : String, kills : Int, gold : Int) ~ String {

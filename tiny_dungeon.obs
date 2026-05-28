@@ -163,6 +163,10 @@ class TinyDungeon {
 	@floor_entry_name : TextSprite;
 	@floor_entry_lore : TextSprite;
 
+	# --- Async AI poll state ---
+	@quip_pending    : Bool;
+	@last_quip_level : Int;
+
 	# --- Overworld ---
 	@overworld_manager   : OverworldManager;
 	@ow_player_r         : Int;
@@ -719,12 +723,15 @@ class TinyDungeon {
 		else               { @monster := Monster->CreateByFloor("Goblin",         fl, 9,  11, 11, 6,  30.0, 11.0, 14, false); @monster_sprint_index := MonsterID->ZOMBIE; };
 		monster_name := @monster->GetName();
 		@monster_name_text->RenderedText(monster_name, Color->New(255, 200, 200));
-		if(DungeonAI->IsReady() & @ai_timer = 0 & Int->Random(9) < 3) {
+		@quip_pending := false;   # battle cry takes AI display priority
+		if(DungeonAI->IsReady() & @ai_timer = 0) {
+			# Always try — MonsterBattleCry returns cached instantly or posts and returns Nil
 			cry := DungeonAI->MonsterBattleCry(monster_name, GetPlayerClassName());
 			if(cry <> Nil) {
 				@ai_text->RenderedText(cry, Color->New(255, 140, 100));
 				@ai_timer := 120;
 			};
+			# Otherwise poll loop in Render() will display it when the worker responds
 		};
 	}
 
@@ -968,6 +975,7 @@ class TinyDungeon {
 		MoveForward();
 		UpdateView();
 		if(inc_level <> 0) { SaveGame(); };
+		if(@player <> Nil & DungeonAI->IsReady()) { DungeonAI->PostFloorBattleCries(@current_floor, GetPlayerClassName()); };
 	}
 
 	method : GetInput(e : Event) ~ Nil {
@@ -1428,11 +1436,16 @@ class TinyDungeon {
 								new_level := @player->GetLevel();
 								@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
 								@levelup_timer := 90;
-								if(DungeonAI->IsReady() & @ai_timer = 0) {
+								if(DungeonAI->IsReady()) {
 									quip := DungeonAI->LevelUpQuip(GetPlayerClassName(), new_level);
-									if(quip <> Nil) {
+									if(quip <> Nil & @ai_timer = 0) {
 										@ai_text->RenderedText(quip, Color->New(220, 220, 80));
 										@ai_timer := 130;
+									}
+									else {
+										# quip posted to worker; poll will display when ready
+										@quip_pending := true;
+										@last_quip_level := new_level;
 									};
 								};
 							};
@@ -1897,11 +1910,15 @@ class TinyDungeon {
 						new_level := @player->GetLevel();
 						@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
 						@levelup_timer := 90;
-						if(DungeonAI->IsReady() & @ai_timer = 0) {
+						if(DungeonAI->IsReady()) {
 							quip := DungeonAI->LevelUpQuip(GetPlayerClassName(), new_level);
-							if(quip <> Nil) {
+							if(quip <> Nil & @ai_timer = 0) {
 								@ai_text->RenderedText(quip, Color->New(220, 220, 80));
 								@ai_timer := 130;
+							}
+							else {
+								@quip_pending := true;
+								@last_quip_level := new_level;
 							};
 						};
 					};
@@ -3042,6 +3059,30 @@ class TinyDungeon {
 			rend->BoxColor(p_x2 - 7, p_y2 - 7, p_x2 - 1, p_y2 - 1, Color->New(180, 140, 50));
 			@ai_text->Render(text_x, text_y);
 			@ai_timer -= 1;
+		};
+
+		# Poll async AI results
+		if(DungeonAI->IsReady() & @ai_timer = 0) {
+			# Battle cry: check cache for current monster
+			if(@monster <> Nil) {
+				mn := @monster->GetName();
+				cry_key := "cry:{$mn}";
+				cry := DungeonAI->GetCached(cry_key);
+				if(cry <> Nil) {
+					@ai_text->RenderedText(cry, Color->New(255, 140, 100));
+					@ai_timer := 120;
+				};
+			};
+			# Level-up quip: check cache when pending
+			if(@quip_pending & @player <> Nil) {
+				ql := @last_quip_level;
+				quip := DungeonAI->GetCached("quip:{$ql}");
+				if(quip <> Nil) {
+					@ai_text->RenderedText(quip, Color->New(220, 220, 80));
+					@ai_timer := 130;
+					@quip_pending := false;
+				};
+			};
 		};
 
 		DrawFloorEntry();
