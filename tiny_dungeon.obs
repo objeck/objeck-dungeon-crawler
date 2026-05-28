@@ -203,7 +203,7 @@ class TinyDungeon {
 
 		@title_text->RenderedText("WARDEN OF GREYHOLD", Color->New(220, 180, 60));
 		@title_sub->RenderedText("A Dungeon of Darkness Awaits", Color->New(160, 140, 100));
-		@title_prompt->RenderedText("Press SPACE to descend", Color->New(200, 190, 160));
+		@title_prompt->RenderedText("Press SPACE to descend", Color->New(245, 235, 200));
 
 		@title_lore[0]->RenderedText("The ancient evil stirs beneath the city.", Color->New(140, 120, 90));
 		@title_lore[1]->RenderedText("Demons claw at the seals of binding.", Color->New(140, 120, 90));
@@ -265,6 +265,7 @@ class TinyDungeon {
 		ai_model := DungeonAI->InitModel();
 		if(ai_model <> Nil) {
 			"[AI] Connected: {$ai_model}"->ErrorLine();
+			DungeonAI->StartThemeAsync();
 		}
 		else {
 			"[AI] Ollama not available - AI features disabled"->ErrorLine();
@@ -481,8 +482,8 @@ class TinyDungeon {
 		player_xp := @player->GetXP();
 
 		# spells
-		player_spell1 := @player->GetMagic1() = Nil ? "None" : @player->GetMagic1()->ToString();
-		player_spell2 := @player->GetMagic2() = Nil ? "None" : @player->GetMagic2()->ToString();
+		player_spell1 := @player->GetSpell(0) = Nil ? "None" : @player->GetSpell(0)->ToString();
+		player_spell2 := @player->GetSpell(1) = Nil ? "None" : @player->GetSpell(1)->ToString();
 
 		stat_box_copy := [
 			"Lv:{$player_level} HP:{$player_hp}/{$player_max_hp}",
@@ -608,10 +609,6 @@ class TinyDungeon {
 	}
 
 	method : StartLevel(inc_level : Int) ~ Nil {
-		# generate AI dungeon theme on first dungeon entry
-		if(inc_level = 0 & DungeonAI->IsReady() & <>DungeonAI->IsThemeReady()) {
-			DungeonAI->GenerateTheme();
-		};
 		@player_direction := MapManager->Direction->NORTH;
 		start_location := @map_manager->GetStart(inc_level);
 		@player_location[0] := start_location[0];
@@ -1245,7 +1242,7 @@ class TinyDungeon {
         					idx := Int->Random(@plaque_texts->Size() - 1);
         					plaque_str := @plaque_texts[idx];
         				};
-        				@plaque_text_sprite->RenderedText(plaque_str, Color->New(200, 190, 160));
+        				@plaque_text_sprite->RenderedText(plaque_str, Color->New(245, 235, 200));
         				@plaque_timer := 120;
         			}
         			else {
@@ -2184,8 +2181,10 @@ class TinyDungeon {
 			@item_box_texts[i]->Render(460, 330 + i * 24);
 		};
 
-		# quest text
-		@quest_text->Render(15, 480);
+		# quest text (only outside combat; combat hints use this sprite at y=314)
+		if(@monster = Nil) {
+			@quest_text->Render(15, 480);
+		};
 
 		# flavor text
 		if(@flavor_timer > 0) {

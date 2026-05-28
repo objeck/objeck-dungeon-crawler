@@ -1,4 +1,4 @@
-use API.Ollama, Collection;
+use API.Ollama, Collection, System.Concurrency;
 
 class DungeonAI {
     @model : static : String;
@@ -24,6 +24,7 @@ class DungeonAI {
     @theme_archetype : static : Int;   # 0=undead 1=beast 2=infernal 3=arcane
     @theme_treasure  : static : Int;   # 0=weapon 1=magic 2=gold
     @theme_ready     : static : Bool;
+    @theme_thread    : static : Thread;
 
     consts Archetype {
         UNDEAD   := 0,
@@ -70,6 +71,12 @@ class DungeonAI {
 
     function : IsReady() ~ Bool {
         return @is_ready;
+    }
+
+    function : StartThemeAsync() ~ Nil {
+        if(<>@is_ready | @theme_thread <> Nil) { return; };
+        @theme_thread := ThemeLoaderThread->New();
+        @theme_thread->Execute(Nil);
     }
 
     function : GetModelName() ~ String {
@@ -409,5 +416,13 @@ class DungeonAI {
             };
         };
         return Int->Random(99);
+    }
+}
+
+class ThemeLoaderThread from Thread {
+    New() { Parent("theme-loader"); }
+
+    method : public : Run(data : Base) ~ Nil {
+        DungeonAI->GenerateTheme();
     }
 }

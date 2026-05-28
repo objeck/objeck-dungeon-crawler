@@ -386,8 +386,12 @@ class Player from Entity {
 		@defense_bonus := 0;
 		@step_count := 0;
 
-		# learn starting spell
-		LearnSpellForLevel(1);
+		# learn starting spell — class-specific
+		select(@class_id) {
+			label PlayerClass->MAGE { LearnSpellForLevel(2); }
+			label PlayerClass->NINJA { }
+			other { LearnSpellForLevel(1); }
+		};
 	}
 
 	method : LearnSpellForLevel(level : Int) ~ Nil {
