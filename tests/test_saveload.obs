@@ -1,0 +1,135 @@
+#~
+Save/Load JSON round-trip — no SDL required
+~#
+
+use Data.JSON;
+use System.IO.Filesystem;
+
+class SaveLoadTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : AssertInt(lbl : String, got : Int, want : Int) ~ Nil {
+        if(got <> want) { Fail("{$lbl}: got {$got}, want {$want}"); };
+    }
+
+    function : AssertFloat(lbl : String, got : Float, want : Float, tol : Float) ~ Nil {
+        diff := got - want;
+        if(diff < 0.0) { diff := -diff; };
+        if(diff > tol) { Fail("{$lbl}: got {$got}, want {$want}"); };
+    }
+
+    function : AssertBool(lbl : String, got : Bool, want : Bool) ~ Nil {
+        if(got <> want) {
+            gs := got ? "true" : "false";
+            ws := want ? "true" : "false";
+            Fail("{$lbl}: got {$gs}, want {$ws}");
+        };
+    }
+
+    function : Run() ~ Nil {
+        builder := JsonBuilder->New();
+        builder->PushObject();
+        builder->Insert("version", 1);
+        builder->Insert("floor",   3);
+        builder->Insert("loc_row", 12);
+        builder->Insert("loc_col", 7);
+        builder->Insert("dir",     2);
+        builder->Insert("kills",   42);
+
+        builder->PushObject("player");
+        builder->Insert("class_id",   2);
+        builder->Insert("hp",         18);
+        builder->Insert("max_hp",     22);
+        builder->Insert("mp",         14);
+        builder->Insert("max_mp",     28);
+        builder->Insert("level",      4);
+        builder->Insert("xp",         180);
+        builder->Insert("gold",       320);
+        builder->Insert("tents",      1);
+        builder->Insert("str",        10.5);
+        builder->Insert("agi",        12.0);
+        builder->Insert("sta",        9.0);
+        builder->Insert("crit",       2);
+        builder->Insert("weapon_tier",3);
+        builder->Insert("armor_tier", 2);
+        builder->Insert("p1_type",    0);
+        builder->Insert("p1_count",   2);
+        builder->Insert("p2_type",    1);
+        builder->Insert("p2_count",   1);
+        builder->Insert("p3_type",    0);
+        builder->Insert("p3_count",   0);
+        builder->Insert("poison",     0);
+        builder->Insert("blind",      3);
+        builder->Insert("confuse",    0);
+        builder->Insert("slow",       0);
+        builder->Insert("defense",    5);
+        builder->Insert("cursed_wpn", false);
+        builder->Insert("cursed_arm", true);
+        builder->Pop();
+
+        root := builder->PopAll();
+        json := root->ToString();
+        if(json = Nil | json->IsEmpty()) { Fail("JSON serialization empty"); return; };
+
+        FileWriter->WriteFile("test_save_tmp.json", json);
+        readback := FileReader->ReadFile("test_save_tmp.json");
+        if(readback = Nil) { Fail("File read nil"); return; };
+
+        parsed := JsonParser->TextToElement(readback);
+        if(parsed = Nil) { Fail("JSON parse nil"); return; };
+
+        AssertInt("version", parsed->Get("version")->GetInt(), 1);
+        AssertInt("floor",   parsed->Get("floor")->GetInt(),   3);
+        AssertInt("loc_row", parsed->Get("loc_row")->GetInt(), 12);
+        AssertInt("loc_col", parsed->Get("loc_col")->GetInt(), 7);
+        AssertInt("dir",     parsed->Get("dir")->GetInt(),     2);
+        AssertInt("kills",   parsed->Get("kills")->GetInt(),   42);
+
+        p := parsed->Get("player");
+        if(p = Nil) { Fail("player object missing"); return; };
+
+        AssertInt("class_id",    p->Get("class_id")->GetInt(),    2);
+        AssertInt("hp",          p->Get("hp")->GetInt(),          18);
+        AssertInt("max_hp",      p->Get("max_hp")->GetInt(),      22);
+        AssertInt("mp",          p->Get("mp")->GetInt(),          14);
+        AssertInt("max_mp",      p->Get("max_mp")->GetInt(),      28);
+        AssertInt("level",       p->Get("level")->GetInt(),       4);
+        AssertInt("xp",          p->Get("xp")->GetInt(),          180);
+        AssertInt("gold",        p->Get("gold")->GetInt(),        320);
+        AssertInt("tents",       p->Get("tents")->GetInt(),       1);
+        AssertFloat("str",       p->Get("str")->GetFloat(),       10.5, 0.01);
+        AssertFloat("agi",       p->Get("agi")->GetFloat(),       12.0, 0.01);
+        AssertFloat("sta",       p->Get("sta")->GetFloat(),       9.0,  0.01);
+        AssertInt("crit",        p->Get("crit")->GetInt(),        2);
+        AssertInt("weapon_tier", p->Get("weapon_tier")->GetInt(), 3);
+        AssertInt("armor_tier",  p->Get("armor_tier")->GetInt(),  2);
+        AssertInt("p1_count",    p->Get("p1_count")->GetInt(),    2);
+        AssertInt("p2_type",     p->Get("p2_type")->GetInt(),     1);
+        AssertInt("p3_count",    p->Get("p3_count")->GetInt(),    0);
+        AssertInt("blind",       p->Get("blind")->GetInt(),       3);
+        AssertInt("defense",     p->Get("defense")->GetInt(),     5);
+        AssertBool("cursed_wpn", p->Get("cursed_wpn")->GetBool(), false);
+        AssertBool("cursed_arm", p->Get("cursed_arm")->GetBool(), true);
+
+        missing := parsed->Get("nonexistent_key");
+        if(missing <> Nil) { Fail("missing key should return nil"); };
+
+        FileWriter->WriteFile("test_save_tmp.json", "");
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: save/load JSON round-trip"->PrintLine();
+        }
+        else {
+            "FAIL: save/load JSON round-trip"->PrintLine();
+        };
+    }
+}

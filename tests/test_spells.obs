@@ -1,0 +1,99 @@
+#~
+Spell system tests
+~#
+
+use System.Concurrency;
+use Collection;
+use Game.SDL2;
+use Game.Framework;
+use System.IO.Filesystem;
+
+class SpellTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : Run() ~ Nil {
+        # GetSpellForLevel mapping
+        sp1 := Spell->GetSpellForLevel(1);
+        if(sp1 = Nil) { Fail("Level 1 spell nil"); }
+        else {
+            if(<>sp1->GetName()->Equals("Heal"))  { Fail("Level 1 should be Heal, got {$sp1->GetName()}"); };
+            if(<>sp1->IsHeal())                   { Fail("Heal IsHeal() should be true"); };
+            if(sp1->GetMpCost() <> 3)             { Fail("Heal MP should be 3"); };
+            if(sp1->GetPower()  <> 15)            { Fail("Heal power should be 15"); };
+        };
+
+        sp2 := Spell->GetSpellForLevel(2);
+        if(sp2 = Nil | <>sp2->GetName()->Equals("Flame"))    { Fail("Level 2 should be Flame"); };
+        if(sp2 <> Nil & sp2->IsHeal())                       { Fail("Flame should not be heal"); };
+        if(sp2 <> Nil & sp2->GetMpCost() <> 5)              { Fail("Flame MP should be 5"); };
+
+        sp3 := Spell->GetSpellForLevel(3);
+        if(sp3 = Nil | <>sp3->GetName()->Equals("Frost"))    { Fail("Level 3 should be Frost"); };
+        sp4 := Spell->GetSpellForLevel(4);
+        if(sp4 = Nil | <>sp4->GetName()->Equals("Shield"))   { Fail("Level 4 should be Shield"); };
+        sp5 := Spell->GetSpellForLevel(5);
+        if(sp5 = Nil | <>sp5->GetName()->Equals("Lightning")){ Fail("Level 5 should be Lightning"); };
+        sp7 := Spell->GetSpellForLevel(7);
+        if(sp7 = Nil | <>sp7->GetName()->Equals("Holy Smite")){ Fail("Level 7 should be Holy Smite"); };
+        sp9 := Spell->GetSpellForLevel(9);
+        if(sp9 = Nil | <>sp9->GetName()->Equals("Inferno"))  { Fail("Level 9 should be Inferno"); };
+
+        # Levels with no spell
+        sp6 := Spell->GetSpellForLevel(6);
+        if(sp6 <> Nil) { Fail("Level 6 should have no spell"); };
+        sp8 := Spell->GetSpellForLevel(8);
+        if(sp8 <> Nil) { Fail("Level 8 should have no spell"); };
+
+        # CastSpell consumes MP
+        cp := Player->New("Warden", PlayerClass->KNIGHT);
+        cp->SetMpDirect(10, 20);
+        cast_result := cp->CastSpell(0);  # Heal costs 3
+        if(cast_result <= 0) { Fail("CastSpell(Heal) should return positive power"); };
+        if(cp->GetMp() <> 7) { Fail("MP after Heal should be 7, got {$cp->GetMp()}"); };
+
+        # CastSpell returns -1 when insufficient MP
+        cp->SetMpDirect(2, 20);
+        cast2 := cp->CastSpell(0);
+        if(cast2 >= 0) { Fail("CastSpell should return -1 when MP < cost, got {$cast2}"); };
+        if(cp->GetMp() <> 2) { Fail("MP should not change on failed cast"); };
+
+        # RestoreSpells: Knight level 3 → Heal+Flame+Frost
+        rp := Player->New("Warden", PlayerClass->KNIGHT);
+        rp->RestoreSpells(3);
+        if(rp->GetNumSpells() <> 3) { Fail("Knight RestoreSpells(3) should give 3 spells, got {$rp->GetNumSpells()}"); };
+        rs0 := rp->GetSpell(0); rs1 := rp->GetSpell(1); rs2 := rp->GetSpell(2);
+        if(rs0 = Nil | <>rs0->GetName()->Equals("Heal"))  { Fail("RestoreSpells[0] should be Heal"); };
+        if(rs1 = Nil | <>rs1->GetName()->Equals("Flame")) { Fail("RestoreSpells[1] should be Flame"); };
+        if(rs2 = Nil | <>rs2->GetName()->Equals("Frost")) { Fail("RestoreSpells[2] should be Frost"); };
+
+        # RestoreSpells: Mage level 2 → Flame only (starts at 2, no duplicate)
+        mp2 := Player->New("Warden", PlayerClass->MAGE);
+        mp2->RestoreSpells(2);
+        if(mp2->GetNumSpells() <> 1) { Fail("Mage RestoreSpells(2) should give 1 spell, got {$mp2->GetNumSpells()}"); };
+
+        # RestoreSpells: Ninja level 4 → Flame+Frost+Shield
+        np4 := Player->New("Warden", PlayerClass->NINJA);
+        np4->RestoreSpells(4);
+        if(np4->GetNumSpells() <> 3) { Fail("Ninja RestoreSpells(4) should give 3 spells, got {$np4->GetNumSpells()}"); };
+
+        # Out-of-range GetSpell returns nil
+        if(cp->GetSpell(10)  <> Nil) { Fail("GetSpell(10) should be nil"); };
+        if(cp->GetSpell(-1)  <> Nil) { Fail("GetSpell(-1) should be nil"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: spell system"->PrintLine();
+        }
+        else {
+            "FAIL: spell system"->PrintLine();
+        };
+    }
+}

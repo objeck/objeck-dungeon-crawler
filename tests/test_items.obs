@@ -1,0 +1,117 @@
+#~
+Weapon, armor, and potion tests
+~#
+
+use System.Concurrency;
+use Collection;
+use Game.SDL2;
+use Game.Framework;
+use System.IO.Filesystem;
+
+class ItemTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : Run() ~ Nil {
+        # TieredWeapon tiers 0-7: exist, strictly increasing hit, non-empty name
+        prev_hit := -1.0;
+        for(tier := 0; tier <= 7; tier += 1;) {
+            w := TieredWeapon->Create(tier);
+            if(w = Nil) { Fail("TieredWeapon->Create({$tier}) nil"); }
+            else {
+                if(w->GetTier() <> tier) {
+                    got_tier := w->GetTier();
+                    Fail("Weapon tier {$tier}: GetTier() = {$got_tier}");
+                };
+                if(w->GetHit() <= prev_hit) {
+                    got_hit := w->GetHit();
+                    Fail("Weapon tier {$tier} hit ({$got_hit}) not > prev ({$prev_hit})");
+                };
+                prev_hit := w->GetHit();
+                wn := w->ToString();
+                if(wn = Nil | wn->IsEmpty()) { Fail("Weapon tier {$tier} name empty"); };
+            };
+        };
+
+        # TieredArmor tiers 0-7: exist, strictly increasing block
+        prev_block := -1.0;
+        for(tier := 0; tier <= 7; tier += 1;) {
+            a := TieredArmor->Create(tier);
+            if(a = Nil) { Fail("TieredArmor->Create({$tier}) nil"); }
+            else {
+                if(a->GetTier() <> tier) {
+                    got_tier := a->GetTier();
+                    Fail("Armor tier {$tier}: GetTier() = {$got_tier}");
+                };
+                if(a->GetBlock() <= prev_block) {
+                    got_blk := a->GetBlock();
+                    Fail("Armor tier {$tier} block ({$got_blk}) not > prev ({$prev_block})");
+                };
+                prev_block := a->GetBlock();
+                an := a->ToString();
+                if(an = Nil | an->IsEmpty()) { Fail("Armor tier {$tier} name empty"); };
+            };
+        };
+
+        # SetWeapon wires into attack calculation
+        wp := Player->New("Warden", PlayerClass->KNIGHT);
+        wp->SetWeapon(TieredWeapon->Create(0));
+        atk_fists := wp->GetAttack();
+        wp->SetWeapon(TieredWeapon->Create(7));
+        atk_holy := wp->GetAttack();
+        if(atk_holy <= atk_fists) { Fail("Tier 7 attack should > tier 0 attack"); };
+
+        # SetArmor wires into defense
+        dp := Player->New("Warden", PlayerClass->KNIGHT);
+        dp->SetArmor(TieredArmor->Create(0));
+        def_rags := dp->GetDefense();
+        dp->SetArmor(TieredArmor->Create(7));
+        def_top := dp->GetDefense();
+        if(def_top <= def_rags) { Fail("Tier 7 defense should > tier 0 defense"); };
+
+        # Potion: AddPotion and UsePotion
+        pp := Player->New("Warden", PlayerClass->KNIGHT);
+        pp->SetHpDirect(10, 40);
+        ok := pp->AddPotion(Potion->Type->WEAK_HEALTH, 2);
+        if(<>ok) { Fail("AddPotion should succeed"); };
+        pot := pp->GetPotion1();
+        if(pot = Nil) { Fail("GetPotion1 nil after AddPotion"); };
+        if(pot->GetCount() <> 2) { cnt := pot->GetCount(); Fail("Potion count should be 2, got {$cnt}"); };
+
+        used := pp->UsePotion(0);
+        if(<>used) { Fail("UsePotion should return true"); };
+        if(pp->GetHp() <= 10) { Fail("HP should increase after potion"); };
+        pot2 := pp->GetPotion1();
+        if(pot2 <> Nil & pot2->GetCount() <> 1) { Fail("Potion count should be 1 after use"); };
+
+        # UsePotion on empty slot
+        ep := Player->New("Warden", PlayerClass->KNIGHT);
+        if(ep->UsePotion(0)) { Fail("UsePotion on empty slot should return false"); };
+
+        # SetPotionDirect load-game path
+        sp := Player->New("Warden", PlayerClass->KNIGHT);
+        sp->SetPotionDirect(0, Potion->Type->WEAK_HEALTH, 3);
+        pot3 := sp->GetPotion1();
+        if(pot3 = Nil) { Fail("SetPotionDirect: GetPotion1 nil"); }
+        else if(pot3->GetCount() <> 3) { cnt3 := pot3->GetCount(); Fail("SetPotionDirect count should be 3, got {$cnt3}"); };
+
+        # SetPotionDirect count=0 leaves slot nil
+        sp->SetPotionDirect(1, Potion->Type->WEAK_HEALTH, 0);
+        if(sp->GetPotion2() <> Nil) { Fail("count=0 should leave slot nil"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: weapon/armor/potion items"->PrintLine();
+        }
+        else {
+            "FAIL: weapon/armor/potion items"->PrintLine();
+        };
+    }
+}

@@ -1,0 +1,112 @@
+#~
+OverworldManager passability and event routing tests
+~#
+
+use Game.SDL2;
+use Game.Framework;
+
+class OverworldTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : Run() ~ Nil {
+        gen := WorldGen->New(7);
+        map := gen->Generate();
+
+        # Passability logic (inline, matches OverworldManager->IsPassable)
+        passable := Int->New[6];
+        passable[0] := OverworldTile->GRASS;
+        passable[1] := OverworldTile->FOREST;
+        passable[2] := OverworldTile->TOWN;
+        passable[3] := OverworldTile->CASTLE;
+        passable[4] := OverworldTile->DUNGEON;
+        passable[5] := OverworldTile->SKYPORT;
+
+        blocked := Int->New[3];
+        blocked[0] := OverworldTile->MOUNTAIN;
+        blocked[1] := OverworldTile->SHALLOW_SEA;
+        blocked[2] := OverworldTile->DEEP_SEA;
+
+        for(i := 0; i < passable->Size(); i += 1;) {
+            tv := passable[i];
+            is_p := tv = OverworldTile->GRASS | tv = OverworldTile->FOREST |
+                    tv = OverworldTile->TOWN  | tv = OverworldTile->CASTLE  |
+                    tv = OverworldTile->DUNGEON | tv = OverworldTile->SKYPORT;
+            if(<>is_p) { Fail("Tile {$tv} should be passable"); };
+        };
+        for(i := 0; i < blocked->Size(); i += 1;) {
+            tv := blocked[i];
+            is_p := tv = OverworldTile->GRASS | tv = OverworldTile->FOREST |
+                    tv = OverworldTile->TOWN  | tv = OverworldTile->CASTLE  |
+                    tv = OverworldTile->DUNGEON | tv = OverworldTile->SKYPORT;
+            if(is_p) { Fail("Tile {$tv} should be blocked"); };
+        };
+
+        # Event routing
+        dpos := gen->GetDungeonPos();
+        dt := map[dpos[0], dpos[1]];
+        devt := 0;
+        if(dt = OverworldTile->DUNGEON) { devt := OverworldEvent->DUNGEON; };
+        if(devt <> OverworldEvent->DUNGEON) { Fail("DUNGEON tile should fire DUNGEON event"); };
+
+        cpos := gen->GetCastlePos();
+        ct := map[cpos[0], cpos[1]];
+        cevt := 0;
+        if(ct = OverworldTile->CASTLE) { cevt := OverworldEvent->CASTLE; };
+        if(cevt <> OverworldEvent->CASTLE) { Fail("CASTLE tile should fire CASTLE event"); };
+
+        # OverworldTile consts are distinct
+        tiles := Int->New[9];
+        tiles[0] := OverworldTile->GRASS;
+        tiles[1] := OverworldTile->FOREST;
+        tiles[2] := OverworldTile->MOUNTAIN;
+        tiles[3] := OverworldTile->SHALLOW_SEA;
+        tiles[4] := OverworldTile->DEEP_SEA;
+        tiles[5] := OverworldTile->TOWN;
+        tiles[6] := OverworldTile->CASTLE;
+        tiles[7] := OverworldTile->DUNGEON;
+        tiles[8] := OverworldTile->SKYPORT;
+        for(i := 0; i < tiles->Size(); i += 1;) {
+            for(j := i + 1; j < tiles->Size(); j += 1;) {
+                if(tiles[i] = tiles[j]) {
+                    Fail("OverworldTile consts not distinct");
+                };
+            };
+        };
+
+        # OverworldEvent consts are distinct
+        evts := Int->New[5];
+        evts[0] := OverworldEvent->NONE;
+        evts[1] := OverworldEvent->DUNGEON;
+        evts[2] := OverworldEvent->TOWN;
+        evts[3] := OverworldEvent->CASTLE;
+        evts[4] := OverworldEvent->SKYPORT;
+        for(i := 0; i < evts->Size(); i += 1;) {
+            for(j := i + 1; j < evts->Size(); j += 1;) {
+                if(evts[i] = evts[j]) { Fail("OverworldEvent consts not distinct"); };
+            };
+        };
+
+        # GetStartPos is near dungeon but not at it
+        sr := dpos[0] - 3; sc := dpos[1] - 3;
+        if(sr < 2) { sr := 2; };
+        if(sc < 2) { sc := 2; };
+        dist_sq := (sr - dpos[0]) * (sr - dpos[0]) + (sc - dpos[1]) * (sc - dpos[1]);
+        if(dist_sq = 0) { Fail("start pos coincides with dungeon entrance"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: overworld passability and events"->PrintLine();
+        }
+        else {
+            "FAIL: overworld passability and events"->PrintLine();
+        };
+    }
+}

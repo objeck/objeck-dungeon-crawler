@@ -1,0 +1,120 @@
+#~
+WorldGen map validation tests
+~#
+
+use Game.SDL2;
+use Game.Framework;
+
+class WorldGenTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : Run() ~ Nil {
+        gen := WorldGen->New(42);
+        map := gen->Generate();
+
+        if(map = Nil) { Fail("Generate() returned nil"); return; };
+
+        # Dimension sanity — no crash at corners
+        dummy1 := map[63, 63];
+        dummy2 := map[0, 0];
+
+        # Tile distribution: 20-80% land
+        land := 0; total := 64 * 64;
+        for(r := 0; r < 64; r += 1;) {
+            for(c := 0; c < 64; c += 1;) {
+                tile := map[r, c];
+                if(tile = OverworldTile->GRASS | tile = OverworldTile->FOREST | tile = OverworldTile->MOUNTAIN) {
+                    land += 1;
+                };
+            };
+        };
+        land_pct := land * 100 / total;
+        if(land_pct < 20) { Fail("Too little land: {$land_pct}% (want >= 20%)"); };
+        if(land_pct > 80) { Fail("Too much land: {$land_pct}% (want <= 80%)"); };
+
+        # Named locations: exactly 1 DUNGEON, 1 CASTLE, 2 TOWN
+        dungeon_count := 0; castle_count := 0; town_count := 0;
+        for(r := 0; r < 64; r += 1;) {
+            for(c := 0; c < 64; c += 1;) {
+                tile := map[r, c];
+                if(tile = OverworldTile->DUNGEON) { dungeon_count += 1; };
+                if(tile = OverworldTile->CASTLE)  { castle_count  += 1; };
+                if(tile = OverworldTile->TOWN)    { town_count    += 1; };
+            };
+        };
+        if(dungeon_count <> 1) { Fail("DUNGEON count = {$dungeon_count}, want 1"); };
+        if(castle_count  <> 1) { Fail("CASTLE count = {$castle_count}, want 1");  };
+        if(town_count    <> 2) { Fail("TOWN count = {$town_count}, want 2");      };
+
+        # GetDungeonPos tile should match
+        dpos := gen->GetDungeonPos();
+        if(dpos = Nil | dpos->Size() < 2) { Fail("GetDungeonPos nil/short"); }
+        else {
+            dr := dpos[0]; dc := dpos[1];
+            if(dr < 30 | dc < 30) {
+                Fail("Dungeon pos too far NW: ({$dr},{$dc})");
+            };
+            dt := map[dr, dc];
+            if(dt <> OverworldTile->DUNGEON) {
+                Fail("Tile at dungeon pos is not DUNGEON");
+            };
+        };
+
+        # GetCastlePos tile should match
+        cpos := gen->GetCastlePos();
+        if(cpos = Nil | cpos->Size() < 2) { Fail("GetCastlePos nil/short"); }
+        else {
+            cr := cpos[0]; cc := cpos[1];
+            ct := map[cr, cc];
+            if(ct <> OverworldTile->CASTLE) {
+                Fail("Tile at castle pos is not CASTLE");
+            };
+        };
+
+        # No out-of-range tile values
+        bad_tile := false;
+        for(r := 0; r < 64 & <>bad_tile; r += 1;) {
+            for(c := 0; c < 64 & <>bad_tile; c += 1;) {
+                tile := map[r, c];
+                if(tile < 0 | tile > OverworldTile->SKYPORT) {
+                    Fail("Out-of-range tile {$tile} at [{$r},{$c}]");
+                    bad_tile := true;
+                };
+            };
+        };
+
+        # Coastline: no DEEP_SEA directly adjacent to GRASS
+        for(r := 1; r < 63; r += 1;) {
+            for(c := 1; c < 63; c += 1;) {
+                if(map[r, c] = OverworldTile->DEEP_SEA) {
+                    if(map[r-1,c] = OverworldTile->GRASS | map[r+1,c] = OverworldTile->GRASS |
+                       map[r,c-1] = OverworldTile->GRASS | map[r,c+1] = OverworldTile->GRASS) {
+                        Fail("DEEP_SEA adjacent to GRASS at [{$r},{$c}]");
+                    };
+                };
+            };
+        };
+
+        # Determinism check: two generators with same ops produce same result
+        gen2 := WorldGen->New(42);
+        map2 := gen2->Generate();
+        # Note: uses Int->Random so not truly deterministic — just verify it runs again
+        if(map2 = Nil) { Fail("Second Generate() returned nil"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: WorldGen map validation"->PrintLine();
+        }
+        else {
+            "FAIL: WorldGen map validation"->PrintLine();
+        };
+    }
+}

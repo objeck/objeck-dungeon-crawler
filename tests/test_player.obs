@@ -1,0 +1,131 @@
+#~
+Player class tests — stats, level-up, XP, spells, tents, potions, setters
+~#
+
+use System.Concurrency;
+use Collection;
+use Game.SDL2;
+use Game.Framework;
+use System.IO.Filesystem;
+
+class PlayerTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : CheckRange(lbl : String, v : Int, lo : Int, hi : Int) ~ Nil {
+        if(v < lo | v > hi) { Fail("{$lbl} = {$v}, want [{$lo},{$hi}]"); };
+    }
+
+    function : Run() ~ Nil {
+        # Knight initial stats
+        knight := Player->New("Warden", PlayerClass->KNIGHT);
+        CheckRange("knight HP",    knight->GetHp(),         28, 35);
+        CheckRange("knight MP",    knight->GetMp(),         6,  10);
+        CheckRange("knight level", knight->GetLevel(),      1,  1);
+        CheckRange("knight XP",    knight->GetXP(),         0,  0);
+        CheckRange("knight crit",  knight->GetCritChance(), 5,  5);
+        if(knight->GetNumSpells() <> 1) { Fail("Knight should start with 1 spell"); };
+        ksp := knight->GetSpell(0);
+        if(ksp = Nil | <>ksp->GetName()->Equals("Heal")) { Fail("Knight spell 0 should be Heal"); };
+
+        # Mage initial stats
+        mage := Player->New("Warden", PlayerClass->MAGE);
+        CheckRange("mage HP", mage->GetHp(),  16, 22);
+        CheckRange("mage MP", mage->GetMp(),  20, 28);
+        if(mage->GetNumSpells() <> 1) { Fail("Mage should start with 1 spell"); };
+        msp := mage->GetSpell(0);
+        if(msp = Nil | <>msp->GetName()->Equals("Flame")) { Fail("Mage spell 0 should be Flame"); };
+
+        # Ninja has no starting spell
+        ninja := Player->New("Warden", PlayerClass->NINJA);
+        if(ninja->GetNumSpells() <> 0) { Fail("Ninja should start with 0 spells"); };
+
+        # Cleric has Heal
+        cleric := Player->New("Warden", PlayerClass->CLERIC);
+        csp := cleric->GetSpell(0);
+        if(csp = Nil | <>csp->GetName()->Equals("Heal")) { Fail("Cleric spell 0 should be Heal"); };
+
+        # Level-up at threshold
+        lp := Player->New("Warden", PlayerClass->KNIGHT);
+        old_hp := lp->GetMaxHp();
+        old_mp := lp->GetMaxMp();
+        leveled := lp->AddXP(25);  # threshold[1] = 25
+        if(<>leveled) { Fail("AddXP(25) should trigger level-up"); };
+        if(lp->GetLevel() <> 2) { Fail("Level should be 2 after first XP threshold"); };
+        if(lp->GetMaxHp() <> old_hp + 4) { Fail("MaxHp should increase by 4"); };
+        if(lp->GetMaxMp() <> old_mp + 3) { Fail("MaxMp should increase by 3"); };
+        if(lp->GetNumSpells() <> 2) { Fail("Knight at level 2 should have 2 spells"); };
+
+        # No level-up on small XP
+        lp2 := Player->New("Warden", PlayerClass->MAGE);
+        if(lp2->AddXP(5)) { Fail("AddXP(5) should not level up"); };
+
+        # Gold tracking
+        gp := Player->New("Warden", PlayerClass->KNIGHT);
+        if(gp->GetGold() <> 0) { Fail("Initial gold should be 0"); };
+        gp->AddGold(100);
+        if(gp->GetGold() <> 100) { Fail("Gold should be 100"); };
+        gp->AddGold(50);
+        if(gp->GetGold() <> 150) { Fail("Gold should be 150"); };
+
+        # Tent mechanics
+        tp := Player->New("Warden", PlayerClass->KNIGHT);
+        if(tp->GetTents() <> 0) { Fail("Initial tents should be 0"); };
+        tp->AddTent();
+        if(tp->GetTents() <> 1) { Fail("Tents should be 1 after AddTent"); };
+        tp->SetHpDirect(10, 30);
+        tp->SetMpDirect(2, 20);
+        used := tp->UseTent();
+        if(<>used) { Fail("UseTent should return true when available"); };
+        if(tp->GetHp() <> 30) { Fail("HP should be max after UseTent"); };
+        if(tp->GetMp() <> 20) { Fail("MP should be max after UseTent"); };
+        if(tp->GetTents() <> 0) { Fail("Tents should be 0 after use"); };
+        if(tp->UseTent()) { Fail("UseTent should return false when empty"); };
+
+        # Poison status
+        pp := Player->New("Warden", PlayerClass->KNIGHT);
+        if(pp->IsPoisoned()) { Fail("Should not be poisoned initially"); };
+        pp->SetPoison(6);
+        if(<>pp->IsPoisoned()) { Fail("Should be poisoned after SetPoison(6)"); };
+        if(pp->GetPoisonTurns() <> 6) { Fail("PoisonTurns should be 6"); };
+
+        # Setter round-trip (load-game path)
+        sp6 := Player->New("Warden", PlayerClass->KNIGHT);
+        sp6->SetHpDirect(15, 35);
+        sp6->SetMpDirect(8, 12);
+        sp6->SetXpDirect(110);
+        sp6->SetGoldDirect(200);
+        sp6->SetTentsDirect(3);
+        sp6->SetCritChanceDirect(10);
+        sp6->SetLevelDirect(3);
+        sp6->SetStatsDirect(16.0, 11.0, 14.0);
+        if(sp6->GetHp()         <> 15)  { Fail("SetHpDirect hp"); };
+        if(sp6->GetMaxHp()      <> 35)  { Fail("SetHpDirect max_hp"); };
+        if(sp6->GetMp()         <> 8)   { Fail("SetMpDirect mp"); };
+        if(sp6->GetMaxMp()      <> 12)  { Fail("SetMpDirect max_mp"); };
+        if(sp6->GetXP()         <> 110) { Fail("SetXpDirect"); };
+        if(sp6->GetGold()       <> 200) { Fail("SetGoldDirect"); };
+        if(sp6->GetTents()      <> 3)   { Fail("SetTentsDirect"); };
+        if(sp6->GetCritChance() <> 10)  { Fail("SetCritChanceDirect"); };
+        if(sp6->GetLevel()      <> 3)   { Fail("SetLevelDirect"); };
+
+        str_diff := sp6->GetStrength() - 16.0;
+        if(str_diff < 0.0) { str_diff := -str_diff; };
+        if(str_diff > 0.01) { Fail("SetStatsDirect strength"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: player stats and level-up"->PrintLine();
+        }
+        else {
+            "FAIL: player stats and level-up"->PrintLine();
+        };
+    }
+}

@@ -1,0 +1,95 @@
+#~
+Combat math tests — Entity HP, Attack/Defense, monster factory, floor scaling
+~#
+
+use System.Concurrency;
+use Collection;
+use Game.SDL2;
+use Game.Framework;
+use System.IO.Filesystem;
+
+class CombatTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : Run() ~ Nil {
+        # Entity IsAlive / UpdateHp
+        kp := Player->New("Warden", PlayerClass->KNIGHT);
+        if(<>kp->IsAlive()) { Fail("Player should start alive"); };
+        full_hp := kp->GetHp();
+        if(full_hp <= 0) { Fail("Player HP should be > 0"); };
+        kp->UpdateHp(full_hp);
+        if(kp->IsAlive()) { Fail("Player should be dead after max damage"); };
+
+        # GetAttack scales with weapon
+        ap := Player->New("Warden", PlayerClass->KNIGHT);
+        ap->SetWeapon(TieredWeapon->Create(2));
+        atk := ap->GetAttack();
+        if(atk <= 0) { Fail("Attack with weapon should be > 0, got {$atk}"); };
+
+        # GetDefense scales with armor
+        def_p := Player->New("Warden", PlayerClass->KNIGHT);
+        def_p->SetArmor(TieredArmor->Create(3));
+        def_val := def_p->GetDefense();
+        if(def_val <= 0) { Fail("Defense with armor should be > 0, got {$def_val}"); };
+
+        # Higher tier armor → statistically better defense (20 samples)
+        lp := Player->New("Warden", PlayerClass->KNIGHT); lp->SetArmor(TieredArmor->Create(0));
+        hp2 := Player->New("Warden", PlayerClass->KNIGHT); hp2->SetArmor(TieredArmor->Create(7));
+        high_wins := 0;
+        for(i := 0; i < 20; i += 1;) {
+            if(hp2->GetDefense() > lp->GetDefense()) { high_wins += 1; };
+        };
+        if(high_wins < 10) { Fail("Tier 7 armor should usually beat tier 0 ({$high_wins}/20)"); };
+
+        # Monster factory: CreateByFloor produces valid monsters
+        m1 := Monster->CreateByFloor("Skeleton", 1, 10, 11, 8, 7, 32.0, 14.0, 15, false);
+        if(m1 = Nil) { Fail("CreateByFloor returned nil"); }
+        else {
+            if(<>m1->IsAlive())   { Fail("Fresh monster should be alive"); };
+            if(m1->GetHp() < 8)  { mhp := m1->GetHp(); Fail("Skeleton HP too low: {$mhp}"); };
+            if(m1->GetMaxHp() <= 0) { Fail("MaxHp should be > 0"); };
+            if(m1->IsBoss())     { Fail("Non-boss should not have IsBoss=true"); };
+        };
+
+        # Boss flag
+        boss := Monster->CreateByFloor("Malachar", 4, 55, 18, 12, 14, 48.0, 22.0, 100, true);
+        if(boss = Nil | <>boss->IsBoss()) { Fail("Boss should have IsBoss()=true"); };
+
+        # Floor scaling: floor 4 monster stronger than floor 1
+        mf1 := Monster->CreateByFloor("Goblin", 1, 10, 10, 8, 6, 25.0, 10.0, 10, false);
+        mf4 := Monster->CreateByFloor("Goblin", 4, 10, 10, 8, 6, 25.0, 10.0, 10, false);
+        if(mf4->GetMaxHp() <= mf1->GetMaxHp()) {
+            f4hp := mf4->GetMaxHp(); f1hp := mf1->GetMaxHp();
+            Fail("Floor 4 monster HP ({$f4hp}) should > floor 1 ({$f1hp})");
+        };
+
+        # GetHpPerc boundary
+        pp2 := Player->New("Warden", PlayerClass->KNIGHT);
+        pp2->SetHpDirect(pp2->GetMaxHp(), pp2->GetMaxHp());
+        full_perc := pp2->GetHpPerc();
+        if(full_perc < 0.99) { Fail("GetHpPerc at full HP should be ~1.0, got {$full_perc}"); };
+
+        # GenericMonster GetWinExp > 0
+        gm := m1->As(GenericMonster);
+        if(gm <> Nil) {
+            xp := gm->GetWinExp();
+            if(xp <= 0) { Fail("Monster XP reward should be > 0, got {$xp}"); };
+        };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: combat math and monster factory"->PrintLine();
+        }
+        else {
+            "FAIL: combat math and monster factory"->PrintLine();
+        };
+    }
+}
