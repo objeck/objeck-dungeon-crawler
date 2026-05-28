@@ -113,6 +113,7 @@ class DungeonAI {
     @theme_thread    : static : Thread;
 
     @world_name   : static : String;
+    @world_threat : static : String;
     @world_ready  : static : Bool;
     @world_thread : static : Thread;
 
@@ -226,6 +227,31 @@ class DungeonAI {
         if(AIWorker->HasCached(key)) { return; };
         prompt := "A {$monster_name} lunges at a {$class_name} in a dark dungeon. ONE menacing battle cry, max 9 words. No quotes.";
         AIWorker->Post(key, prompt);
+    }
+
+    # --- Town / Castle async messages ---
+
+    function : PostTownMessages(class_name : String, world_name : String) ~ Nil {
+        if(@worker = Nil | <>@is_ready) { return; };
+        PostRequest("inn_rest",     "The {$class_name} rests at an inn in {$world_name}. Write ONE brief, atmospheric rest message, max 10 words. No quotes.");
+        PostRequest("healer_greet", "A dungeon healer greets a weary {$class_name}. ONE short welcoming line, max 9 words. No quotes.");
+        PostRequest("tavern_rumor", "A tavern keeper in {$world_name} shares a cryptic dungeon rumor with a {$class_name}. ONE sentence, max 12 words. No quotes.");
+        PostRequest("shop_greet",   "A weapon merchant greets an adventurous {$class_name}. ONE short sales line, max 8 words. No quotes.");
+    }
+
+    function : PostCastleMessages(class_name : String, threat : String) ~ Nil {
+        if(@worker = Nil | <>@is_ready) { return; };
+        if(threat <> Nil & <>threat->IsEmpty()) {
+            PostRequest("lord_speech", "A castle lord tells a {$class_name}: '{$threat}'. Rephrase urgently in ONE sentence, max 13 words. No quotes.");
+        }
+        else {
+            PostRequest("lord_speech", "A castle lord urges a {$class_name} to descend into Greyhold and defeat the demon lord. ONE dramatic sentence, max 13 words. No quotes.");
+        };
+        PostRequest("lord_reward",  "A castle lord thanks a {$class_name} for defeating a demon lord. ONE grateful royal line, max 10 words. No quotes.");
+    }
+
+    function : GetTownMsg(key : String) ~ String {
+        return GetCached(key);
     }
 
     function : Clip(text : String) ~ String {
@@ -564,7 +590,8 @@ class DungeonAI {
     }
 
     function : IsWorldReady() ~ Bool { return @world_ready; }
-    function : GetWorldName() ~ String { return @world_name = Nil ? "World of Greyhold" : @world_name; }
+    function : GetWorldName()   ~ String { return @world_name   = Nil ? "World of Greyhold" : @world_name; }
+    function : GetWorldThreat() ~ String { return @world_threat = Nil ? "Malachar the demon lord must be stopped." : @world_threat; }
 
     function : StartWorldGenAsync() ~ Nil {
         if(@world_thread <> Nil) { return; };
@@ -574,7 +601,7 @@ class DungeonAI {
 
     function : GenerateWorldSeed() ~ Nil {
         if(<>@is_ready) { return; };
-        prompt := "Generate a dark fantasy overworld name. Respond EXACTLY this format with no extra text:\nWORLD: [3-5 word name]";
+        prompt := "Generate a dark fantasy overworld name and threat. Respond EXACTLY this format:\nWORLD: [3-5 word name]\nTHREAT: [one sentence why Malachar must be stopped, max 12 words]";
         response := Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85));
         if(response = Nil) { return; };
         think_end := response->Find("</think>");
@@ -598,6 +625,7 @@ class DungeonAI {
             };
         };
         if(@world_name = Nil) { @world_name := "World of Greyhold"; };
+        @world_threat := ParseField(response, "THREAT:");
         @world_ready := true;
     }
 

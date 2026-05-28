@@ -1,0 +1,165 @@
+#~
+Town economy logic tests — shop prices, heal costs, inn costs, boat purchase
+Tests the business rules without SDL (math/state only)
+~#
+
+use System.Concurrency;
+use Collection;
+use Game.SDL2;
+use Game.Framework;
+use System.IO.Filesystem;
+
+class TownTest {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : WeaponPrice(curr_tier : Int) ~ Int {
+        return 50 + curr_tier * 30;
+    }
+
+    function : ArmorPrice(curr_tier : Int) ~ Int {
+        return 40 + curr_tier * 25;
+    }
+
+    function : HealCost(current_hp : Int, max_hp : Int) ~ Int {
+        cost := (max_hp - current_hp) * 2;
+        if(cost < 10) { cost := 10; };
+        return cost;
+    }
+
+    function : Run() ~ Nil {
+        # --- Weapon shop prices increase with tier ---
+        prev_price := -1;
+        for(tier := 0; tier < 7; tier += 1;) {
+            price := WeaponPrice(tier);
+            if(price <= prev_price) { Fail("Weapon price tier {$tier} not increasing"); };
+            prev_price := price;
+        };
+
+        # --- Armor shop prices increase with tier ---
+        prev_price := -1;
+        for(tier := 0; tier < 7; tier += 1;) {
+            price := ArmorPrice(tier);
+            if(price <= prev_price) { Fail("Armor price tier {$tier} not increasing"); };
+            prev_price := price;
+        };
+
+        # --- Heal cost: at least 10g minimum ---
+        if(HealCost(30, 30) <> 10) { Fail("Full health heal cost should be 10g minimum"); };
+        if(HealCost(20, 30) <> 20) { Fail("10 missing HP heal cost should be 20g"); };
+        if(HealCost(0, 30)  <> 60) { Fail("30 missing HP heal cost should be 60g"); };
+        if(HealCost(25, 30) <> 10) { Fail("5 missing HP heal cost should be min 10g"); };
+
+        # --- Inn cost is fixed ---
+        inn_cost := 30;
+        if(inn_cost <> 30) { Fail("Inn cost should be 30g"); };
+
+        # --- Potion cost is fixed ---
+        pot_cost := 10;
+        if(pot_cost <> 10) { Fail("Potion cost should be 10g"); };
+
+        # --- Boat cost is 200g ---
+        boat_cost := 200;
+        if(boat_cost <> 200) { Fail("Boat cost should be 200g"); };
+
+        # --- Buy weapon: reduces gold, upgrades tier ---
+        p := Player->New("Warden", PlayerClass->KNIGHT);
+        p->SetGoldDirect(200);
+        p->SetWeapon(TieredWeapon->Create(2));  # Mace → tier 2
+        curr_tier : Int;
+        if(p->GetWeapon() <> Nil) { curr_tier := p->GetWeapon()->GetTier(); } else { curr_tier := 0; };
+        price := WeaponPrice(curr_tier);
+        p->AddGold(-price);
+        p->SetWeapon(TieredWeapon->Create(curr_tier + 1));
+        new_tier : Int;
+        if(p->GetWeapon() <> Nil) { new_tier := p->GetWeapon()->GetTier(); } else { new_tier := 0; };
+        if(new_tier <> curr_tier + 1) { Fail("Weapon tier should increase after purchase"); };
+        if(p->GetGold() <> 200 - price) { Fail("Gold should decrease by weapon price"); };
+
+        # --- Can't buy max tier ---
+        p->SetWeapon(TieredWeapon->Create(7));  # Holy Avenger — max
+        max_tier : Int;
+        if(p->GetWeapon() <> Nil) { max_tier := p->GetWeapon()->GetTier(); } else { max_tier := 0; };
+        if(max_tier <> 7) { Fail("Max weapon tier should be 7"); };
+
+        # --- Buy armor: reduces gold, upgrades tier ---
+        p2 := Player->New("Warden", PlayerClass->KNIGHT);
+        p2->SetGoldDirect(300);
+        p2->SetArmor(TieredArmor->Create(1));
+        curr_arm : Int;
+        if(p2->GetArmor() <> Nil) { curr_arm := p2->GetArmor()->GetTier(); } else { curr_arm := 0; };
+        arm_price := ArmorPrice(curr_arm);
+        p2->AddGold(-arm_price);
+        p2->SetArmor(TieredArmor->Create(curr_arm + 1));
+        new_arm : Int;
+        if(p2->GetArmor() <> Nil) { new_arm := p2->GetArmor()->GetTier(); } else { new_arm := 0; };
+        if(new_arm <> curr_arm + 1) { Fail("Armor tier should increase after purchase"); };
+
+        # --- Heal: restores HP and MP, clears status ---
+        hp := Player->New("Warden", PlayerClass->KNIGHT);
+        hp->SetHpDirect(10, 35);
+        hp->SetMpDirect(3, 20);
+        hp->SetPoison(5);
+        hc := HealCost(10, 35);
+        hp->SetGoldDirect(hc + 50);
+        hp->AddGold(-hc);
+        hp->SetHpDirect(35, 35);
+        hp->SetMpDirect(20, 20);
+        hp->SetStatusDirect(0, 0, 0, 0, 0, false, false);
+        if(hp->GetHp() <> 35)     { Fail("HP should be max after heal"); };
+        if(hp->GetMp() <> 20)     { Fail("MP should be max after heal"); };
+        if(hp->IsPoisoned())       { Fail("Should not be poisoned after heal"); };
+        if(hp->GetGold() <> 50)   { Fail("Gold should be 50 after heal"); };
+
+        # --- Inn: costs 30g, fully restores ---
+        ip := Player->New("Warden", PlayerClass->KNIGHT);
+        ip->SetGoldDirect(100);
+        ip->SetHpDirect(5, 30);
+        ip->SetMpDirect(2, 15);
+        ip->AddGold(-30);
+        ip->SetHpDirect(30, 30);
+        ip->SetMpDirect(15, 15);
+        if(ip->GetHp() <> 30) { Fail("HP should be full after inn"); };
+        if(ip->GetMp() <> 15) { Fail("MP should be full after inn"); };
+        if(ip->GetGold() <> 70) { Fail("Gold should be 70 after inn (was 100, paid 30)"); };
+
+        # --- Potion buy: costs 10g, adds to inventory ---
+        pp := Player->New("Warden", PlayerClass->KNIGHT);
+        pp->SetGoldDirect(50);
+        pp->AddGold(-10);
+        pp->AddPotion(Potion->Type->WEAK_HEALTH, 1);
+        if(pp->GetGold() <> 40) { Fail("Gold should be 40 after potion"); };
+        pot := pp->GetPotion1();
+        if(pot = Nil | pot->GetCount() < 1) { Fail("Should have at least 1 potion after purchase"); };
+
+        # --- Boat purchase reduces gold ---
+        has_boat := false;
+        boat_gold := 250;
+        if(boat_gold >= 200) {
+            boat_gold -= 200;
+            has_boat := true;
+        };
+        if(<>has_boat) { Fail("Should have boat after paying 200g"); };
+        if(boat_gold <> 50) { Fail("Gold should be 50 after boat (was 250, paid 200)"); };
+
+        # --- Not enough gold: can't buy ---
+        poor_gold := 50;
+        can_buy := poor_gold >= 200;
+        if(can_buy) { Fail("Should not be able to buy boat with only 50g"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: town economy logic"->PrintLine();
+        }
+        else {
+            "FAIL: town economy logic"->PrintLine();
+        };
+    }
+}

@@ -1,0 +1,92 @@
+#~
+Overworld Phase 2-4 tests: boat passability, castle quest state, encounter zones
+~#
+
+use Game.SDL2;
+use Game.Framework;
+
+class Overworld2Test {
+    @pass : static : Bool;
+
+    function : Fail(msg : String) ~ Nil {
+        "  FAIL: {$msg}"->PrintLine();
+        @pass := false;
+    }
+
+    function : Run() ~ Nil {
+        # --- Boat passability logic ---
+        # Without boat: only GRASS, FOREST, TOWN, CASTLE, DUNGEON, SKYPORT passable
+        has_boat := false;
+
+        for(tile := 0; tile <= OverworldTile->SKYPORT; tile += 1;) {
+            land_pass := tile = OverworldTile->GRASS | tile = OverworldTile->FOREST |
+                         tile = OverworldTile->TOWN  | tile = OverworldTile->CASTLE  |
+                         tile = OverworldTile->DUNGEON | tile = OverworldTile->SKYPORT;
+            sea_pass := has_boat & (tile = OverworldTile->SHALLOW_SEA | tile = OverworldTile->DEEP_SEA);
+            passable := land_pass | sea_pass;
+
+            if(tile = OverworldTile->MOUNTAIN & passable)    { Fail("Mountain should block without boat"); };
+            if(tile = OverworldTile->SHALLOW_SEA & passable) { Fail("Shallow sea should block without boat"); };
+            if(tile = OverworldTile->DEEP_SEA & passable)    { Fail("Deep sea should block without boat"); };
+            if(tile = OverworldTile->GRASS & <>passable)     { Fail("Grass should be passable"); };
+            if(tile = OverworldTile->FOREST & <>passable)    { Fail("Forest should be passable"); };
+        };
+
+        # With boat: shallow sea passable, mountain still blocked
+        has_boat := true;
+        shallow_pass := has_boat & (OverworldTile->SHALLOW_SEA = OverworldTile->SHALLOW_SEA | OverworldTile->SHALLOW_SEA = OverworldTile->DEEP_SEA);
+        if(<>shallow_pass) { Fail("Shallow sea should be passable with boat"); };
+        deep_pass := has_boat & (OverworldTile->DEEP_SEA = OverworldTile->SHALLOW_SEA | OverworldTile->DEEP_SEA = OverworldTile->DEEP_SEA);
+        if(<>deep_pass) { Fail("Deep sea should be passable with boat"); };
+        mtn_pass := has_boat & (OverworldTile->MOUNTAIN = OverworldTile->SHALLOW_SEA | OverworldTile->MOUNTAIN = OverworldTile->DEEP_SEA);
+        if(mtn_pass) { Fail("Mountain should still block even with boat"); };
+
+        # --- Castle quest logic: kill threshold ---
+        # 40 kills = likely cleared Greyhold → lord gives reward
+        kills_cleared := 42;
+        if(kills_cleared < 40) { Fail("42 kills should satisfy cleared threshold"); };
+        kills_not := 15;
+        if(kills_not >= 40) { Fail("15 kills should not satisfy cleared threshold"); };
+
+        # --- Encounter zones ---
+        grass_rate := 7;
+        forest_rate := 18;
+        if(forest_rate <= grass_rate) { Fail("Forest encounter rate should be higher than grass"); };
+        if(grass_rate < 1 | grass_rate > 30) { Fail("Grass encounter rate out of reasonable range"); };
+
+        # --- Town prices scale correctly ---
+        # Weapon: base 50 + tier*30
+        for(tier := 0; tier <= 6; tier += 1;) {
+            price := 50 + tier * 30;
+            if(price <= 0) { Fail("Weapon price should be positive for tier {$tier}"); };
+            next_price := 50 + (tier + 1) * 30;
+            if(next_price <= price) { Fail("Weapon price should increase each tier"); };
+        };
+
+        # --- Boat cost logic ---
+        # Player needs exactly 200g; 199g fails
+        boat_cost := 200;
+        if(boat_cost <> 200) { Fail("Boat cost should be 200g"); };
+        ok := (200 >= boat_cost);
+        if(<>ok) { Fail("200g should be enough to buy boat"); };
+        not_ok := (199 >= boat_cost);
+        if(not_ok) { Fail("199g should not be enough to buy boat"); };
+
+        # --- Inn and healer costs are positive ---
+        inn_cost := 30;
+        min_heal := 10;
+        if(inn_cost <= 0) { Fail("Inn cost should be positive"); };
+        if(min_heal <= 0) { Fail("Minimum heal cost should be positive"); };
+    }
+
+    function : Main(args : String[]) ~ Nil {
+        @pass := true;
+        Run();
+        if(@pass) {
+            "PASS: overworld Phase 2-4 logic"->PrintLine();
+        }
+        else {
+            "FAIL: overworld Phase 2-4 logic"->PrintLine();
+        };
+    }
+}

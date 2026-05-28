@@ -167,6 +167,29 @@ class TinyDungeon {
 	@quip_pending    : Bool;
 	@last_quip_level : Int;
 
+	# --- Town ---
+	@town_state  : Int;  # 0=menu 1=weapon 2=armor 3=healer 4=inn 5=potions
+	@town_cursor : Int;
+	@town_name   : String;
+	@town_title  : TextSprite;
+	@town_desc   : TextSprite;
+	@town_opts   : TextSprite[];  # 7 options
+	@town_detail_a : TextSprite;
+	@town_detail_b : TextSprite;
+	@town_status : TextSprite;
+	@town_msg    : TextSprite;
+
+	# --- Castle ---
+	@castle_state  : Int;  # 0=menu 1=speaking
+	@castle_cursor : Int;
+	@castle_title  : TextSprite;
+	@castle_opts   : TextSprite[];  # 3 options
+	@castle_speech : TextSprite;
+	@castle_speech2 : TextSprite;
+
+	# --- Vehicles ---
+	@has_boat : Bool;
+
 	# --- Overworld ---
 	@overworld_manager   : OverworldManager;
 	@ow_player_r         : Int;
@@ -302,6 +325,23 @@ class TinyDungeon {
 		@came_from_overworld := false;
 		@ow_world_name := "World of Greyhold";
 		@ow_encounter_banner := @framework->AddTextSprite();
+
+		# Town sprites
+		@town_title   := @framework->AddTextSprite();
+		@town_desc    := @framework->AddTextSprite();
+		@town_opts    := TextSprite->New[7];
+		each(i : @town_opts)   { @town_opts[i]   := @framework->AddTextSprite(); };
+		@town_detail_a := @framework->AddTextSprite();
+		@town_detail_b := @framework->AddTextSprite();
+		@town_status  := @framework->AddTextSprite();
+		@town_msg     := @framework->AddTextSprite();
+
+		# Castle sprites
+		@castle_title  := @framework->AddTextSprite();
+		@castle_opts   := TextSprite->New[3];
+		each(i : @castle_opts) { @castle_opts[i] := @framework->AddTextSprite(); };
+		@castle_speech  := @framework->AddTextSprite();
+		@castle_speech2 := @framework->AddTextSprite();
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -683,20 +723,11 @@ class TinyDungeon {
 			return;
 		};
 		if(evt = OverworldEvent->TOWN) {
-			if(@ai_timer = 0 & DungeonAI->IsReady()) {
-				greeting := DungeonAI->MerchantGreet(GetPlayerClassName(), @player->GetGold(), 1);
-				if(greeting <> Nil) {
-					@ai_text->RenderedText(greeting, Color->New(220, 200, 130));
-					@ai_timer := 150;
-				};
-			}
-			else {
-				@ow_encounter_banner->RenderedText("A town — more to come...", Color->New(200, 180, 100));
-			};
+			EnterTown();
 			return;
 		};
 		if(evt = OverworldEvent->CASTLE) {
-			@ow_encounter_banner->RenderedText("A castle — more to come...", Color->New(200, 180, 100));
+			EnterCastle();
 			return;
 		};
 
@@ -733,6 +764,532 @@ class TinyDungeon {
 			};
 			# Otherwise poll loop in Render() will display it when the worker responds
 		};
+	}
+
+	# ================================================================
+	# TOWN (game_state = 4)
+	# ================================================================
+
+	method : EnterTown() ~ Nil {
+		if(@player = Nil) { return; };
+		@game_state  := 4;
+		@town_state  := 0;
+		@town_cursor := 0;
+		wn := DungeonAI->IsWorldReady() ? DungeonAI->GetWorldName() : "A Wayward Town";
+		@town_name := wn;
+		@town_title->RenderedText("— {$wn} —", Color->New(220, 180, 60));
+		@town_desc->RenderedText("Torchlight and the smell of ale greet you.", Color->New(160, 140, 100));
+		# Pre-warm AI messages for this town
+		if(DungeonAI->IsReady()) {
+			DungeonAI->PostTownMessages(GetPlayerClassName(), wn);
+		};
+		RefreshTownOpts();
+	}
+
+	method : RefreshTownOpts() ~ Nil {
+		if(@player = Nil) { return; };
+		gold := @player->GetGold();
+		wpn_tier : Int; arm_tier : Int;
+		if(@player->GetWeapon() <> Nil) { wpn_tier := @player->GetWeapon()->GetTier(); } else { wpn_tier := 0; };
+		if(@player->GetArmor()  <> Nil) { arm_tier := @player->GetArmor()->GetTier(); }  else { arm_tier := 0; };
+		heal_cost := @player->GetMaxHp() - @player->GetHp();
+		if(heal_cost < 0) { heal_cost := 0; };
+		heal_cost := heal_cost * 2;
+		if(heal_cost < 10) { heal_cost := 10; };
+
+		opts_text := String->New[7];
+		opts_text[0] := "1. Weapon Shop";
+		opts_text[1] := "2. Armor Shop";
+		opts_text[2] := "3. Healer       ({$heal_cost}g)";
+		opts_text[3] := "4. Inn          (30g)";
+		opts_text[4] := "5. Potions      (10g each)";
+		if(@has_boat) { opts_text[5] := "6. Boat         (owned)"; }
+		else          { opts_text[5] := "6. Buy Boat     (200g)"; };
+		opts_text[6] := "7. Leave town";
+
+		for(i := 0; i < 7; i += 1;) {
+			sel := i = @town_cursor;
+			if(sel) { @town_opts[i]->RenderedText(opts_text[i], Color->New(255, 220, 80)); }
+			else    { @town_opts[i]->RenderedText(opts_text[i], Color->New(200, 185, 155)); };
+		};
+
+		g_str := "Gold: {$gold}   HP: {$@player->GetHp()}/{$@player->GetMaxHp()}   MP: {$@player->GetMp()}/{$@player->GetMaxMp()}";
+		@town_status->RenderedText(g_str, Color->New(140, 200, 130));
+	}
+
+	method : HandleTownInput(code : Int) ~ Nil {
+		if(@town_state = 0) {
+			# Main menu navigation
+			if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) {
+				@town_cursor -= 1;
+				if(@town_cursor < 0) { @town_cursor := 6; };
+				RefreshTownOpts();
+			}
+			else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) {
+				@town_cursor += 1;
+				if(@town_cursor > 6) { @town_cursor := 0; };
+				RefreshTownOpts();
+			}
+			else if(code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_RETURN |
+			        code = Scancode->SDL_SCANCODE_1 | code = Scancode->SDL_SCANCODE_2 |
+			        code = Scancode->SDL_SCANCODE_3 | code = Scancode->SDL_SCANCODE_4 |
+			        code = Scancode->SDL_SCANCODE_5 | code = Scancode->SDL_SCANCODE_6 |
+			        code = Scancode->SDL_SCANCODE_7) {
+				sel := @town_cursor;
+				if(code = Scancode->SDL_SCANCODE_1) { sel := 0; }
+				else if(code = Scancode->SDL_SCANCODE_2) { sel := 1; }
+				else if(code = Scancode->SDL_SCANCODE_3) { sel := 2; }
+				else if(code = Scancode->SDL_SCANCODE_4) { sel := 3; }
+				else if(code = Scancode->SDL_SCANCODE_5) { sel := 4; }
+				else if(code = Scancode->SDL_SCANCODE_6) { sel := 5; }
+				else if(code = Scancode->SDL_SCANCODE_7) { sel := 6; };
+				TownSelect(sel);
+			}
+			else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+				@game_state := 3;
+			};
+		}
+		else {
+			# Sub-screen: any key returns to main menu
+			if(code = Scancode->SDL_SCANCODE_ESCAPE | code = Scancode->SDL_SCANCODE_SPACE |
+			   code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_BACKSPACE) {
+				@town_state := 0;
+				@town_msg->RenderedText("", Color->New(0, 0, 0));
+				RefreshTownOpts();
+			};
+		};
+	}
+
+	method : TownSelect(sel : Int) ~ Nil {
+		if(@player = Nil) { return; };
+		select(sel) {
+			label 0 { TownWeaponShop(); }
+			label 1 { TownArmorShop(); }
+			label 2 { TownHeal(); }
+			label 3 { TownInn(); }
+			label 4 { TownPotions(); }
+			label 5 { TownBuyBoat(); }
+			label 6 { @game_state := 3; }
+		};
+	}
+
+	method : TownWeaponShop() ~ Nil {
+		@town_state := 1;
+		wpn := @player->GetWeapon();
+		tier := wpn <> Nil ? wpn->GetTier() : 0;
+		curr_name := wpn <> Nil ? wpn->ToString() : "Fists";
+		next_tier := tier + 1;
+		if(next_tier > 7) {
+			@town_detail_a->RenderedText("You wield the finest weapon!", Color->New(255, 220, 80));
+			@town_detail_b->RenderedText("", Color->New(0, 0, 0));
+			@town_msg->RenderedText("Current: {$curr_name}", Color->New(200, 185, 155));
+			return;
+		};
+		next_wpn := TieredWeapon->Create(next_tier);
+		price := 50 + tier * 30;
+		next_name := next_wpn->ToString();
+		@town_detail_a->RenderedText("Current: {$curr_name}", Color->New(180, 165, 135));
+		@town_detail_b->RenderedText("Upgrade: {$next_name}  —  {$price} gold", Color->New(255, 220, 80));
+		if(@player->GetGold() >= price) {
+			@player->AddGold(-price);
+			@player->SetWeapon(next_wpn);
+			@town_msg->RenderedText("Purchased! You now wield the {$next_name}.", Color->New(100, 220, 100));
+			RefreshTownOpts();
+		}
+		else {
+			@town_msg->RenderedText("Not enough gold. Need {$price}g.", Color->New(255, 100, 80));
+		};
+		shop_greet := DungeonAI->GetTownMsg("shop_greet");
+		if(shop_greet <> Nil) {
+			@town_desc->RenderedText(shop_greet, Color->New(200, 180, 120));
+		};
+	}
+
+	method : TownArmorShop() ~ Nil {
+		@town_state := 2;
+		arm := @player->GetArmor();
+		tier := arm <> Nil ? arm->GetTier() : 0;
+		curr_name := arm <> Nil ? arm->ToString() : "Rags";
+		next_tier := tier + 1;
+		if(next_tier > 7) {
+			@town_detail_a->RenderedText("You wear the finest armor!", Color->New(255, 220, 80));
+			@town_detail_b->RenderedText("", Color->New(0, 0, 0));
+			@town_msg->RenderedText("Current: {$curr_name}", Color->New(200, 185, 155));
+			return;
+		};
+		next_arm := TieredArmor->Create(next_tier);
+		price := 40 + tier * 25;
+		next_name := next_arm->ToString();
+		@town_detail_a->RenderedText("Current: {$curr_name}", Color->New(180, 165, 135));
+		@town_detail_b->RenderedText("Upgrade: {$next_name}  —  {$price} gold", Color->New(255, 220, 80));
+		if(@player->GetGold() >= price) {
+			@player->AddGold(-price);
+			@player->SetArmor(next_arm);
+			@town_msg->RenderedText("Equipped! You now wear the {$next_name}.", Color->New(100, 220, 100));
+			RefreshTownOpts();
+		}
+		else {
+			@town_msg->RenderedText("Not enough gold. Need {$price}g.", Color->New(255, 100, 80));
+		};
+	}
+
+	method : TownHeal() ~ Nil {
+		@town_state := 3;
+		heal_cost := @player->GetMaxHp() - @player->GetHp();
+		if(heal_cost < 0) { heal_cost := 0; };
+		heal_cost := heal_cost * 2;
+		if(heal_cost < 10) { heal_cost := 10; };
+		healer_msg := DungeonAI->GetTownMsg("healer_greet");
+		if(healer_msg <> Nil) {
+			@town_desc->RenderedText(healer_msg, Color->New(180, 220, 160));
+		};
+		if(@player->GetHp() = @player->GetMaxHp() & @player->GetMp() = @player->GetMaxMp()) {
+			@town_detail_a->RenderedText("You are already fully healed.", Color->New(100, 220, 100));
+			@town_detail_b->RenderedText("", Color->New(0, 0, 0));
+			@town_msg->RenderedText("The healer smiles and waves you on.", Color->New(180, 165, 135));
+			return;
+		};
+		@town_detail_a->RenderedText("Restore HP and MP to full?", Color->New(200, 185, 155));
+		@town_detail_b->RenderedText("Cost: {$heal_cost} gold", Color->New(255, 220, 80));
+		if(@player->GetGold() >= heal_cost) {
+			@player->AddGold(-heal_cost);
+			@player->SetHpDirect(@player->GetMaxHp(), @player->GetMaxHp());
+			@player->SetMpDirect(@player->GetMaxMp(), @player->GetMaxMp());
+			@player->SetStatusDirect(0, 0, 0, 0, 0, false, false);
+			@town_msg->RenderedText("Healed! You feel restored.", Color->New(100, 220, 100));
+			RefreshTownOpts();
+		}
+		else {
+			@town_msg->RenderedText("Not enough gold. Need {$heal_cost}g.", Color->New(255, 100, 80));
+		};
+	}
+
+	method : TownInn() ~ Nil {
+		@town_state := 4;
+		inn_cost := 30;
+		@town_detail_a->RenderedText("Rest at the inn? Restores everything.", Color->New(200, 185, 155));
+		@town_detail_b->RenderedText("Cost: {$inn_cost} gold", Color->New(255, 220, 80));
+		if(@player->GetGold() >= inn_cost) {
+			@player->AddGold(-inn_cost);
+			@player->SetHpDirect(@player->GetMaxHp(), @player->GetMaxHp());
+			@player->SetMpDirect(@player->GetMaxMp(), @player->GetMaxMp());
+			@player->SetStatusDirect(0, 0, 0, 0, 0, false, false);
+			inn_msg := DungeonAI->GetTownMsg("inn_rest");
+			if(inn_msg <> Nil) {
+				@town_msg->RenderedText(inn_msg, Color->New(200, 190, 140));
+			}
+			else {
+				@town_msg->RenderedText("You sleep soundly and wake refreshed.", Color->New(200, 190, 140));
+			};
+			RefreshTownOpts();
+		}
+		else {
+			@town_msg->RenderedText("Not enough gold. Need {$inn_cost}g.", Color->New(255, 100, 80));
+		};
+	}
+
+	method : TownPotions() ~ Nil {
+		@town_state := 5;
+		potion_cost := 10;
+		@town_detail_a->RenderedText("Buy a health potion?  10 gold each.", Color->New(200, 185, 155));
+		@town_detail_b->RenderedText("", Color->New(0, 0, 0));
+		if(@player->GetGold() >= potion_cost) {
+			@player->AddGold(-potion_cost);
+			@player->AddPotion(Potion->Type->WEAK_HEALTH, 1);
+			@town_msg->RenderedText("Purchased a health potion!", Color->New(100, 220, 100));
+			RefreshTownOpts();
+		}
+		else {
+			@town_msg->RenderedText("Not enough gold. Need 10g.", Color->New(255, 100, 80));
+		};
+	}
+
+	method : TownBuyBoat() ~ Nil {
+		@town_state := 6;
+		if(@has_boat) {
+			@town_detail_a->RenderedText("You already own a boat.", Color->New(100, 180, 255));
+			@town_detail_b->RenderedText("Sail the shallow seas freely.", Color->New(160, 145, 120));
+			@town_msg->RenderedText("", Color->New(0, 0, 0));
+			return;
+		};
+		boat_cost := 200;
+		@town_detail_a->RenderedText("Buy a sailing boat?  200 gold.", Color->New(200, 185, 155));
+		@town_detail_b->RenderedText("Allows travel on shallow seas.", Color->New(160, 145, 120));
+		if(@player->GetGold() >= boat_cost) {
+			@player->AddGold(-boat_cost);
+			@has_boat := true;
+			@town_msg->RenderedText("Purchased! A sturdy boat is yours.", Color->New(100, 220, 255));
+			RefreshTownOpts();
+		}
+		else {
+			@town_msg->RenderedText("Not enough gold. Need 200g.", Color->New(255, 100, 80));
+		};
+	}
+
+	method : RenderTown(frame : Int) ~ Nil {
+		renderer := @framework->GetRenderer();
+		@framework->SetClearColor(Color->New(12, 8, 4));
+		@framework->Clear();
+
+		# Background — warm tavern atmosphere
+		renderer->BoxColor(0, 0, 768, 512, Color->New(18, 12, 6));
+		# Wooden beam texture hints
+		for(bx := 0; bx < 768; bx += 80;) {
+			renderer->VlineColor(bx, 0, 512, Color->New(28, 18, 8));
+		};
+
+		# Left panel: town name + menu
+		renderer->BoxColor(10, 10, 360, 502, Color->New(25, 18, 10, 200));
+		renderer->RectangleColor(10, 10, 360, 502, Color->New(100, 70, 30));
+		renderer->RectangleColor(13, 13, 357, 499, Color->New(60, 40, 18));
+
+		# Town name
+		tw := @town_title->GetWidth();
+		@town_title->Render(185 - tw / 2, 24);
+		renderer->HLineColor(20, 350, 48, Color->New(80, 55, 22));
+
+		# Atmospheric description
+		dw := @town_desc->GetWidth();
+		@town_desc->Render(185 - dw / 2, 56);
+		renderer->HLineColor(20, 350, 76, Color->New(60, 40, 15));
+
+		# Menu options
+		for(i := 0; i < 7; i += 1;) {
+			oy := 90 + i * 48;
+			if(i = @town_cursor & @town_state = 0) {
+				renderer->BoxColor(18, oy - 4, 352, oy + 34, Color->New(55, 35, 12, 180));
+				renderer->RectangleColor(18, oy - 4, 352, oy + 34, Color->New(140, 100, 40));
+			};
+			@town_opts[i]->Render(30, oy + 4);
+		};
+
+		# Right panel: detail / shop info
+		renderer->BoxColor(375, 10, 758, 430, Color->New(20, 15, 8, 200));
+		renderer->RectangleColor(375, 10, 758, 430, Color->New(90, 60, 25));
+		renderer->RectangleColor(378, 13, 755, 427, Color->New(55, 38, 15));
+
+		# Shop detail
+		if(@town_state > 0) {
+			renderer->HLineColor(385, 748, 45, Color->New(70, 48, 18));
+			@town_detail_a->Render(390, 18);
+			@town_detail_b->Render(390, 55);
+			# AI message
+			mw := @town_msg->GetWidth();
+			if(mw > 0) {
+				renderer->HLineColor(385, 748, 200, Color->New(70, 48, 18));
+				@town_msg->Render(390, 215);
+			};
+		}
+		else {
+			# tavern rumor when on main menu
+			rum := DungeonAI->GetTownMsg("tavern_rumor");
+			if(rum <> Nil) {
+				@town_desc->RenderedText(rum, Color->New(160, 140, 100));
+			};
+		};
+
+		# Bottom strip
+		renderer->BoxColor(0, 440, 768, 512, Color->New(15, 10, 5));
+		renderer->HLineColor(0, 768, 440, Color->New(80, 55, 22));
+		@town_status->Render(10, 450);
+		hint_str := "ESC=leave  UP/DOWN=navigate  SPACE=select  1-7=shortcut";
+		@town_msg->RenderedText(hint_str, Color->New(100, 85, 60));
+
+		# Torch flicker
+		flk := (Float->Sin(frame->As(Float) * 0.15) * 8.0)->As(Int);
+		fa := 18 + flk;
+		renderer->FilledCircleColor(35, 35, 22, Color->New(255, 160, 50, fa));
+		renderer->FilledCircleColor(335, 35, 22, Color->New(255, 160, 50, fa));
+
+		@framework->Show();
+	}
+
+	# ================================================================
+	# CASTLE (game_state = 5)
+	# ================================================================
+
+	method : EnterCastle() ~ Nil {
+		if(@player = Nil) { return; };
+		@game_state    := 5;
+		@castle_state  := 0;
+		@castle_cursor := 0;
+		wn := DungeonAI->IsWorldReady() ? DungeonAI->GetWorldName() : "Castle Ironhold";
+		@castle_title->RenderedText("— Castle of {$wn} —", Color->New(200, 185, 100));
+		if(DungeonAI->IsReady()) {
+			threat := DungeonAI->GetWorldThreat();
+			DungeonAI->PostCastleMessages(GetPlayerClassName(), threat);
+		};
+		RefreshCastleOpts();
+	}
+
+	method : RefreshCastleOpts() ~ Nil {
+		opts := String->New[3];
+		opts[0] := "1. Speak with the Lord";
+		opts[1] := @has_boat ? "2. Boat (owned)" : "2. Gift a Boat  (quest reward)";
+		opts[2] := "3. Leave castle";
+		for(i := 0; i < 3; i += 1;) {
+			if(i = @castle_cursor) { @castle_opts[i]->RenderedText(opts[i], Color->New(255, 220, 80)); }
+			else                   { @castle_opts[i]->RenderedText(opts[i], Color->New(200, 185, 155)); };
+		};
+	}
+
+	method : HandleCastleInput(code : Int) ~ Nil {
+		if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) {
+			@castle_cursor -= 1;
+			if(@castle_cursor < 0) { @castle_cursor := 2; };
+			RefreshCastleOpts();
+		}
+		else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) {
+			@castle_cursor += 1;
+			if(@castle_cursor > 2) { @castle_cursor := 0; };
+			RefreshCastleOpts();
+		}
+		else if(code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_RETURN |
+		        code = Scancode->SDL_SCANCODE_1 | code = Scancode->SDL_SCANCODE_2 | code = Scancode->SDL_SCANCODE_3) {
+			sel := @castle_cursor;
+			if(code = Scancode->SDL_SCANCODE_1) { sel := 0; }
+			else if(code = Scancode->SDL_SCANCODE_2) { sel := 1; }
+			else if(code = Scancode->SDL_SCANCODE_3) { sel := 2; };
+			CastleSelect(sel);
+		}
+		else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+			@game_state := 3;
+		};
+	}
+
+	method : CastleSelect(sel : Int) ~ Nil {
+		select(sel) {
+			label 0 { CastleSpeakLord(); }
+			label 1 { CastleGiftBoat(); }
+			label 2 { @game_state := 3; }
+		};
+	}
+
+	method : CastleSpeakLord() ~ Nil {
+		@castle_state := 1;
+		# Check if boss defeated — different speech
+		if(@monsters_killed > 40) {
+			# Player has likely cleared the dungeon — offer reward speech
+			reward := DungeonAI->GetTownMsg("lord_reward");
+			if(reward <> Nil) {
+				@castle_speech->RenderedText(reward, Color->New(255, 220, 100));
+			}
+			else {
+				@castle_speech->RenderedText("You have saved the realm! Malachar is defeated!", Color->New(255, 220, 100));
+			};
+			@castle_speech2->RenderedText("The kingdom is in your debt.", Color->New(200, 185, 140));
+			# Gift boat if player doesn't have one
+			if(<>@has_boat) {
+				@has_boat := true;
+				@castle_speech2->RenderedText("Accept our finest vessel as reward.", Color->New(100, 220, 255));
+			};
+		}
+		else {
+			speech := DungeonAI->GetTownMsg("lord_speech");
+			if(speech <> Nil) {
+				@castle_speech->RenderedText(speech, Color->New(220, 200, 140));
+			}
+			else {
+				@castle_speech->RenderedText("Brave adventurer — only you can stop Malachar!", Color->New(220, 200, 140));
+			};
+			threat := DungeonAI->GetWorldThreat();
+			if(threat <> Nil) {
+				@castle_speech2->RenderedText(threat, Color->New(180, 160, 120));
+			};
+		};
+	}
+
+	method : CastleGiftBoat() ~ Nil {
+		if(@has_boat) {
+			@castle_speech->RenderedText("You already command a vessel, brave soul.", Color->New(200, 185, 155));
+			@castle_speech2->RenderedText("", Color->New(0, 0, 0));
+		}
+		else {
+			@castle_speech->RenderedText("Prove yourself by defeating Malachar first.", Color->New(255, 160, 80));
+			@castle_speech2->RenderedText("Return victorious and a boat shall be yours.", Color->New(180, 155, 115));
+		};
+		@castle_state := 1;
+	}
+
+	method : RenderCastle(frame : Int) ~ Nil {
+		renderer := @framework->GetRenderer();
+		@framework->SetClearColor(Color->New(6, 6, 10));
+		@framework->Clear();
+
+		# Stone background
+		for(bx := 0; bx < 768; bx += 48;) {
+			for(by := 0; by < 512; by += 48;) {
+				renderer->RectangleColor(bx, by, bx + 47, by + 47, Color->New(22, 20, 28));
+			};
+		};
+
+		# Left panel: castle + options
+		renderer->BoxColor(10, 10, 340, 502, Color->New(18, 16, 24, 210));
+		renderer->RectangleColor(10, 10, 340, 502, Color->New(80, 70, 110));
+		renderer->RectangleColor(13, 13, 337, 499, Color->New(45, 40, 65));
+
+		# Castle title
+		tw := @castle_title->GetWidth();
+		@castle_title->Render(175 - tw / 2, 24);
+		renderer->HLineColor(20, 330, 48, Color->New(70, 60, 90));
+
+		# Lord silhouette (SDL primitives)
+		renderer->BoxColor(145, 65, 205, 180, Color->New(35, 30, 50));
+		renderer->FilledCircleColor(175, 75, 18, Color->New(45, 38, 60));
+		renderer->BoxColor(130, 100, 220, 175, Color->New(50, 42, 68));
+		# Crown hint
+		for(cx := 158; cx <= 192; cx += 8;) {
+			renderer->VlineColor(cx, 56, 68, Color->New(180, 150, 50));
+		};
+		renderer->HLineColor(158, 192, 68, Color->New(180, 150, 50));
+
+		renderer->HLineColor(20, 330, 192, Color->New(60, 52, 80));
+
+		# Menu options
+		for(i := 0; i < 3; i += 1;) {
+			oy := 208 + i * 56;
+			if(i = @castle_cursor) {
+				renderer->BoxColor(18, oy - 4, 332, oy + 38, Color->New(45, 38, 65, 180));
+				renderer->RectangleColor(18, oy - 4, 332, oy + 38, Color->New(100, 85, 140));
+			};
+			@castle_opts[i]->Render(30, oy + 6);
+		};
+
+		# Right panel: speech / info
+		renderer->BoxColor(355, 10, 758, 440, Color->New(14, 12, 20, 210));
+		renderer->RectangleColor(355, 10, 758, 440, Color->New(75, 65, 100));
+		renderer->RectangleColor(358, 13, 755, 437, Color->New(42, 36, 60));
+
+		if(@castle_state = 1) {
+			renderer->HLineColor(365, 748, 45, Color->New(60, 52, 80));
+			@castle_speech->Render(370, 18);
+			sw2 := @castle_speech2->GetWidth();
+			if(sw2 > 0) {
+				renderer->HLineColor(365, 748, 100, Color->New(50, 44, 68));
+				@castle_speech2->Render(370, 112);
+			};
+		}
+		else {
+			hint := "Speak with the Lord to learn the threat.";
+			@castle_speech->RenderedText(hint, Color->New(130, 120, 160));
+			@castle_speech->Render(370, 18);
+		};
+
+		# Bottom strip
+		renderer->BoxColor(0, 452, 768, 512, Color->New(10, 8, 14));
+		renderer->HLineColor(0, 768, 452, Color->New(70, 60, 95));
+		wn := DungeonAI->IsWorldReady() ? DungeonAI->GetWorldName() : "the realm";
+		wn_txt := "ESC=leave the castle   |   {$wn}";
+		@castle_speech2->RenderedText(wn_txt, Color->New(100, 90, 130));
+		@castle_speech2->Render(10, 464);
+
+		# Torch flicker (blue-white castle torches)
+		flk := (Float->Sin(frame->As(Float) * 0.1) * 6.0)->As(Int);
+		fa := 14 + flk;
+		renderer->FilledCircleColor(30, 30, 18, Color->New(200, 210, 255, fa));
+		renderer->FilledCircleColor(320, 30, 18, Color->New(200, 210, 255, fa));
+
+		@framework->Show();
 	}
 
 	method : SaveGame() ~ Nil {
@@ -1023,8 +1580,20 @@ class TinyDungeon {
 			return;
 		};
 
+		# town screen
+		if(@game_state = 4) {
+			HandleTownInput(e->GetKey()->GetKeysym()->GetScancode());
+			return;
+		};
+
+		# castle screen
+		if(@game_state = 5) {
+			HandleCastleInput(e->GetKey()->GetKeysym()->GetScancode());
+			return;
+		};
+
 		# terminal screens: only ESC
-		if(@game_state > 0) {
+		if(@game_state = 1 | @game_state = 2) {
 			if(e->GetKey()->GetKeysym()->GetScancode() = Scancode->SDL_SCANCODE_ESCAPE) {
 				@quit := true;
 			};
@@ -1042,7 +1611,9 @@ class TinyDungeon {
 			else if(code = Scancode->SDL_SCANCODE_RIGHT | code = Scancode->SDL_SCANCODE_D) { dc :=  1; };
 			if(dr <> 0 | dc <> 0) {
 				nr := @ow_player_r + dr; nc := @ow_player_c + dc;
-				if(@overworld_manager->IsPassable(nr, nc)) {
+				sea := @overworld_manager->GetTile(nr, nc);
+				boat_ok := @has_boat & (sea = OverworldTile->SHALLOW_SEA | sea = OverworldTile->DEEP_SEA);
+				if(@overworld_manager->IsPassable(nr, nc) | boat_ok) {
 					@ow_player_r := nr; @ow_player_c := nc;
 					@ow_move_cooldown := 6;
 					OverworldCheckEvent();
@@ -2091,7 +2662,9 @@ class TinyDungeon {
 			else if(btn = GameControllerButton->SDL_CONTROLLER_BUTTON_DPAD_RIGHT) { dc :=  1; };
 			if(dr <> 0 | dc <> 0) {
 				nr := @ow_player_r + dr; nc := @ow_player_c + dc;
-				if(@overworld_manager->IsPassable(nr, nc)) {
+				sea := @overworld_manager->GetTile(nr, nc);
+				boat_ok := @has_boat & (sea = OverworldTile->SHALLOW_SEA | sea = OverworldTile->DEEP_SEA);
+				if(@overworld_manager->IsPassable(nr, nc) | boat_ok) {
 					@ow_player_r := nr; @ow_player_c := nc;
 					@ow_move_cooldown := 6;
 					OverworldCheckEvent();
@@ -2836,7 +3409,18 @@ class TinyDungeon {
 		};
 
 		# terminal screens (game over / victory)
-		if(@game_state > 0) {
+		# town and castle screens
+		if(@game_state = 4) {
+			RenderTown(frame_count);
+			return;
+		};
+		if(@game_state = 5) {
+			RenderCastle(frame_count);
+			return;
+		};
+
+		# terminal screens (game over / victory)
+		if(@game_state = 1 | @game_state = 2) {
 			RenderTerminalScreen();
 			return;
 		};
