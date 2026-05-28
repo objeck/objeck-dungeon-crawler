@@ -1,0 +1,310 @@
+use API.Ollama, Collection;
+
+class DungeonAI {
+    @model : static : String;
+    @is_ready : static : Bool;
+    @boss_round : static : Int;
+
+    # --- Dungeon Theme (generated once at game start) ---
+    @theme_name      : static : String;
+    @theme_lore      : static : String;
+    @theme_archetype : static : Int;   # 0=undead 1=beast 2=infernal 3=arcane
+    @theme_treasure  : static : Int;   # 0=weapon 1=magic 2=gold
+    @theme_ready     : static : Bool;
+
+    consts Archetype {
+        UNDEAD   := 0,
+        BEAST    := 1,
+        INFERNAL := 2,
+        ARCANE   := 3
+    }
+
+    consts Treasure {
+        WEAPON := 0,
+        MAGIC  := 1,
+        GOLD   := 2
+    }
+
+    function : InitModel() ~ String {
+        models := Model->List();
+        if(models = Nil) {
+            @is_ready := false;
+            return Nil;
+        };
+        if(models->Size() = 0) {
+            @is_ready := false;
+            return Nil;
+        };
+
+        m := models->Get(0)->As(Model);
+        if(m = Nil) {
+            @is_ready := false;
+            return Nil;
+        };
+
+        mp := m->GetPulled();
+        if(mp = Nil) {
+            @is_ready := false;
+            return Nil;
+        };
+
+        @model := mp->GetName();
+        @is_ready := true;
+        @boss_round := 0;
+        return @model;
+    }
+
+    function : IsReady() ~ Bool {
+        return @is_ready;
+    }
+
+    function : GetModelName() ~ String {
+        return @model;
+    }
+
+    function : Clip(text : String) ~ String {
+        if(text = Nil) { return Nil; };
+        if(text->IsEmpty()) { return Nil; };
+        # strip DeepSeek R1 <think>...</think> reasoning block
+        think_end := text->Find("</think>");
+        if(think_end >= 0) {
+            after_start := think_end + 8;
+            after_len := text->Size() - after_start;
+            if(after_len > 0) {
+                sub := text->SubString(after_start, after_len);
+                if(sub = Nil) { return Nil; };
+                text := sub->Trim();
+            }
+            else {
+                return Nil;
+            };
+        }
+        else {
+            text := text->Trim();
+        };
+        if(text = Nil) { return Nil; };
+        if(text->IsEmpty()) { return Nil; };
+        if(text->Size() > 72) {
+            clipped := text->SubString(0, 69);
+            clipped->Append("...");
+            return clipped;
+        };
+        return text;
+    }
+
+    function : PlaqueText(floor : Int, player_class : String) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "Write a cryptic dungeon wall inscription for Greyhold dungeon floor {$floor}. A {$player_class} reads it. ONE sentence, max 11 words, ominous and mysterious. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.9)));
+    }
+
+    function : RuneRiddle(seq_str : String) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "A dungeon door opens by pressing these directions: {$seq_str}. Write ONE cryptic riddle hint (max 12 words) that alludes to these directions. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.8)));
+    }
+
+    function : SpellHint(element : String) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "A magical dungeon door requires the element {$element} to open. Write ONE cryptic riddle hint (max 11 words) alluding to {$element}. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.8)));
+    }
+
+    function : MerchantGreet(player_class : String, gold : Int, floor : Int) ~ String {
+        if(<>@is_ready) { return Nil; };
+        prompt := "You are a sly dungeon merchant. A {$player_class} with {$gold} gold arrives on floor {$floor} of a dark dungeon. Greet them in ONE sentence, max 12 words, sly tone. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85)));
+    }
+
+    function : MerchantReact(item : String, afforded : Bool) ~ String {
+        if(<>@is_ready) { return Nil; };
+
+        ai_response : String;
+        if(afforded) {
+            prompt := "Sly dungeon merchant just sold an item called '{$item}'. ONE witty satisfied line, max 9 words. No quotes.";
+            ai_response := Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85)));
+        }
+        else {
+            prompt := "Sly dungeon merchant: customer cannot afford '{$item}'. ONE mocking line, max 9 words. No quotes.";
+            ai_response := Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85)));
+        };
+
+        return ai_response;
+    }
+
+    function : BossIntro(player_class : String, floor : Int, kills : Int) ~ String {
+        if(<>@is_ready) { return Nil; };
+        @boss_round := 0;
+        prompt := "You are Malachar, an ancient demon lord in a dark fantasy dungeon. A {$player_class} who slew {$kills} of your minions stands before you. Greet them with contempt in ONE sentence, max 14 words. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.8)));
+    }
+
+    function : BossTaunt(player_class : String, boss_hp_perc : Int) ~ String {
+        if(<>@is_ready) { return Nil; };
+        @boss_round += 1;
+        round := @boss_round;
+
+        mood : String;
+        if(boss_hp_perc > 66) {
+            mood := "powerful and contemptuous";
+        }
+        else if(boss_hp_perc > 33) {
+            mood := "angered and focused";
+        }
+        else {
+            mood := "enraged and desperate";
+        };
+
+        prompt := "You are Malachar, demon lord at {$boss_hp_perc}% HP, feeling {$mood}. Fighting a {$player_class}, round {$round}. ONE sinister battle taunt, max 11 words. No quotes.";
+        return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85)));
+    }
+
+    # --- Theme generation ---
+
+    function : GenerateTheme() ~ Nil {
+        if(<>@is_ready) { return; };
+
+        prompt := "Generate a dark fantasy dungeon theme. Respond in EXACTLY this format with no extra text:\nNAME: [2-4 word dungeon name]\nLORE: [one ominous sentence, max 11 words]\nTYPE: [undead or beast or infernal or arcane]\nLOOT: [weapon or magic or gold]";
+        response := Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85));
+        if(response = Nil) { return; };
+        response := response->Trim();
+
+        # strip DeepSeek R1 reasoning block
+        think_end := response->Find("</think>");
+        if(think_end >= 0) {
+            after := think_end + 8;
+            if(after < response->Size()) {
+                response := response->SubString(after, response->Size() - after)->Trim();
+            }
+            else {
+                return;
+            };
+        };
+
+        @theme_name := ParseField(response, "NAME:");
+        @theme_lore := ParseField(response, "LORE:");
+
+        type_str := ParseField(response, "TYPE:");
+        if(type_str <> Nil) {
+            if(type_str->Find("ndead") >= 0) {
+                @theme_archetype := DungeonAI->Archetype->UNDEAD;
+            }
+            else if(type_str->Find("east") >= 0) {
+                @theme_archetype := DungeonAI->Archetype->BEAST;
+            }
+            else if(type_str->Find("nfernal") >= 0) {
+                @theme_archetype := DungeonAI->Archetype->INFERNAL;
+            }
+            else {
+                @theme_archetype := DungeonAI->Archetype->ARCANE;
+            };
+        };
+
+        loot_str := ParseField(response, "LOOT:");
+        if(loot_str <> Nil) {
+            if(loot_str->Find("eapon") >= 0) {
+                @theme_treasure := DungeonAI->Treasure->WEAPON;
+            }
+            else if(loot_str->Find("agic") >= 0) {
+                @theme_treasure := DungeonAI->Treasure->MAGIC;
+            }
+            else {
+                @theme_treasure := DungeonAI->Treasure->GOLD;
+            };
+        };
+
+        if(@theme_name <> Nil & @theme_lore <> Nil) {
+            @theme_ready := true;
+        };
+    }
+
+    function : ParseField(response : String, key : String) ~ String {
+        pos := response->Find(key);
+        if(pos < 0) { return Nil; };
+        start := pos + key->Size();
+        if(start >= response->Size()) { return Nil; };
+        rest := response->SubString(start, response->Size() - start);
+        if(rest = Nil) { return Nil; };
+        rest := rest->Trim();
+        if(rest->IsEmpty()) { return Nil; };
+        nl := rest->Find("\n");
+        if(nl > 0) {
+            return rest->SubString(0, nl)->Trim();
+        };
+        return rest;
+    }
+
+    function : IsThemeReady() ~ Bool {
+        return @theme_ready;
+    }
+
+    function : GetThemeName() ~ String {
+        return @theme_name;
+    }
+
+    function : GetThemeLore() ~ String {
+        return @theme_lore;
+    }
+
+    function : GetArchetype() ~ Int {
+        return @theme_archetype;
+    }
+
+    function : GetTreasure() ~ Int {
+        return @theme_treasure;
+    }
+
+    function : ThemeBiasedRoll(floor : Int) ~ Int {
+        if(floor = 1) {
+            if(@theme_archetype = DungeonAI->Archetype->UNDEAD) {
+                return Int->Random(39, 79);
+            }
+            else if(@theme_archetype = DungeonAI->Archetype->BEAST) {
+                r := Int->Random(4);
+                if(r = 0) { return Int->Random(0, 20); }
+                else if(r = 1) { return Int->Random(21, 38); }
+                else if(r = 2) { return Int->Random(53, 66); }
+                else { return Int->Random(90, 98); };
+            };
+        }
+        else if(floor = 2) {
+            if(@theme_archetype = DungeonAI->Archetype->UNDEAD) {
+                return Int->Random(0, 88);
+            }
+            else if(@theme_archetype = DungeonAI->Archetype->ARCANE) {
+                return Int->Random(63, 76);
+            };
+        }
+        else if(floor = 3) {
+            if(@theme_archetype = DungeonAI->Archetype->UNDEAD) {
+                return Int->Random(60, 70);
+            }
+            else if(@theme_archetype = DungeonAI->Archetype->BEAST) {
+                if(Int->Random(2) = 0) { return Int->Random(0, 31); }
+                else { return Int->Random(82, 91); };
+            }
+            else if(@theme_archetype = DungeonAI->Archetype->INFERNAL) {
+                return Int->Random(32, 46);
+            }
+            else if(@theme_archetype = DungeonAI->Archetype->ARCANE) {
+                if(Int->Random(2) = 0) { return Int->Random(47, 59); }
+                else { return Int->Random(92, 98); };
+            };
+        }
+        else {
+            if(@theme_archetype = DungeonAI->Archetype->INFERNAL) {
+                r := Int->Random(5);
+                if(r = 0) { return Int->Random(0, 17); }
+                else if(r = 1) { return Int->Random(18, 34); }
+                else if(r = 2) { return Int->Random(51, 64); }
+                else if(r = 3) { return Int->Random(65, 76); }
+                else { return Int->Random(89, 98); };
+            }
+            else if(@theme_archetype = DungeonAI->Archetype->ARCANE) {
+                if(Int->Random(2) = 0) { return Int->Random(35, 50); }
+                else { return Int->Random(77, 88); };
+            };
+        };
+        return Int->Random(99);
+    }
+}
