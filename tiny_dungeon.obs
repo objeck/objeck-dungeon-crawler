@@ -150,6 +150,13 @@ class TinyDungeon {
 	@class_select_text : TextSprite;
 	@class_inst_text : TextSprite;
 
+	# --- Spell Menu ---
+	@spell_menu_active : Bool;
+	@spell_menu_cursor : Int;
+	@spell_menu_title : TextSprite;
+	@spell_menu_sprites : TextSprite[];
+	@spell_menu_cancel : TextSprite;
+
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Warden of Greyhold");
 		@clear_color := Color->New(30, 15, 5);
@@ -254,6 +261,15 @@ class TinyDungeon {
 
 		@class_texts[3]->RenderedText("NINJA", Color->New(200, 180, 200));
 		@class_desc[3]->RenderedText("Swift strikes, deadly crits, elusive. The shadow blade.", Color->New(140, 130, 120));
+
+		@spell_menu_title := @framework->AddTextSprite();
+		@spell_menu_title->RenderedText("CHOOSE SPELL", Color->New(220, 180, 60));
+		@spell_menu_sprites := TextSprite->New[7];
+		each(i : @spell_menu_sprites) {
+			@spell_menu_sprites[i] := @framework->AddTextSprite();
+		};
+		@spell_menu_cancel := @framework->AddTextSprite();
+		@spell_menu_cancel->RenderedText("ESC to cancel", Color->New(110, 100, 85));
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -912,6 +928,29 @@ class TinyDungeon {
 
 		# block input during animation
 		if(@anim_counter > 0) {
+			return;
+		};
+
+		# --- Spell menu input ---
+		if(@spell_menu_active) {
+			code := e->GetKey()->GetKeysym()->GetScancode();
+			if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) {
+				@spell_menu_cursor -= 1;
+				if(@spell_menu_cursor < 0) { @spell_menu_cursor := @player->GetNumSpells() - 1; };
+				RefreshSpellMenu();
+			}
+			else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) {
+				@spell_menu_cursor += 1;
+				if(@spell_menu_cursor >= @player->GetNumSpells()) { @spell_menu_cursor := 0; };
+				RefreshSpellMenu();
+			}
+			else if(code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_RETURN) {
+				@spell_menu_active := false;
+				ExecuteSpellCast(@spell_menu_cursor);
+			}
+			else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+				@spell_menu_active := false;
+			};
 			return;
 		};
 
@@ -1644,96 +1683,153 @@ class TinyDungeon {
         			RefreshItems();
         		}
         		else if(@monster <> Nil & @player <> Nil) {
-        			# find best spell to cast
-        			cast_idx := -1;
-        			# if low HP, try heal first
-        			if(@player->GetHp() < @player->GetMaxHp() / 2) {
-        				for(i := 0; i < @player->GetNumSpells(); i += 1;) {
-        					sp := @player->GetSpell(i);
-        					if(sp <> Nil & sp->IsHeal() & @player->GetMp() >= sp->GetMpCost()) {
-        						cast_idx := i;
-        					};
-        				};
-        			};
-        			# otherwise find best damage spell
-        			if(cast_idx = -1) {
-        				best_power := 0;
-        				for(i := 0; i < @player->GetNumSpells(); i += 1;) {
-        					sp := @player->GetSpell(i);
-        					if(sp <> Nil & <>sp->IsHeal() & @player->GetMp() >= sp->GetMpCost()) {
-        						if(sp->GetPower() > best_power) {
-        							best_power := sp->GetPower();
-        							cast_idx := i;
-        						};
-        					};
-        				};
-        			};
-
-        			if(cast_idx >= 0) {
-        				sp := @player->GetSpell(cast_idx);
-        				power := @player->CastSpell(cast_idx);
-        				if(power > 0) {
-        					spell_name := sp->GetName();
-        					if(sp->IsHeal()) {
-        						@damage_text->RenderedText("+{$power} HP ({$spell_name})", Color->New(100, 255, 100));
-        						@damage_timer := 25;
-        						@damage_is_player := false;
-        					}
-        					else {
-        						@monster->UpdateHp(power);
-        						@sound_manager->Strike();
-        						@damage_text->RenderedText("-{$power} ({$spell_name})", Color->New(100, 200, 255));
-        						@damage_timer := 25;
-        						@damage_is_player := false;
-
-        						# spell attack animation (always arcane bolt style)
-        						@attack_anim_type := 3;
-        						@attack_anim_timer := 20;
-        						@attack_anim_frame := 20;
-
-        						if(<>@monster->IsAlive()) {
-        							xp_reward := @monster->GetWinExp();
-        							gold_reward := Int->Random(0, 2) * 10 + @current_floor * 5;
-        							was_boss := @monster->IsBoss();
-        							@monsters_killed += 1;
-        							leveled_up := @player->AddXP(xp_reward);
-        							@player->AddGold(gold_reward);
-        							@reward_text->RenderedText("+{$xp_reward} XP  +{$gold_reward} Gold", Color->New(60, 255, 60));
-        							@reward_timer := 60;
-        							if(leveled_up) {
-        								new_level := @player->GetLevel();
-        								@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
-        								@levelup_timer := 90;
-        							};
-        							if(was_boss) { @game_state := 2; ShowTerminalScreen(); };
-        							@monster := Nil;
-        							@player_hit := @monster_hit := 0;
-        							SaveGame();
-        						};
-        					};
-        				}
-        				else {
-        					@damage_text->RenderedText("Not enough MP!", Color->New(200, 100, 100));
-        					@damage_timer := 20;
-        					@damage_is_player := false;
-        				};
+        			if(@player->GetNumSpells() = 0) {
+        				@damage_text->RenderedText("No spells learned yet.", Color->New(140, 130, 110));
+        				@damage_timer := 25;
+        				@damage_is_player := false;
         			}
         			else {
-        				@damage_text->RenderedText("No spells available!", Color->New(200, 100, 100));
-        				@damage_timer := 20;
-        				@damage_is_player := false;
+        				OpenSpellMenu();
         			};
-
-        			# monster retaliates
-        			if(@monster <> Nil) {
-        				@player_hit := @monster->Attack(@player) ? 8 : 0;
-        				if(@player_hit > 0) { @sound_manager->Strike(); };
-        				if(<>@player->IsAlive()) { @game_state := 1; ShowTerminalScreen(); };
-        			};
-
-        			RefreshStats();
         		};
         	
+	}
+
+	method : OpenSpellMenu() ~ Nil {
+		@spell_menu_active := true;
+		@spell_menu_cursor := 0;
+		RefreshSpellMenu();
+	}
+
+	method : RefreshSpellMenu() ~ Nil {
+		if(@player = Nil) { return; };
+		num := @player->GetNumSpells();
+		for(i := 0; i < num; i += 1;) {
+			sp := @player->GetSpell(i);
+			if(sp <> Nil) {
+				mp_cost := sp->GetMpCost();
+				power := sp->GetPower();
+				num_str := i + 1;
+				sp_name := sp->GetName();
+				effect_str : String;
+				if(sp->IsHeal()) { effect_str := "+{$power}HP"; }
+				else { effect_str := "{$power}dmg"; };
+				entry := "{$num_str}. {$sp_name}  {$effect_str}  {$mp_cost}MP";
+				if(@player->GetMp() < mp_cost) {
+					@spell_menu_sprites[i]->RenderedText(entry, Color->New(85, 78, 65));
+				}
+				else if(i = @spell_menu_cursor) {
+					@spell_menu_sprites[i]->RenderedText(entry, Color->New(255, 220, 80));
+				}
+				else {
+					@spell_menu_sprites[i]->RenderedText(entry, Color->New(210, 200, 175));
+				};
+			};
+		};
+	}
+
+	method : ExecuteSpellCast(idx : Int) ~ Nil {
+		if(@player = Nil | @monster = Nil) { return; };
+		sp := @player->GetSpell(idx);
+		if(sp = Nil) { return; };
+		if(@player->GetMp() < sp->GetMpCost()) {
+			@damage_text->RenderedText("Not enough MP!", Color->New(200, 100, 100));
+			@damage_timer := 25;
+			@damage_is_player := false;
+			return;
+		};
+		power := @player->CastSpell(idx);
+		if(power > 0) {
+			spell_name := sp->GetName();
+			if(sp->IsHeal()) {
+				@damage_text->RenderedText("+{$power} HP ({$spell_name})", Color->New(100, 255, 100));
+				@damage_timer := 25;
+				@damage_is_player := false;
+			}
+			else {
+				@monster->UpdateHp(power);
+				@sound_manager->Strike();
+				@damage_text->RenderedText("-{$power} ({$spell_name})", Color->New(100, 200, 255));
+				@damage_timer := 25;
+				@damage_is_player := false;
+				@attack_anim_type := 3;
+				@attack_anim_timer := 20;
+				@attack_anim_frame := 20;
+
+				if(<>@monster->IsAlive()) {
+					xp_reward := @monster->GetWinExp();
+					gold_reward := Int->Random(0, 2) * 10 + @current_floor * 5;
+					was_boss := @monster->IsBoss();
+					@monsters_killed += 1;
+					leveled_up := @player->AddXP(xp_reward);
+					@player->AddGold(gold_reward);
+					@reward_text->RenderedText("+{$xp_reward} XP  +{$gold_reward} Gold", Color->New(60, 255, 60));
+					@reward_timer := 60;
+					if(leveled_up) {
+						new_level := @player->GetLevel();
+						@levelup_text->RenderedText("LEVEL UP! Level {$new_level}!", Color->New(255, 255, 60));
+						@levelup_timer := 90;
+					};
+					if(was_boss) { @game_state := 2; ShowTerminalScreen(); };
+					DungeonAI->EndFight();
+					@monster := Nil;
+					@player_hit := @monster_hit := 0;
+					SaveGame();
+				};
+			};
+		};
+		# monster retaliates if still alive
+		if(@monster <> Nil) {
+			@player_hit := @monster->Attack(@player) ? 8 : 0;
+			if(@player_hit > 0) { @sound_manager->Strike(); };
+			if(<>@player->IsAlive()) { @game_state := 1; ShowTerminalScreen(); };
+		};
+		RefreshStats();
+	}
+
+	method : DrawSpellMenu() ~ Nil {
+		if(<>@spell_menu_active | @player = Nil) { return; };
+		renderer := @framework->GetRenderer();
+
+		px0 := 184; py0 := 128;
+		px1 := 584; py1 := 395;
+
+		# panel background + border
+		renderer->BoxColor(px0, py0, px1, py1, Color->New(8, 4, 20, 235));
+		renderer->RectangleColor(px0, py0, px1, py1, Color->New(90, 65, 150));
+		renderer->RectangleColor(px0 + 3, py0 + 3, px1 - 3, py1 - 3, Color->New(50, 36, 90));
+		# corner accents
+		renderer->BoxColor(px0 + 1, py0 + 1, px0 + 7, py0 + 7, Color->New(90, 65, 150));
+		renderer->BoxColor(px1 - 7, py0 + 1, px1 - 1, py0 + 7, Color->New(90, 65, 150));
+		renderer->BoxColor(px0 + 1, py1 - 7, px0 + 7, py1 - 1, Color->New(90, 65, 150));
+		renderer->BoxColor(px1 - 7, py1 - 7, px1 - 1, py1 - 1, Color->New(90, 65, 150));
+
+		# title
+		tw := @spell_menu_title->GetWidth();
+		cx := (px0 + px1) / 2;
+		@spell_menu_title->Render(cx - tw / 2, py0 + 10);
+		renderer->HLineColor(px0 + 10, px1 - 10, py0 + 32, Color->New(65, 48, 110));
+
+		# spell rows
+		num := @player->GetNumSpells();
+		row_y := py0 + 40;
+		for(i := 0; i < num; i += 1;) {
+			sp := @player->GetSpell(i);
+			if(sp <> Nil) {
+				# highlight selected row
+				if(i = @spell_menu_cursor & @player->GetMp() >= sp->GetMpCost()) {
+					renderer->BoxColor(px0 + 6, row_y - 2, px1 - 6, row_y + 24, Color->New(55, 40, 100, 180));
+					renderer->RectangleColor(px0 + 6, row_y - 2, px1 - 6, row_y + 24, Color->New(100, 75, 160));
+				};
+				@spell_menu_sprites[i]->Render(px0 + 18, row_y + 2);
+			};
+			row_y += 32;
+		};
+
+		# cancel hint
+		cw := @spell_menu_cancel->GetWidth();
+		@spell_menu_cancel->Render(cx - cw / 2, py1 - 22);
+		renderer->HLineColor(px0 + 10, px1 - 10, py1 - 26, Color->New(65, 48, 110));
 	}
 
 	method : DoTent() ~ Nil {
@@ -1771,6 +1867,7 @@ class TinyDungeon {
         			if(Int->Random(99) < flee_chance) {
         				@monster := Nil;
         				@player_hit := @monster_hit := 0;
+        				@spell_menu_active := false;
         				@damage_text->RenderedText("Escaped!", Color->New(200, 200, 100));
         				@damage_timer := 30;
         				@damage_is_player := false;
@@ -2743,6 +2840,8 @@ class TinyDungeon {
 			@ai_text->Render(text_x, text_y);
 			@ai_timer -= 1;
 		};
+
+		DrawSpellMenu();
 
 		@framework->Show();
 	}
