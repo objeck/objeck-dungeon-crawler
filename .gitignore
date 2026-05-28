@@ -1,0 +1,12 @@
+*.obe
+*.obm
+*.log
+crash_log.txt
+debug.txt
+save.json
+.frames/
+stage2_*.py
+tiny_dungeon_original.obs
+tiny_dungeon_original.obe
+tiny_dungeon_fixed.obm
+tiny_dungeon_s0.obm
