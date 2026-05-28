@@ -157,6 +157,11 @@ class TinyDungeon {
 	@spell_menu_sprites : TextSprite[];
 	@spell_menu_cancel : TextSprite;
 
+	# --- Floor Entry Overlay ---
+	@floor_entry_timer : Int;
+	@floor_entry_name : TextSprite;
+	@floor_entry_lore : TextSprite;
+
 	New() {
 		@framework := GameFramework->New(Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, "Warden of Greyhold");
 		@clear_color := Color->New(30, 15, 5);
@@ -270,6 +275,10 @@ class TinyDungeon {
 		};
 		@spell_menu_cancel := @framework->AddTextSprite();
 		@spell_menu_cancel->RenderedText("ESC to cancel", Color->New(110, 100, 85));
+
+		@floor_entry_name := @framework->AddTextSprite();
+		@floor_entry_lore := @framework->AddTextSprite();
+		@floor_entry_timer := 0;
 	}
 
 	function : Main(args : String[]) ~ Nil {
@@ -410,7 +419,7 @@ class TinyDungeon {
 
 		# terminal screen texts
 		@terminal_title := @framework->AddTextSprite();
-		@terminal_stats := TextSprite->New[5];
+		@terminal_stats := TextSprite->New[7];
 		each(i : @terminal_stats) {
 			@terminal_stats[i] := @framework->AddTextSprite();
 		};
@@ -838,25 +847,33 @@ class TinyDungeon {
 		UpdateQuestText();
 		UpdateCompass();
 
-		# floor entry story text
-		story : String;
-		select(@current_floor) {
-			label 1 {
-				story := "The Catacombs. The dead lie uneasy here...";
-			}
-			label 2 {
-				story := "The Forgotten Crypts. Spectral light flickers...";
-			}
-			label 3 {
-				story := "The Deep Halls. Runes of binding crack and fail...";
-			}
-			label 4 {
-				story := "The Abyss. The air itself burns. Malachar waits...";
-			}
-		};
-		if(story <> Nil) {
-			@flavor_text->RenderedText(story, Color->New(200, 180, 120));
-			@flavor_timer := 180;
+		# floor entry overlay
+		if(inc_level <> 0) {
+			floor_name : String;
+			floor_lore : String;
+			select(@current_floor) {
+				label 1 {
+					floor_name := "FLOOR I — THE CATACOMBS";
+					floor_lore := "The dead lie uneasy beneath ancient stone.";
+				}
+				label 2 {
+					floor_name := "FLOOR II — THE FORGOTTEN CRYPTS";
+					floor_lore := "Spectral light weeps from the walls.";
+				}
+				label 3 {
+					floor_name := "FLOOR III — THE DEEP HALLS";
+					floor_lore := "Runes of binding crack and fail.";
+				}
+				label 4 {
+					floor_name := "FLOOR IV — THE ABYSS";
+					floor_lore := "The air itself burns. Malachar awaits.";
+				}
+			};
+			if(floor_name <> Nil) {
+				@floor_entry_name->RenderedText(floor_name, Color->New(220, 180, 60));
+				@floor_entry_lore->RenderedText(floor_lore, Color->New(160, 140, 100));
+				@floor_entry_timer := 150;
+			};
 		};
 
 		# show AI theme lore placard on first dungeon entry
@@ -2255,24 +2272,37 @@ class TinyDungeon {
 		player_gold := @player->GetGold();
 		player_kills := @monsters_killed;
 		player_xp := @player->GetXP();
+		class_name := GetPlayerClassName();
+
+		wpn_name := "Fists";
+		arm_name := "Rags";
+		wpn := @player->GetWeapon();
+		arm := @player->GetArmor();
+		if(wpn <> Nil) { wpn_name := wpn->ToString(); };
+		if(arm <> Nil) { arm_name := arm->ToString(); };
 
 		if(@game_state = 1) {
-			@terminal_title->RenderedText("YOU HAVE FALLEN...", Color->New(255, 80, 80));
-
-			@terminal_stats[0]->RenderedText("Floor: {$player_floor}", @text_color);
-			@terminal_stats[1]->RenderedText("Level: {$player_level}", @text_color);
-			@terminal_stats[2]->RenderedText("Gold: {$player_gold}", @text_color);
-			@terminal_stats[3]->RenderedText("Monsters Slain: {$player_kills}", @text_color);
-			@terminal_stats[4]->RenderedText("Press ESC to exit", Color->New(180, 160, 120));
+			@terminal_title->RenderedText("THE WARDEN HAS FALLEN", Color->New(255, 80, 80));
+			@terminal_stats[0]->RenderedText("Class: {$class_name}", @text_color);
+			@terminal_stats[1]->RenderedText("Reached Floor: {$player_floor}   Level: {$player_level}", @text_color);
+			@terminal_stats[2]->RenderedText("Monsters Slain: {$player_kills}   Gold: {$player_gold}", @text_color);
+			@terminal_stats[3]->RenderedText("{$wpn_name}  |  {$arm_name}", Color->New(160, 150, 130));
+			@terminal_stats[4]->RenderedText("", @text_color);
+			@terminal_stats[5]->RenderedText("", @text_color);
+			@terminal_stats[6]->RenderedText("Press ESC to exit", Color->New(150, 130, 100));
 		}
 		else if(@game_state = 2) {
-			@terminal_title->RenderedText("VICTORY!", Color->New(255, 220, 60));
-
-			@terminal_stats[0]->RenderedText("XP Earned: {$player_xp}", @text_color);
-			@terminal_stats[1]->RenderedText("Level: {$player_level}", @text_color);
-			@terminal_stats[2]->RenderedText("Gold: {$player_gold}", @text_color);
-			@terminal_stats[3]->RenderedText("Monsters Slain: {$player_kills}", @text_color);
-			@terminal_stats[4]->RenderedText("Press ESC to exit", Color->New(180, 160, 120));
+			@terminal_title->RenderedText("GREYHOLD IS CLEARED!", Color->New(255, 220, 60));
+			@terminal_stats[0]->RenderedText("The {$class_name} has vanquished Malachar!", Color->New(220, 200, 100));
+			@terminal_stats[1]->RenderedText("", @text_color);
+			@terminal_stats[2]->RenderedText("Level: {$player_level}   XP: {$player_xp}", @text_color);
+			@terminal_stats[3]->RenderedText("Monsters Slain: {$player_kills}   Gold: {$player_gold}", @text_color);
+			@terminal_stats[4]->RenderedText("{$wpn_name}  |  {$arm_name}", Color->New(160, 150, 130));
+			@terminal_stats[5]->RenderedText("", @text_color);
+			@terminal_stats[6]->RenderedText("Press ESC to exit", Color->New(150, 130, 100));
+			# clear save — the run is complete
+			FileWriter->WriteFile("save.json", "");
+			@title_has_save := false;
 		};
 	}
 
@@ -2841,9 +2871,44 @@ class TinyDungeon {
 			@ai_timer -= 1;
 		};
 
+		DrawFloorEntry();
 		DrawSpellMenu();
 
 		@framework->Show();
+	}
+
+	method : DrawFloorEntry() ~ Nil {
+		if(@floor_entry_timer <= 0) { return; };
+		renderer := @framework->GetRenderer();
+		cx := Game->SCREEN_WIDTH / 2;
+
+		# fade in / fade out alpha
+		alpha : Int;
+		if(@floor_entry_timer > 120) {
+			alpha := (150 - @floor_entry_timer) * 255 / 30;
+			if(alpha < 0) { alpha := 0; };
+			if(alpha > 200) { alpha := 200; };
+		}
+		else if(@floor_entry_timer < 30) {
+			alpha := @floor_entry_timer * 200 / 30;
+		}
+		else {
+			alpha := 200;
+		};
+
+		# dark veil overlay
+		renderer->BoxColor(0, 0, Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, Color->New(0, 0, 0, alpha));
+
+		# only show text when alpha is above threshold
+		if(alpha > 60) {
+			tw := @floor_entry_name->GetWidth();
+			lw := @floor_entry_lore->GetWidth();
+			@floor_entry_name->Render(cx - tw / 2, Game->SCREEN_HEIGHT / 2 - 28);
+			renderer->HLineColor(cx - 140, cx + 140, Game->SCREEN_HEIGHT / 2, Color->New(180, 140, 50));
+			@floor_entry_lore->Render(cx - lw / 2, Game->SCREEN_HEIGHT / 2 + 12);
+		};
+
+		@floor_entry_timer -= 1;
 	}
 
 	method : RenderBorder() ~ Nil {
@@ -2984,21 +3049,46 @@ class TinyDungeon {
 	}
 
 	method : RenderTerminalScreen() ~ Nil {
+		renderer := @framework->GetRenderer();
+		cx := Game->SCREEN_WIDTH / 2;
+
 		if(@game_state = 1) {
-			# game over - dark red background
 			@framework->SetClearColor(@gameover_color);
+			@framework->Clear();
+			# dim red vignette
+			renderer->BoxColor(0, 0, Game->SCREEN_WIDTH, 60, Color->New(80, 0, 0, 120));
+			renderer->BoxColor(0, Game->SCREEN_HEIGHT - 60, Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, Color->New(80, 0, 0, 120));
+			renderer->HLineColor(60, Game->SCREEN_WIDTH - 60, 78, Color->New(140, 40, 40));
 		}
 		else {
-			# victory - dark gold background
 			@framework->SetClearColor(@victory_color);
+			@framework->Clear();
+			# gold vignette
+			renderer->BoxColor(0, 0, Game->SCREEN_WIDTH, 60, Color->New(60, 50, 0, 120));
+			renderer->BoxColor(0, Game->SCREEN_HEIGHT - 60, Game->SCREEN_WIDTH, Game->SCREEN_HEIGHT, Color->New(60, 50, 0, 120));
+			renderer->HLineColor(60, Game->SCREEN_WIDTH - 60, 78, Color->New(180, 140, 40));
 		};
 
-		@framework->Clear();
+		# centered title
+		tw := @terminal_title->GetWidth();
+		@terminal_title->Render(cx - tw / 2, 28);
 
-		@terminal_title->Render(200, 100);
+		# decorative rule below title
+		if(@game_state = 1) {
+			renderer->HLineColor(80, Game->SCREEN_WIDTH - 80, 90, Color->New(120, 30, 30));
+		}
+		else {
+			renderer->HLineColor(80, Game->SCREEN_WIDTH - 80, 90, Color->New(160, 120, 30));
+		};
 
+		# stats centered
+		stat_y := 115;
 		each(i : @terminal_stats) {
-			@terminal_stats[i]->Render(220, 200 + i * 40);
+			sw := @terminal_stats[i]->GetWidth();
+			if(sw > 0) {
+				@terminal_stats[i]->Render(cx - sw / 2, stat_y);
+				stat_y += 38;
+			};
 		};
 
 		@framework->Show();
