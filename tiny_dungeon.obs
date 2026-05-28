@@ -762,7 +762,7 @@ class TinyDungeon {
 						# puzzle solved!
 						@puzzle_active := false;
 						@puzzle_timer := 0;
-						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
 						@view_type := MapManager->Type->OPEN;
 						@can_show_item := false;
 						gold_amount := 25 + @current_floor * 15 + Int->Random(0, 30);
@@ -1144,7 +1144,7 @@ class TinyDungeon {
 	        				@monster := Monster->CreateByFloor("Mimic", fl, 16 + fl * 4, 14, 10, 10, 36.0 + fl->As(Float) * 4.0, 16.0 + fl->As(Float) * 3.0, 25 + fl * 5, false);
 	        				@monster_sprint_index := MonsterID->MIMIC;
 	        				@monster_name_text->RenderedText("It's a Mimic!", Color->New(255, 200, 60));
-	        				@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+	        				@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
 	        				@can_show_item := false;
 	        				RefreshStats();
 	        			}
@@ -1231,7 +1231,7 @@ class TinyDungeon {
 					# --- Dungeon Key pickup ---
 					else if(@view_type = MapManager->Type->DUNGEON_KEY) {
 						@has_dungeon_key := true;
-						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
 						@view_type := MapManager->Type->OPEN;
 						@can_show_item := false;
 						@reward_text->RenderedText("Found a Dungeon Key!", Color->New(220, 200, 60));
@@ -1297,7 +1297,7 @@ class TinyDungeon {
 					else if(@view_type = MapManager->Type->KEY_DOOR) {
 						if(@has_dungeon_key) {
 							@has_dungeon_key := false;
-							@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+							@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
 							@view_type := MapManager->Type->OPEN;
 							@can_show_item := false;
 							# reward: guaranteed loot
@@ -1337,7 +1337,7 @@ class TinyDungeon {
 						@mini_boss_fight := true;
 						monster_name := @monster->GetName();
 						@monster_name_text->RenderedText("** {$monster_name} **", Color->New(255, 180, 60));
-						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
 						@can_show_item := false;
 					}
 					# --- Merchant interaction ---
@@ -1441,7 +1441,7 @@ class TinyDungeon {
         						# spell door opens!
         						@puzzle_active := false;
         						@puzzle_timer := 0;
-        						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+        						@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
         						@view_type := MapManager->Type->OPEN;
         						@can_show_item := false;
         						gold_amount := 30 + @current_floor * 20 + Int->Random(0, 35);
@@ -1648,7 +1648,7 @@ class TinyDungeon {
 					if(@puzzle_input_pos >= @puzzle_seq_len) {
 						@puzzle_active := false;
 						@puzzle_timer := 0;
-						@map_manager->SetType(@player_location, MapManager->Type->OPEN);
+						@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN);
 						@view_type := MapManager->Type->OPEN;
 						@can_show_item := false;
 						gold_amount := 25 + @current_floor * 15 + Int->Random(0, 30);
@@ -2155,15 +2155,26 @@ class TinyDungeon {
 		};
 	}
 
+	method : GetForwardPos() ~ Int[] {
+		fwd := Int->New[2];
+		select(@player_direction) {
+			label MapManager->Direction->NORTH { fwd[0] := @player_location[0] - 1; fwd[1] := @player_location[1]; }
+			label MapManager->Direction->SOUTH { fwd[0] := @player_location[0] + 1; fwd[1] := @player_location[1]; }
+			label MapManager->Direction->EAST  { fwd[0] := @player_location[0];     fwd[1] := @player_location[1] + 1; }
+			label MapManager->Direction->WEST  { fwd[0] := @player_location[0];     fwd[1] := @player_location[1] - 1; }
+		};
+		return fwd;
+	}
+
 	method : AddPotion(type : Potion->Type) ~ Nil {
-		if(@player->AddPotion(type, Int->Random(1, 3)) & @map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
+		if(@player->AddPotion(type, Int->Random(1, 3)) & @map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN)) {
 			RefreshItems();
 			@can_show_item := false;
 		};
 	}
 
 	method : AddGold(amount : Int) ~ Nil {
-		if(@map_manager->SetType(@player_location, MapManager->Type->OPEN)) {
+		if(@map_manager->SetType(GetForwardPos(), MapManager->Type->OPEN)) {
 			@player->AddGold(amount);
 			RefreshItems();
 			@can_show_item := false;
