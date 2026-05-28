@@ -26,6 +26,10 @@ class DungeonAI {
     @theme_ready     : static : Bool;
     @theme_thread    : static : Thread;
 
+    @world_name   : static : String;
+    @world_ready  : static : Bool;
+    @world_thread : static : Thread;
+
     consts Archetype {
         UNDEAD   := 0,
         BEAST    := 1,
@@ -418,6 +422,44 @@ class DungeonAI {
         return Int->Random(99);
     }
 
+    function : IsWorldReady() ~ Bool { return @world_ready; }
+    function : GetWorldName() ~ String { return @world_name = Nil ? "World of Greyhold" : @world_name; }
+
+    function : StartWorldGenAsync() ~ Nil {
+        if(@world_thread <> Nil) { return; };
+        @world_thread := WorldGenLoaderThread->New();
+        @world_thread->Execute(Nil);
+    }
+
+    function : GenerateWorldSeed() ~ Nil {
+        if(<>@is_ready) { return; };
+        prompt := "Generate a dark fantasy overworld name. Respond EXACTLY this format with no extra text:\nWORLD: [3-5 word name]";
+        response := Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85));
+        if(response = Nil) { return; };
+        think_end := response->Find("</think>");
+        if(think_end >= 0) {
+            after := think_end + 8;
+            if(response->Size() - after > 0) { response := response->SubString(after, response->Size() - after)->Trim(); }
+            else { return; };
+        };
+        world_idx := response->Find("WORLD:");
+        if(world_idx >= 0) {
+            name_start := world_idx + 6;
+            remaining := response->Size() - name_start;
+            if(remaining > 0) {
+                name_line := response->SubString(name_start, remaining)->Trim();
+                if(name_line <> Nil & <>name_line->IsEmpty()) {
+                    nl := name_line->Find("\n");
+                    if(nl >= 0) { name_line := name_line->SubString(0, nl)->Trim(); };
+                    if(name_line->Size() > 36) { name_line := name_line->SubString(0, 33); name_line->Append("..."); };
+                    @world_name := name_line;
+                };
+            };
+        };
+        if(@world_name = Nil) { @world_name := "World of Greyhold"; };
+        @world_ready := true;
+    }
+
     function : MonsterBattleCry(monster_name : String, player_class : String) ~ String {
         if(<>@is_ready) { return Nil; };
         prompt := "A {$monster_name} lunges at a {$player_class} in a dark dungeon. Write ONE menacing battle cry, max 9 words. No quotes.";
@@ -464,5 +506,13 @@ class ThemeLoaderThread from Thread {
 
     method : public : Run(data : Base) ~ Nil {
         DungeonAI->GenerateTheme();
+    }
+}
+
+class WorldGenLoaderThread from Thread {
+    New() { Parent("world-gen-loader"); }
+
+    method : public : Run(data : Base) ~ Nil {
+        DungeonAI->GenerateWorldSeed();
     }
 }

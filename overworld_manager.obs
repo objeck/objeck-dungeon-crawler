@@ -1,0 +1,467 @@
+#~
+Warden of Greyhold — Overworld
+Ultima-style top-down world map with procedural generation
+~#
+
+use Game.SDL2;
+use Game.Framework;
+
+consts OverworldTile {
+	GRASS      := 0,
+	FOREST     := 1,
+	MOUNTAIN   := 2,
+	SHALLOW_SEA := 3,
+	DEEP_SEA   := 4,
+	TOWN       := 5,
+	CASTLE     := 6,
+	DUNGEON    := 7,
+	SKYPORT    := 8
+}
+
+consts OverworldEvent {
+	NONE    := 0,
+	DUNGEON := 1,
+	TOWN    := 2,
+	CASTLE  := 3,
+	SKYPORT := 4
+}
+
+#~
+Deterministic LCG-based map generator (64x64)
+~#
+class WorldGen {
+	@dungeon_pos : Int[];
+	@castle_pos  : Int[];
+	@town_pos    : Int[,];
+
+	New(seed : Int) {
+		@dungeon_pos := Int->New[2];
+		@castle_pos  := Int->New[2];
+		@town_pos    := Int->New[2, 2];
+	}
+
+	method : LCGRange(lo : Int, hi : Int) ~ Int {
+		if(hi <= lo) { return lo; };
+		return Int->Random(lo, hi);
+	}
+
+	# returns squared distance (avoids sqrt; compare against min_dist^2)
+	method : Dist2(ar : Int, ac : Int, br : Int, bc : Int) ~ Int {
+		dr := ar - br; dc := ac - bc;
+		return dr * dr + dc * dc;
+	}
+
+	method : public : Generate() ~ Byte[,] {
+		map := Byte->New[64, 64];
+		r : Int; c : Int;
+
+		# Pass 1: fill with DEEP_SEA
+		for(r := 0; r < 64; r += 1;) {
+			for(c := 0; c < 64; c += 1;) {
+				map[r, c] := OverworldTile->DEEP_SEA;
+			};
+		};
+
+		# Pass 2: continental mass — probabilistic circle from center (32,32)
+		for(r := 0; r < 64; r += 1;) {
+			for(c := 0; c < 64; c += 1;) {
+				dr := r - 32; dc := c - 32;
+				dist_sq := dr * dr + dc * dc;
+				threshold := LCGRange(16, 23);
+				if(dist_sq < threshold * threshold) {
+					map[r, c] := OverworldTile->GRASS;
+				};
+			};
+		};
+
+		# Pass 3: mountain ridges (3 ridges)
+		ridge_r := Int->New[3]; ridge_c := Int->New[3];
+		ridge_r[0] := LCGRange(22, 30); ridge_c[0] := LCGRange(22, 30);
+		ridge_r[1] := LCGRange(30, 42); ridge_c[1] := LCGRange(34, 44);
+		ridge_r[2] := LCGRange(38, 44); ridge_c[2] := LCGRange(24, 34);
+		for(ri := 0; ri < 3; ri += 1;) {
+			rr := ridge_r[ri]; rc := ridge_c[ri];
+			steps := LCGRange(8, 14);
+			dr := LCGRange(-1, 1); dc := LCGRange(-1, 1);
+			if(dr = 0 & dc = 0) { dr := 1; };
+			for(s := 0; s < steps; s += 1;) {
+				for(wr := rr - 1; wr <= rr + 1; wr += 1;) {
+					for(wc := rc - 1; wc <= rc + 1; wc += 1;) {
+						if(wr >= 1 & wr < 63 & wc >= 1 & wc < 63) {
+							if(map[wr, wc] = OverworldTile->GRASS) {
+								map[wr, wc] := OverworldTile->MOUNTAIN;
+							};
+						};
+					};
+				};
+				rr += dr; rc += dc;
+				if(rr < 8 | rr > 55 | rc < 8 | rc > 55) { rr -= dr; rc -= dc; dr := -dr; dc := -dc; };
+				if(LCGRange(0, 3) = 0) { dr := LCGRange(-1, 1); dc := LCGRange(-1, 1); if(dr = 0 & dc = 0) { dr := 1; }; };
+			};
+		};
+
+		# Pass 4: coastline — DEEP_SEA adjacent to land → SHALLOW_SEA
+		for(r := 1; r < 63; r += 1;) {
+			for(c := 1; c < 63; c += 1;) {
+				if(map[r, c] = OverworldTile->DEEP_SEA) {
+					if(map[r-1,c] = OverworldTile->GRASS | map[r+1,c] = OverworldTile->GRASS |
+					   map[r,c-1] = OverworldTile->GRASS | map[r,c+1] = OverworldTile->GRASS |
+					   map[r-1,c] = OverworldTile->MOUNTAIN | map[r+1,c] = OverworldTile->MOUNTAIN |
+					   map[r,c-1] = OverworldTile->MOUNTAIN | map[r,c+1] = OverworldTile->MOUNTAIN) {
+						map[r, c] := OverworldTile->SHALLOW_SEA;
+					};
+				};
+			};
+		};
+
+		# Pass 5: forest patches (5 seeds, 2 growth passes each)
+		seeds_r := Int->New[5]; seeds_c := Int->New[5];
+		placed := 0;
+		for(attempt := 0; attempt < 50 & placed < 5; attempt += 1;) {
+			fr := LCGRange(14, 50); fc := LCGRange(14, 50);
+			if(map[fr, fc] = OverworldTile->GRASS) {
+				ok := true;
+				for(prev := 0; prev < placed; prev += 1;) {
+					if(Dist2(fr, fc, seeds_r[prev], seeds_c[prev]) < 36) { ok := false; };
+				};
+				if(ok) { seeds_r[placed] := fr; seeds_c[placed] := fc; placed += 1; };
+			};
+		};
+		for(fi := 0; fi < placed; fi += 1;) {
+			map[seeds_r[fi], seeds_c[fi]] := OverworldTile->FOREST;
+			for(pass := 0; pass < 2; pass += 1;) {
+				for(fr := seeds_r[fi] - 5; fr <= seeds_r[fi] + 5; fr += 1;) {
+					for(fc := seeds_c[fi] - 5; fc <= seeds_c[fi] + 5; fc += 1;) {
+						if(fr > 0 & fr < 63 & fc > 0 & fc < 63) {
+							if(map[fr, fc] = OverworldTile->GRASS & LCGRange(0, 99) < 55) {
+								map[fr, fc] := OverworldTile->FOREST;
+							};
+						};
+					};
+				};
+			};
+		};
+
+		# Pass 6: named locations with min-distance enforcement
+		PlaceTile(map, OverworldTile->DUNGEON, 40, 55, 40, 55, -1, -1, -1, -1, @dungeon_pos);
+		PlaceTile(map, OverworldTile->CASTLE,  12, 26, 12, 26, @dungeon_pos[0], @dungeon_pos[1], -1, -1, @castle_pos);
+		t1 := Int->New[2];
+		PlaceTile(map, OverworldTile->TOWN, 14, 50, 14, 50, @dungeon_pos[0], @dungeon_pos[1], @castle_pos[0], @castle_pos[1], t1);
+		@town_pos[0, 0] := t1[0]; @town_pos[0, 1] := t1[1];
+		t2 := Int->New[2];
+		PlaceTile(map, OverworldTile->TOWN, 14, 50, 14, 50, t1[0], t1[1], @castle_pos[0], @castle_pos[1], t2);
+		@town_pos[1, 0] := t2[0]; @town_pos[1, 1] := t2[1];
+
+		return map;
+	}
+
+	method : PlaceTile(map : Byte[,], tile : Int, r0 : Int, r1 : Int, c0 : Int, c1 : Int,
+	                   avoid_r1 : Int, avoid_c1 : Int, avoid_r2 : Int, avoid_c2 : Int,
+	                   out : Int[]) ~ Nil {
+		for(attempt := 0; attempt < 80; attempt += 1;) {
+			r := LCGRange(r0, r1); c := LCGRange(c0, c1);
+			if(r >= 1 & r <= 62 & c >= 1 & c <= 62) {
+				if(map[r, c] = OverworldTile->GRASS | map[r, c] = OverworldTile->FOREST) {
+					d1_ok := avoid_r1 < 0 | Dist2(r, c, avoid_r1, avoid_c1) >= 64;
+					d2_ok := avoid_r2 < 0 | Dist2(r, c, avoid_r2, avoid_c2) >= 64;
+					if(d1_ok & d2_ok) {
+						map[r, c] := tile;
+						out[0] := r; out[1] := c;
+						return;
+					};
+				};
+			};
+		};
+		# fallback: scan quadrant
+		found := false;
+		for(fr := r0; fr <= r1 & <>found; fr += 1;) {
+			for(fc := c0; fc <= c1 & <>found; fc += 1;) {
+				if(map[fr, fc] = OverworldTile->GRASS) {
+					map[fr, fc] := tile;
+					out[0] := fr; out[1] := fc;
+					found := true;
+				};
+			};
+		};
+	}
+
+	method : public : GetDungeonPos() ~ Int[] { return @dungeon_pos; }
+	method : public : GetCastlePos()  ~ Int[] { return @castle_pos; }
+	method : public : GetTownPos(idx : Int) ~ Int[] {
+		t := Int->New[2];
+		t[0] := @town_pos[idx, 0]; t[1] := @town_pos[idx, 1];
+		return t;
+	}
+}
+
+#~
+Manages the overworld tile map and event lookup
+~#
+class OverworldManager {
+	@tiles       : Byte[,];
+	@dungeon_pos : Int[];
+	@castle_pos  : Int[];
+	@renderer    : OverworldRenderer;
+
+	New(framework : GameFramework, seed : Int) {
+		gen := WorldGen->New(seed);
+		@tiles := gen->Generate();
+		@dungeon_pos := gen->GetDungeonPos();
+		@castle_pos  := gen->GetCastlePos();
+		@renderer := OverworldRenderer->New(framework);
+	}
+
+	method : public : GetTile(r : Int, c : Int) ~ Int {
+		if(r < 0 | r >= 64 | c < 0 | c >= 64) { return OverworldTile->MOUNTAIN; };
+		return @tiles[r, c];
+	}
+
+	method : public : IsPassable(r : Int, c : Int) ~ Bool {
+		t := GetTile(r, c);
+		return t = OverworldTile->GRASS | t = OverworldTile->FOREST |
+		       t = OverworldTile->TOWN  | t = OverworldTile->CASTLE  |
+		       t = OverworldTile->DUNGEON | t = OverworldTile->SKYPORT;
+	}
+
+	method : public : GetEvent(r : Int, c : Int) ~ Int {
+		t := GetTile(r, c);
+		if(t = OverworldTile->DUNGEON) { return OverworldEvent->DUNGEON; };
+		if(t = OverworldTile->TOWN)    { return OverworldEvent->TOWN; };
+		if(t = OverworldTile->CASTLE)  { return OverworldEvent->CASTLE; };
+		if(t = OverworldTile->SKYPORT) { return OverworldEvent->SKYPORT; };
+		return OverworldEvent->NONE;
+	}
+
+	method : public : GetDungeonPos() ~ Int[] { return @dungeon_pos; }
+	method : public : GetCastlePos()  ~ Int[] { return @castle_pos; }
+
+	method : public : GetStartPos() ~ Int[] {
+		# spawn player 3 tiles NW of dungeon entrance
+		sp := Int->New[2];
+		sp[0] := @dungeon_pos[0] - 3;
+		sp[1] := @dungeon_pos[1] - 3;
+		if(sp[0] < 2) { sp[0] := 2; };
+		if(sp[1] < 2) { sp[1] := 2; };
+		return sp;
+	}
+
+	method : public : Render(player_r : Int, player_c : Int, frame : Int,
+	                         world_name : String, hp : Int, max_hp : Int) ~ Nil {
+		@renderer->Render(@tiles, player_r, player_c, frame, world_name, hp, max_hp);
+	}
+}
+
+#~
+Draws the overworld in full-screen 2D top-down mode (SDL primitives, no PNGs)
+Screen: 768x512
+Tile: 24x24, 32 cols x 19 rows = 768x456, HUD strip at y=456 (56px tall)
+~#
+class OverworldRenderer {
+	@framework   : GameFramework;
+	@renderer    : Renderer;
+	@tri_vx      : Int[];
+	@tri_vy      : Int[];
+	@hud_name    : TextSprite;
+	@hud_coords  : TextSprite;
+	@hud_hp      : TextSprite;
+
+	consts OW {
+		TILE_SIZE    := 24,
+		COLS         := 32,
+		ROWS         := 19,
+		HUD_Y        := 456
+	}
+
+	New(framework : GameFramework) {
+		@framework := framework;
+		@renderer  := framework->GetRenderer();
+		@tri_vx := Int->New[3];
+		@tri_vy := Int->New[3];
+		@hud_name   := framework->AddTextSprite();
+		@hud_coords := framework->AddTextSprite();
+		@hud_hp     := framework->AddTextSprite();
+	}
+
+	method : public : Render(tiles : Byte[,], player_r : Int, player_c : Int, frame : Int,
+	                         world_name : String, hp : Int, max_hp : Int) ~ Nil {
+		@framework->SetClearColor(Color->New(10, 8, 20));
+		@framework->Clear();
+
+		# camera: center player on screen
+		cam_r := player_r - OW->ROWS / 2;
+		cam_c := player_c - OW->COLS / 2;
+		if(cam_r < 0) { cam_r := 0; };
+		if(cam_c < 0) { cam_c := 0; };
+		if(cam_r > 64 - OW->ROWS) { cam_r := 64 - OW->ROWS; };
+		if(cam_c > 64 - OW->COLS) { cam_c := 64 - OW->COLS; };
+
+		for(sr := 0; sr < OW->ROWS; sr += 1;) {
+			for(sc := 0; sc < OW->COLS; sc += 1;) {
+				wr := cam_r + sr; wc := cam_c + sc;
+				t : Int;
+				if(wr >= 0 & wr < 64 & wc >= 0 & wc < 64) { t := tiles[wr, wc]; }
+				else { t := OverworldTile->DEEP_SEA; };
+				px := sc * OW->TILE_SIZE;
+				py := sr * OW->TILE_SIZE;
+				DrawTile(t, px, py, frame);
+			};
+		};
+
+		# player dot (screen center)
+		px := (player_c - cam_c) * OW->TILE_SIZE;
+		py := (player_r - cam_r) * OW->TILE_SIZE;
+		DrawPlayer(px, py, frame);
+
+		DrawHUD(world_name, player_r, player_c, hp, max_hp, frame);
+
+		@framework->Show();
+	}
+
+	method : DrawTile(t : Int, px : Int, py : Int, frame : Int) ~ Nil {
+		x1 := px; y1 := py; x2 := px + OW->TILE_SIZE - 1; y2 := py + OW->TILE_SIZE - 1;
+		cx := px + 12; cy := py + 12;
+
+		select(t) {
+			label OverworldTile->GRASS {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(48, 108, 38));
+				@renderer->FilledCircleColor(cx - 5, cy - 4, 2, Color->New(58, 125, 45));
+				@renderer->FilledCircleColor(cx + 4, cy + 3, 2, Color->New(58, 125, 45));
+				@renderer->FilledCircleColor(cx + 2, cy - 6, 2, Color->New(42, 95, 33));
+			}
+
+			label OverworldTile->FOREST {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(22, 68, 22));
+				# 3 small tree triangles
+				DrawTreeShape(cx - 5, cy + 4, 5);
+				DrawTreeShape(cx + 5, cy + 2, 5);
+				DrawTreeShape(cx,     cy - 4, 6);
+			}
+
+			label OverworldTile->MOUNTAIN {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(75, 72, 68));
+				@tri_vx[0] := cx - 8; @tri_vy[0] := y2;
+				@tri_vx[1] := cx + 8; @tri_vy[1] := y2;
+				@tri_vx[2] := cx;     @tri_vy[2] := y1 + 3;
+				@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(105, 100, 95));
+				@renderer->FilledCircleColor(cx, y1 + 4, 3, Color->New(220, 220, 230));
+			}
+
+			label OverworldTile->SHALLOW_SEA {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(48, 100, 168));
+				wave := (frame / 8 + px / 8) % OW->TILE_SIZE;
+				@renderer->HLineColor(x1, x2, y1 + wave % 8 + 4, Color->New(80, 140, 200));
+				@renderer->HLineColor(x1, x2, y1 + (wave + 4) % 8 + 12, Color->New(65, 120, 180));
+			}
+
+			label OverworldTile->DEEP_SEA {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(18, 44, 100));
+				wave := (frame / 12 + px / 12) % 10;
+				@renderer->HLineColor(x1, x2, y1 + wave + 3,  Color->New(30, 62, 120));
+				@renderer->HLineColor(x1, x2, y1 + wave + 13, Color->New(30, 62, 120));
+			}
+
+			label OverworldTile->TOWN {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(140, 105, 65));
+				# house: body + roof
+				@renderer->BoxColor(cx - 6, cy, cx + 6, y2 - 2, Color->New(180, 145, 90));
+				@tri_vx[0] := cx - 8; @tri_vy[0] := cy;
+				@tri_vx[1] := cx + 8; @tri_vy[1] := cy;
+				@tri_vx[2] := cx;     @tri_vy[2] := y1 + 3;
+				@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(160, 60, 40));
+				# door
+				@renderer->BoxColor(cx - 2, cy + 7, cx + 2, y2 - 2, Color->New(80, 50, 25));
+			}
+
+			label OverworldTile->CASTLE {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(75, 75, 88));
+				# keep + battlements
+				@renderer->BoxColor(cx - 7, cy - 2, cx + 7, y2 - 1, Color->New(105, 105, 118));
+				# crenellations
+				for(ci := 0; ci < 4; ci += 1;) {
+					bx := cx - 7 + ci * 4;
+					@renderer->BoxColor(bx, y1 + 2, bx + 2, cy - 2, Color->New(105, 105, 118));
+				};
+				# gate
+				@renderer->FilledCircleColor(cx, cy + 4, 4, Color->New(25, 22, 35));
+				@renderer->BoxColor(cx - 3, cy + 4, cx + 3, y2 - 1, Color->New(25, 22, 35));
+			}
+
+			label OverworldTile->DUNGEON {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(35, 25, 25));
+				pulse := (Float->Sin(frame->As(Float) * 0.12) * 25.0)->As(Int);
+				glow := 160 + pulse;
+				if(glow > 200) { glow := 200; };
+				@renderer->FilledCircleColor(cx, cy, 8, Color->New(glow, 30, 20));
+				@renderer->FilledCircleColor(cx, cy, 4, Color->New(255, 80, 40));
+				# skull hint
+				@renderer->FilledCircleColor(cx - 2, cy - 1, 1, Color->New(10, 8, 8));
+				@renderer->FilledCircleColor(cx + 2, cy - 1, 1, Color->New(10, 8, 8));
+			}
+
+			label OverworldTile->SKYPORT {
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(72, 64, 110));
+				# diamond / airship pad
+				@tri_vx[0] := cx;     @tri_vy[0] := y1 + 3;
+				@tri_vx[1] := cx + 8; @tri_vy[1] := cy;
+				@tri_vx[2] := cx;     @tri_vy[2] := y2 - 3;
+				@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(80, 190, 210));
+				@tri_vx[0] := cx;     @tri_vy[0] := y1 + 3;
+				@tri_vx[1] := cx - 8; @tri_vy[1] := cy;
+				@tri_vx[2] := cx;     @tri_vy[2] := y2 - 3;
+				@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(60, 160, 185));
+			}
+		};
+	}
+
+	method : DrawTreeShape(tx : Int, ty : Int, r : Int) ~ Nil {
+		@tri_vx[0] := tx;     @tri_vy[0] := ty - r - 3;
+		@tri_vx[1] := tx - r; @tri_vy[1] := ty + 2;
+		@tri_vx[2] := tx + r; @tri_vy[2] := ty + 2;
+		@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(35, 100, 35));
+		@renderer->VlineColor(tx, ty + 2, ty + 5, Color->New(90, 65, 35));
+	}
+
+	method : DrawPlayer(px : Int, py : Int, frame : Int) ~ Nil {
+		bob := (Float->Sin(frame->As(Float) * 0.18) * 1.5)->As(Int);
+		cx := px + 12; cy := py + 12 + bob;
+		# player body
+		@renderer->FilledCircleColor(cx, cy, 5, Color->New(220, 200, 80));
+		@renderer->FilledCircleColor(cx, cy - 7, 4, Color->New(200, 180, 70));
+		# outline
+		@renderer->CircleColor(cx, cy, 5, Color->New(160, 140, 50));
+	}
+
+	method : DrawHUD(world_name : String, player_r : Int, player_c : Int,
+	                 hp : Int, max_hp : Int, frame : Int) ~ Nil {
+		# HUD background strip
+		@renderer->BoxColor(0, OW->HUD_Y, 768, 512, Color->New(12, 10, 22));
+		@renderer->HLineColor(0, 768, OW->HUD_Y, Color->New(60, 50, 100));
+		@renderer->HLineColor(0, 768, OW->HUD_Y + 1, Color->New(40, 32, 72));
+
+		# world name (left)
+		wn := world_name = Nil ? "World of Greyhold" : world_name;
+		@hud_name->RenderedText(wn, Color->New(200, 175, 90));
+		@hud_name->Render(12, OW->HUD_Y + 10);
+
+		# coords (center)
+		coord_str := "X:{$player_c} Y:{$player_r}";
+		@hud_coords->RenderedText(coord_str, Color->New(140, 130, 100));
+		cw := @hud_coords->GetWidth();
+		@hud_coords->Render(384 - cw / 2, OW->HUD_Y + 10);
+
+		# HP bar (right)
+		bar_x := 620; bar_y := OW->HUD_Y + 8;
+		bar_w := 130; bar_h := 10;
+		hp_text := "HP: {$hp}/{$max_hp}";
+		@hud_hp->RenderedText(hp_text, Color->New(140, 200, 130));
+		@hud_hp->Render(bar_x, OW->HUD_Y + 24);
+		perc := max_hp > 0 ? hp->As(Float) / max_hp->As(Float) : 0.0;
+		fill := (bar_w->As(Float) * perc)->As(Int);
+		@renderer->BoxColor(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, Color->New(40, 20, 20));
+		hp_r := perc > 0.5 ? 40 : (perc > 0.25 ? 200 : 210);
+		hp_g := perc > 0.5 ? 180 : (perc > 0.25 ? 180 : 35);
+		hp_b := 40;
+		if(fill > 0) { @renderer->BoxColor(bar_x, bar_y, bar_x + fill, bar_y + bar_h, Color->New(hp_r, hp_g, hp_b)); };
+		@renderer->RectangleColor(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, Color->New(90, 80, 70));
+	}
+}

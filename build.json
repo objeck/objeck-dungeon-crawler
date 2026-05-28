@@ -4,7 +4,8 @@
 		"dungeon_managers.obs",
 		"dungeon_eninities.obs",
 		"dungeon_monsters.obs",
-		"dungeon_ai.obs"
+		"dungeon_ai.obs",
+		"overworld_manager.obs"
 	],
 	"libs": [
 		"cipher",
