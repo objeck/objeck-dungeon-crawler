@@ -5,6 +5,19 @@ class DungeonAI {
     @is_ready : static : Bool;
     @boss_round : static : Int;
 
+    # --- Q-Learning Combat AI ---
+    @q_table   : static : Float[];  # 9 states x 3 actions = 27 values
+    @q_state   : static : Int;
+    @q_action  : static : Int;
+    @q_epsilon : static : Float;
+    @q_fights  : static : Int;
+
+    consts QAction {
+        ATTACK  := 0,
+        ABILITY := 1,
+        DEFEND  := 2
+    }
+
     # --- Dungeon Theme (generated once at game start) ---
     @theme_name      : static : String;
     @theme_lore      : static : String;
@@ -51,6 +64,7 @@ class DungeonAI {
         @model := mp->GetName();
         @is_ready := true;
         @boss_round := 0;
+        InitQTable();
         return @model;
     }
 
@@ -157,6 +171,95 @@ class DungeonAI {
 
         prompt := "You are Malachar, demon lord at {$boss_hp_perc}% HP, feeling {$mood}. Fighting a {$player_class}, round {$round}. ONE sinister battle taunt, max 11 words. No quotes.";
         return Clip(Completion->Generate(@model, prompt, Options->New()->SetTemperature(0.85)));
+    }
+
+    # --- Q-Learning Combat AI ---
+
+    function : InitQTable() ~ Nil {
+        @q_table := Float->New[27];
+        for(s := 0; s < 9; s += 1;) {
+            @q_table[s * 3 + 0] := 1.0;  # ATTACK default
+            @q_table[s * 3 + 1] := 0.5;  # ABILITY default
+            @q_table[s * 3 + 2] := 0.3;  # DEFEND default
+        };
+        # monster critical HP: bias toward DEFEND or ABILITY
+        @q_table[6 * 3 + 2] := 0.9;  # mon_crit + player_healthy -> DEFEND
+        @q_table[7 * 3 + 2] := 0.7;  # mon_crit + player_hurt   -> DEFEND
+        @q_table[8 * 3 + 1] := 0.9;  # mon_crit + player_crit   -> ABILITY (gamble)
+        @q_epsilon := 0.3;
+        @q_fights  := 0;
+    }
+
+    function : GetHpBucket(hp_perc : Int) ~ Int {
+        if(hp_perc > 60) { return 0; }
+        else if(hp_perc > 30) { return 1; }
+        else { return 2; };
+    }
+
+    function : GetQState(mon_hp_perc : Int, player_hp_perc : Int) ~ Int {
+        return GetHpBucket(mon_hp_perc) * 3 + GetHpBucket(player_hp_perc);
+    }
+
+    function : ChooseAction(mon_hp_perc : Int, player_hp_perc : Int, has_ability : Bool) ~ Int {
+        if(@q_table = Nil) { return DungeonAI->QAction->ATTACK; };
+
+        state := GetQState(mon_hp_perc, player_hp_perc);
+        @q_state := state;
+
+        # epsilon-greedy exploration
+        explore := Int->Random(99)->As(Float) / 99.0;
+        if(explore < @q_epsilon) {
+            action : Int;
+            if(has_ability) { action := Int->Random(3); }
+            else {
+                action := Int->Random(2);
+                if(action = 1) { action := DungeonAI->QAction->DEFEND; };
+            };
+            @q_action := action;
+            return action;
+        };
+
+        # greedy: pick highest Q value
+        base := state * 3;
+        best_action := DungeonAI->QAction->ATTACK;
+        best_q := @q_table[base];
+
+        if(has_ability & @q_table[base + 1] > best_q) {
+            best_q := @q_table[base + 1];
+            best_action := DungeonAI->QAction->ABILITY;
+        };
+        if(@q_table[base + 2] > best_q) {
+            best_action := DungeonAI->QAction->DEFEND;
+        };
+
+        @q_action := best_action;
+        return best_action;
+    }
+
+    function : UpdateQ(reward : Float, new_mon_hp_perc : Int, new_player_hp_perc : Int) ~ Nil {
+        if(@q_table = Nil) { return; };
+
+        alpha := 0.15;
+        gamma := 0.8;
+
+        new_state := GetQState(new_mon_hp_perc, new_player_hp_perc);
+        new_base  := new_state * 3;
+
+        max_next := @q_table[new_base];
+        if(@q_table[new_base + 1] > max_next) { max_next := @q_table[new_base + 1]; };
+        if(@q_table[new_base + 2] > max_next) { max_next := @q_table[new_base + 2]; };
+
+        idx := @q_state * 3 + @q_action;
+        old_q := @q_table[idx];
+        @q_table[idx] := old_q + alpha * (reward + gamma * max_next - old_q);
+    }
+
+    function : EndFight() ~ Nil {
+        @q_fights += 1;
+        if(@q_epsilon > 0.05) {
+            @q_epsilon := @q_epsilon - 0.01;
+            if(@q_epsilon < 0.05) { @q_epsilon := 0.05; };
+        };
     }
 
     # --- Theme generation ---

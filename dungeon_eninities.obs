@@ -845,6 +845,21 @@ class Monster from Entity {
 		}
 		else if(name->Equals("Malachar")) {
 			m->SetAbility(MonsterAbility->FIRE_BREATH, 35);
+		}
+		else if(name->Equals("Kobold")) {
+			m->SetAbility(MonsterAbility->POISON_BITE, 35);
+		}
+		else if(name->Equals("Banshee")) {
+			m->SetAbility(MonsterAbility->BLIND, 30);
+		}
+		else if(name->Equals("Werewolf")) {
+			m->SetAbility(MonsterAbility->LIFE_DRAIN, 20);
+		}
+		else if(name->Equals("Medusa")) {
+			m->SetAbility(MonsterAbility->STUN, 25);
+		}
+		else if(name->Equals("Nightmare")) {
+			m->SetAbility(MonsterAbility->FIRE_BREATH, 30);
 		};
 
 		return m;
@@ -898,6 +913,11 @@ class GenericMonster from Monster {
 			return @ability;
 		};
 		return MonsterAbility->NONE;
+	}
+
+	# Force special ability - bypasses chance check (Q-learning action)
+	method : public : ForceAbility() ~ Int {
+		return @ability;
 	}
 
 	method : public : GetName() ~ String { return @name; }

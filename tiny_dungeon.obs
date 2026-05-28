@@ -93,6 +93,7 @@ class TinyDungeon {
 	@mini_boss_fight : Bool;
 	@ai_text : TextSprite;
 	@ai_timer : Int;
+	@monster_defending : Bool;
 	@boss_combat_round : Int;
 
 	# --- Combat UI ---
@@ -842,21 +843,42 @@ class TinyDungeon {
 
         	label Scancode->SDL_SCANCODE_SPACE {
         		if(@monster <> Nil) {
-        			@player_hit := @monster->Attack(@player) ? 10 : 0;
-        			if(@player_hit > 0) {
-						@sound_manager->Strike();
+        			# Q-learning: pick monster action (skip for boss fights)
+        			q_action := QPickAction();
 
-						# show player damage
-						@damage_text->RenderedText("-{$@player_hit}", Color->New(255, 60, 60));
-						@damage_timer := 20;
-						@damage_is_player := true;
+        			if(q_action = DungeonAI->QAction->DEFEND) {
+        				# monster recovers instead of attacking
+        				@monster->UpdateHp(-3);
+        				@player_hit := 0;
+        				@damage_text->RenderedText("Defends!", Color->New(150, 200, 255));
+        				@damage_timer := 20;
+        				@damage_is_player := false;
+        				@monster_defending := true;
+        			}
+        			else if(q_action = DungeonAI->QAction->ABILITY) {
+        				# monster uses special ability instead of attacking
+        				@player_hit := 0;
+        				ApplyMonsterAbilityForced();
+        			}
+        			else {
+        				@player_hit := @monster->Attack(@player) ? 10 : 0;
+        				if(@player_hit > 0) {
+							@sound_manager->Strike();
 
-						# check monster special ability
-						ApplyMonsterAbility();
+							# show player damage
+							@damage_text->RenderedText("-{$@player_hit}", Color->New(255, 60, 60));
+							@damage_timer := 20;
+							@damage_is_player := true;
+
+							# check monster special ability
+							ApplyMonsterAbility();
+        				};
         			};
 
         			if(<>@player->IsAlive()) {
-						# game over
+						# game over — fight ends
+						DungeonAI->EndFight();
+						@monster_defending := false;
 						@game_state := 1;
 						ShowTerminalScreen();
         			}
@@ -880,6 +902,10 @@ class TinyDungeon {
 							@attack_anim_timer := 20;
 							@attack_anim_frame := 20;
 						};
+
+					# Q-learning update
+					QUpdateRound(@player_hit, @monster_hit);
+					@monster_defending := false;
 
 					# boss taunt every 4 combat rounds
 					if(@boss_fight & @monster <> Nil & @monster->IsAlive() & DungeonAI->IsReady() & @ai_timer = 0) {
@@ -952,8 +978,10 @@ class TinyDungeon {
 								@boss_fight := false;
 							};
 
+	        				DungeonAI->EndFight();
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
+	        				@monster_defending := false;
 	        			};
 	        		};
 
@@ -1507,6 +1535,77 @@ class TinyDungeon {
 			}
 		};
 
+		RefreshStats();
+	}
+
+	method : QPickAction() ~ Int {
+		if(<>DungeonAI->IsReady() | @boss_fight | @monster = Nil | @player = Nil) {
+			return DungeonAI->QAction->ATTACK;
+		};
+		gm := @monster->As(GenericMonster);
+		if(gm = Nil) { return DungeonAI->QAction->ATTACK; };
+		mon_max := @monster->GetMaxHp();
+		mon_pct := mon_max > 0 ? @monster->GetHp() * 100 / mon_max : 50;
+		ply_max := @player->GetMaxHp();
+		ply_pct := ply_max > 0 ? @player->GetHp() * 100 / ply_max : 50;
+		return DungeonAI->ChooseAction(mon_pct, ply_pct, gm->GetAbility() <> MonsterAbility->NONE);
+	}
+
+	method : QUpdateRound(player_hit : Int, monster_hit : Int) ~ Nil {
+		if(<>DungeonAI->IsReady() | @boss_fight | @monster = Nil | @player = Nil) { return; };
+		reward := (player_hit->As(Float) / 10.0) - (monster_hit->As(Float) / 15.0) * 0.5;
+		mon_max := @monster->GetMaxHp();
+		mon_pct := mon_max > 0 ? @monster->GetHp() * 100 / mon_max : 0;
+		ply_max := @player->GetMaxHp();
+		ply_pct := ply_max > 0 ? @player->GetHp() * 100 / ply_max : 50;
+		DungeonAI->UpdateQ(reward, mon_pct, ply_pct);
+	}
+
+	# Force monster ability without chance check (Q-learning ABILITY action)
+	method : ApplyMonsterAbilityForced() ~ Nil {
+		if(@monster = Nil | @player = Nil) { return; };
+		gm := @monster->As(GenericMonster);
+		if(gm = Nil) { return; };
+		ability := gm->ForceAbility();
+		if(ability = MonsterAbility->NONE) { return; };
+
+		select(ability) {
+			label MonsterAbility->POISON_BITE {
+				if(<>@player->IsPoisoned()) {
+					@player->SetPoison(6 + @current_floor * 2);
+					@reward_text->RenderedText("Poison bite! Poisoned!", Color->New(120, 255, 60));
+					@reward_timer := 40;
+				};
+			}
+			label MonsterAbility->LIFE_DRAIN {
+				drain := 3 + @current_floor;
+				@player->UpdateHp(drain);
+				@monster->UpdateHp(-drain);
+				@reward_text->RenderedText("Life drain! -{$drain} HP", Color->New(180, 40, 180));
+				@reward_timer := 40;
+			}
+			label MonsterAbility->STUN {
+				@player->SetSlow(4 + @current_floor);
+				@reward_text->RenderedText("Stunned! Slowed...", Color->New(150, 150, 220));
+				@reward_timer := 40;
+			}
+			label MonsterAbility->BLIND {
+				@player->SetBlind(5 + @current_floor * 2);
+				@reward_text->RenderedText("Blinded! Can't see the map!", Color->New(80, 80, 80));
+				@reward_timer := 40;
+			}
+			label MonsterAbility->CONFUSE {
+				@player->SetConfuse(6 + @current_floor);
+				@reward_text->RenderedText("Confused! Directions scrambled!", Color->New(200, 150, 255));
+				@reward_timer := 40;
+			}
+			label MonsterAbility->FIRE_BREATH {
+				burn := 5 + @current_floor * 2 + Int->Random(0, 4);
+				@player->UpdateHp(burn);
+				@reward_text->RenderedText("Fire breath! -{$burn} HP!", Color->New(255, 120, 30));
+				@reward_timer := 40;
+			}
+		};
 		RefreshStats();
 	}
 
