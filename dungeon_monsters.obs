@@ -36,7 +36,12 @@ class MonsterArt {
 			label MonsterID->GOLEM { DrawGolem(renderer, cx, cy, frame); }
 			label MonsterID->VAMPIRE { DrawVampire(renderer, cx, cy, frame); }
 			label MonsterID->EYE_TYRANT { DrawEyeTyrant(renderer, cx, cy, frame); }
-			label MonsterID->MUSHROOM { DrawMushroom(renderer, cx, cy, frame); }
+			label MonsterID->MUSHROOM   { DrawMushroom(renderer, cx, cy, frame); }
+			label MonsterID->KOBOLD     { DrawKobold(renderer, cx, cy, frame); }
+			label MonsterID->BANSHEE    { DrawBanshee(renderer, cx, cy, frame); }
+			label MonsterID->WEREWOLF   { DrawWerewolf(renderer, cx, cy, frame); }
+			label MonsterID->MEDUSA     { DrawMedusa(renderer, cx, cy, frame); }
+			label MonsterID->NIGHTMARE  { DrawNightmare(renderer, cx, cy, frame); }
 		};
 	}
 
@@ -2202,6 +2207,373 @@ class MonsterArt {
 		renderer->VlineColor(cx - 4, cy + 11 + bob, cy + 14 + bob, Color->New(200, 190, 160));
 		renderer->VlineColor(cx + 4, cy + 11 + bob, cy + 14 + bob, Color->New(200, 190, 160));
 	}
+
+	#
+	# === New Monsters ===
+	#
+
+	# Kobold: small hunched reptilian with a crude spear, beady yellow eyes, poison darts
+	function : DrawKobold(renderer : Renderer, cx : Int, cy : Int, frame : Int) ~ Nil {
+		bob  := (Float->Sin(frame->As(Float) * 0.28) * 3.0)->As(Int);
+		sway := (Float->Sin(frame->As(Float) * 0.18) * 2.0)->As(Int);
+
+		scale_c := Color->New(80, 110, 60);
+		scale_d := Color->New(55, 80, 40);
+		scale_l := Color->New(110, 145, 80);
+		belly   := Color->New(160, 170, 110);
+
+		# tail
+		renderer->ThickLineColor(cx + 14, cy + 28 + bob, cx + 38, cy + 38 + bob, 4, scale_d);
+		renderer->ThickLineColor(cx + 38, cy + 38 + bob, cx + 46, cy + 32 + bob, 3, scale_d);
+
+		# crude spear (held right side)
+		renderer->ThickLineColor(cx + 20 + sway, cy - 48 + bob, cx + 24 + sway, cy + 38 + bob, 3, Color->New(120, 85, 40));
+		renderer->FilledEllipseColor(cx + 20 + sway, cy - 50 + bob, 4, 8, Color->New(160, 160, 170));
+
+		# legs
+		renderer->BoxColor(cx - 14, cy + 18 + bob, cx - 4,  cy + 38 + bob, scale_d);
+		renderer->BoxColor(cx + 4,  cy + 18 + bob, cx + 14, cy + 38 + bob, scale_d);
+		# feet (clawed)
+		renderer->BoxColor(cx - 18, cy + 34 + bob, cx - 2,  cy + 42 + bob, scale_c);
+		renderer->BoxColor(cx + 2,  cy + 34 + bob, cx + 18, cy + 42 + bob, scale_c);
+		renderer->LineColor(cx - 20, cy + 42 + bob, cx - 22, cy + 46 + bob, scale_d);
+		renderer->LineColor(cx - 14, cy + 42 + bob, cx - 15, cy + 47 + bob, scale_d);
+		renderer->LineColor(cx + 14, cy + 42 + bob, cx + 16, cy + 46 + bob, scale_d);
+		renderer->LineColor(cx + 20, cy + 42 + bob, cx + 22, cy + 47 + bob, scale_d);
+
+		# body - squat, hunched
+		renderer->FilledEllipseColor(cx, cy + 8 + bob, 22, 16, scale_c);
+		renderer->FilledEllipseColor(cx, cy + 12 + bob, 14, 10, belly);
+
+		# arms
+		renderer->ThickLineColor(cx - 20, cy - 4 + bob, cx - 28, cy + 16 + bob, 6, scale_c);
+		renderer->ThickLineColor(cx + 16, cy - 4 + bob, cx + 22, cy + 14 + bob, 6, scale_c);
+		# clawed hands
+		renderer->LineColor(cx - 28, cy + 16 + bob, cx - 34, cy + 18 + bob, scale_d);
+		renderer->LineColor(cx - 28, cy + 16 + bob, cx - 32, cy + 22 + bob, scale_d);
+
+		# head - wide, flat, reptilian
+		renderer->FilledEllipseColor(cx - 2, cy - 14 + bob, 20, 16, scale_c);
+		# snout
+		renderer->FilledEllipseColor(cx - 2, cy - 6 + bob, 12, 8, scale_l);
+		renderer->FilledCircleColor(cx - 8, cy - 5 + bob, 3, Color->New(30, 20, 15));
+		renderer->FilledCircleColor(cx + 4,  cy - 5 + bob, 3, Color->New(30, 20, 15));
+
+		# small horns
+		renderer->FilledEllipseColor(cx - 14, cy - 28 + bob, 4, 8, scale_d);
+		renderer->FilledEllipseColor(cx + 10, cy - 28 + bob, 4, 8, scale_d);
+
+		# eyes - large yellow
+		renderer->FilledCircleColor(cx - 10, cy - 18 + bob, 6, Color->New(220, 200, 30));
+		renderer->FilledCircleColor(cx + 8,  cy - 18 + bob, 6, Color->New(220, 200, 30));
+		renderer->FilledCircleColor(cx - 10, cy - 18 + bob, 3, Color->New(20, 15, 10));
+		renderer->FilledCircleColor(cx + 8,  cy - 18 + bob, 3, Color->New(20, 15, 10));
+		renderer->FilledCircleColor(cx - 12, cy - 20 + bob, 1, Color->New(255, 240, 180));
+		renderer->FilledCircleColor(cx + 6,  cy - 20 + bob, 1, Color->New(255, 240, 180));
+	}
+
+	# Banshee: wailing spectral spirit, wispy form, screaming hollow face
+	function : DrawBanshee(renderer : Renderer, cx : Int, cy : Int, frame : Int) ~ Nil {
+		bob   := (Float->Sin(frame->As(Float) * 0.15) * 8.0)->As(Int);
+		wail  := (Float->Sin(frame->As(Float) * 0.30) * 4.0)->As(Int);
+		pulse := (Float->Sin(frame->As(Float) * 0.22) * 30.0)->As(Int);
+
+		glow_a := 160 + pulse;
+		if(glow_a > 220) { glow_a := 220; };
+		if(glow_a < 120) { glow_a := 120; };
+
+		ghost_c  := Color->New(200, 220, 240, glow_a);
+		wisp_c   := Color->New(160, 190, 220, 100);
+		hair_c   := Color->New(230, 240, 255, 180);
+		scream_c := Color->New(10, 5, 20);
+
+		# trailing wispy tail (fading downward)
+		renderer->FilledEllipseColor(cx,      cy + 40 + bob, 18, 28, Color->New(160, 190, 220, 60));
+		renderer->FilledEllipseColor(cx - 10, cy + 55 + bob, 10, 18, Color->New(160, 190, 220, 35));
+		renderer->FilledEllipseColor(cx + 12, cy + 50 + bob, 8,  14, Color->New(160, 190, 220, 30));
+
+		# flowing shroud / body
+		renderer->FilledEllipseColor(cx, cy + 14 + bob, 34, 28, ghost_c);
+		renderer->FilledEllipseColor(cx, cy + 8 + bob,  28, 22, Color->New(210, 225, 245, glow_a));
+
+		# tattered arm wisps
+		renderer->ThickLineColor(cx - 28, cy + bob,      cx - 48, cy - 14 + bob + wail, 4, wisp_c);
+		renderer->ThickLineColor(cx - 48, cy - 14 + bob + wail, cx - 54, cy - 8 + bob,  3, wisp_c);
+		renderer->ThickLineColor(cx + 28, cy + bob,      cx + 48, cy - 14 + bob - wail, 4, wisp_c);
+		renderer->ThickLineColor(cx + 48, cy - 14 + bob - wail, cx + 54, cy - 8 + bob,  3, wisp_c);
+		# finger wisps
+		renderer->LineColor(cx - 54, cy - 8 + bob, cx - 60, cy - 14 + bob, wisp_c);
+		renderer->LineColor(cx - 54, cy - 8 + bob, cx - 60, cy - 4 + bob,  wisp_c);
+		renderer->LineColor(cx + 54, cy - 8 + bob, cx + 60, cy - 14 + bob, wisp_c);
+		renderer->LineColor(cx + 54, cy - 8 + bob, cx + 60, cy - 4 + bob,  wisp_c);
+
+		# flowing hair streaming upward
+		renderer->ThickLineColor(cx - 14, cy - 30 + bob, cx - 22, cy - 58 + bob + wail, 3, hair_c);
+		renderer->ThickLineColor(cx,      cy - 32 + bob, cx - 4,  cy - 62 + bob - wail, 3, hair_c);
+		renderer->ThickLineColor(cx + 14, cy - 30 + bob, cx + 20, cy - 56 + bob + wail, 3, hair_c);
+		renderer->ThickLineColor(cx - 6,  cy - 31 + bob, cx - 28, cy - 55 + bob,        2, hair_c);
+		renderer->ThickLineColor(cx + 6,  cy - 31 + bob, cx + 26, cy - 54 + bob,        2, hair_c);
+
+		# head - pale, hollow
+		renderer->FilledCircleColor(cx, cy - 18 + bob, 22, Color->New(215, 228, 245, 230));
+		renderer->FilledCircleColor(cx, cy - 18 + bob, 18, Color->New(225, 235, 250, 210));
+
+		# screaming hollow eye sockets
+		eye_a := 140 + pulse / 2;
+		if(eye_a > 200) { eye_a := 200; };
+		renderer->FilledEllipseColor(cx - 9,  cy - 22 + bob, 6, 8, Color->New(10, 5, 20, eye_a));
+		renderer->FilledEllipseColor(cx + 9,  cy - 22 + bob, 6, 8, Color->New(10, 5, 20, eye_a));
+		# eerie inner glow
+		glow_i := 80 + pulse / 2;
+		renderer->FilledCircleColor(cx - 9,  cy - 22 + bob, 3, Color->New(100, 140, 200, glow_i));
+		renderer->FilledCircleColor(cx + 9,  cy - 22 + bob, 3, Color->New(100, 140, 200, glow_i));
+
+		# wailing open mouth
+		renderer->FilledEllipseColor(cx, cy - 8 + bob + wail / 2, 9, 10, scream_c);
+		renderer->FilledEllipseColor(cx, cy - 8 + bob + wail / 2, 6, 7,  Color->New(20, 10, 35));
+		# upper and lower teeth remnants
+		renderer->LineColor(cx - 6, cy - 12 + bob, cx - 3, cy - 9 + bob, Color->New(200, 200, 210, 160));
+		renderer->LineColor(cx + 6, cy - 12 + bob, cx + 3, cy - 9 + bob, Color->New(200, 200, 210, 160));
+	}
+
+	# Werewolf: muscular bipedal wolf, grey fur, rending claws, hunched predator stance
+	function : DrawWerewolf(renderer : Renderer, cx : Int, cy : Int, frame : Int) ~ Nil {
+		bob    := (Float->Sin(frame->As(Float) * 0.18) * 4.0)->As(Int);
+		growl  := (Float->Sin(frame->As(Float) * 0.35) * 2.0)->As(Int);
+
+		fur    := Color->New(110, 105, 100);
+		fur_d  := Color->New(70, 65, 60);
+		fur_l  := Color->New(160, 155, 145);
+		belly  := Color->New(180, 170, 150);
+		claw_c := Color->New(220, 210, 190);
+
+		# tail (low, raised slightly)
+		renderer->ThickLineColor(cx + 16, cy + 30 + bob, cx + 44, cy + 10 + bob, 6, fur_d);
+		renderer->ThickLineColor(cx + 44, cy + 10 + bob, cx + 50, cy + 4 + bob,  4, fur_d);
+
+		# legs - thick, digitigrade
+		renderer->BoxColor(cx - 22, cy + 20 + bob, cx - 8,  cy + 46 + bob, fur);
+		renderer->BoxColor(cx + 8,  cy + 20 + bob, cx + 22, cy + 46 + bob, fur);
+		# lower leg bend
+		renderer->BoxColor(cx - 26, cy + 38 + bob, cx - 10, cy + 54 + bob, fur_d);
+		renderer->BoxColor(cx + 10, cy + 38 + bob, cx + 26, cy + 54 + bob, fur_d);
+		# paws with claws
+		renderer->BoxColor(cx - 28, cy + 50 + bob, cx - 8,  cy + 60 + bob, fur);
+		renderer->BoxColor(cx + 8,  cy + 50 + bob, cx + 28, cy + 60 + bob, fur);
+		renderer->LineColor(cx - 30, cy + 60 + bob, cx - 33, cy + 66 + bob, claw_c);
+		renderer->LineColor(cx - 22, cy + 60 + bob, cx - 24, cy + 66 + bob, claw_c);
+		renderer->LineColor(cx + 22, cy + 60 + bob, cx + 24, cy + 66 + bob, claw_c);
+		renderer->LineColor(cx + 30, cy + 60 + bob, cx + 33, cy + 66 + bob, claw_c);
+
+		# torso - broad and muscular
+		renderer->FilledEllipseColor(cx, cy + 4 + bob, 28, 22, fur);
+		renderer->FilledEllipseColor(cx, cy + 8 + bob, 18, 16, belly);
+		# chest fur ridge
+		renderer->ThickLineColor(cx, cy - 10 + bob, cx, cy + 20 + bob, 5, fur_l);
+
+		# arms - powerful, raised menacingly
+		renderer->ThickLineColor(cx - 26, cy - 8 + bob, cx - 44, cy + 12 + bob, 12, fur);
+		renderer->ThickLineColor(cx + 26, cy - 8 + bob, cx + 44, cy + 8 + bob,  12, fur);
+		# forearms
+		renderer->ThickLineColor(cx - 44, cy + 12 + bob, cx - 54, cy - 4 + bob, 9, fur_d);
+		renderer->ThickLineColor(cx + 44, cy + 8 + bob,  cx + 54, cy - 6 + bob, 9, fur_d);
+		# rending claws (extended, threatening)
+		renderer->LineColor(cx - 54, cy - 4 + bob, cx - 62, cy - 10 + bob, claw_c);
+		renderer->LineColor(cx - 54, cy - 4 + bob, cx - 62, cy - 2 + bob,  claw_c);
+		renderer->LineColor(cx - 54, cy - 4 + bob, cx - 60, cy + 4 + bob,  claw_c);
+		renderer->LineColor(cx + 54, cy - 6 + bob, cx + 62, cy - 12 + bob, claw_c);
+		renderer->LineColor(cx + 54, cy - 6 + bob, cx + 62, cy - 4 + bob,  claw_c);
+		renderer->LineColor(cx + 54, cy - 6 + bob, cx + 60, cy + 2 + bob,  claw_c);
+
+		# neck - thick
+		renderer->FilledEllipseColor(cx, cy - 18 + bob, 16, 12, fur);
+
+		# head - wolf snout, forward-facing
+		renderer->FilledCircleColor(cx, cy - 34 + bob, 22, fur);
+		# snout / muzzle
+		renderer->FilledEllipseColor(cx, cy - 24 + bob, 14, 10, fur_d);
+		renderer->FilledEllipseColor(cx, cy - 22 + bob, 10, 7,  fur_l);
+		# nose
+		renderer->FilledEllipseColor(cx, cy - 28 + bob, 5, 4, Color->New(30, 20, 20));
+		# snarling mouth with fangs
+		renderer->LineColor(cx - 10, cy - 17 + bob + growl, cx, cy - 14 + bob + growl, Color->New(40, 30, 25));
+		renderer->LineColor(cx, cy - 14 + bob + growl, cx + 10, cy - 17 + bob + growl, Color->New(40, 30, 25));
+		renderer->VlineColor(cx - 5, cy - 17 + bob, cy - 11 + bob, Color->New(230, 220, 210));
+		renderer->VlineColor(cx + 5, cy - 17 + bob, cy - 11 + bob, Color->New(230, 220, 210));
+
+		# ears (pointed, wolf)
+		renderer->FilledEllipseColor(cx - 16, cy - 52 + bob, 8, 14, fur_d);
+		renderer->FilledEllipseColor(cx + 16, cy - 52 + bob, 8, 14, fur_d);
+		renderer->FilledEllipseColor(cx - 16, cy - 52 + bob, 5, 10, fur);
+		renderer->FilledEllipseColor(cx + 16, cy - 52 + bob, 5, 10, fur);
+
+		# glowing yellow eyes
+		renderer->FilledCircleColor(cx - 10, cy - 38 + bob, 6, Color->New(220, 190, 20));
+		renderer->FilledCircleColor(cx + 10, cy - 38 + bob, 6, Color->New(220, 190, 20));
+		renderer->FilledEllipseColor(cx - 10, cy - 38 + bob, 2, 4, Color->New(15, 10, 10));
+		renderer->FilledEllipseColor(cx + 10, cy - 38 + bob, 2, 4, Color->New(15, 10, 10));
+		renderer->FilledCircleColor(cx - 12, cy - 40 + bob, 1, Color->New(255, 240, 180));
+		renderer->FilledCircleColor(cx + 8,  cy - 40 + bob, 1, Color->New(255, 240, 180));
+	}
+
+	# Medusa: gorgon with snake hair, serpentine lower body, cold stone gaze
+	function : DrawMedusa(renderer : Renderer, cx : Int, cy : Int, frame : Int) ~ Nil {
+		bob   := (Float->Sin(frame->As(Float) * 0.12) * 3.0)->As(Int);
+		sway  := (Float->Sin(frame->As(Float) * 0.20) * 5.0)->As(Int);
+		pulse := (Float->Sin(frame->As(Float) * 0.25) * 20.0)->As(Int);
+
+		skin   := Color->New(170, 175, 145);
+		skin_d := Color->New(130, 135, 110);
+		scale  := Color->New(60, 110, 70);
+		scale_l := Color->New(80, 140, 85);
+		robe   := Color->New(80, 50, 100);
+		snake_c := Color->New(55, 105, 60);
+		eye_g  := 120 + pulse;
+		if(eye_g > 180) { eye_g := 180; };
+
+		# serpentine lower body (coiled tail)
+		renderer->FilledEllipseColor(cx + sway / 2, cy + 48 + bob, 30, 16, scale);
+		renderer->FilledEllipseColor(cx + sway / 2, cy + 44 + bob, 24, 12, scale_l);
+		renderer->ThickLineColor(cx - 18, cy + 28 + bob, cx - 36, cy + 52 + bob, 14, scale);
+		renderer->ThickLineColor(cx + 14, cy + 28 + bob, cx + 40, cy + 56 + bob, 12, scale);
+		renderer->ThickLineColor(cx + 40, cy + 56 + bob, cx + 52, cy + 46 + bob, 10, scale_l);
+		# scale pattern
+		renderer->LineColor(cx - 28, cy + 34 + bob, cx - 36, cy + 44 + bob, Color->New(40, 80, 50));
+		renderer->LineColor(cx + 20, cy + 32 + bob, cx + 36, cy + 46 + bob, Color->New(40, 80, 50));
+
+		# torso - robed, arms outstretched
+		renderer->FilledEllipseColor(cx, cy + 6 + bob, 22, 20, robe);
+		renderer->FilledEllipseColor(cx, cy + 2 + bob, 16, 14, Color->New(100, 65, 120));
+		# arms
+		renderer->ThickLineColor(cx - 20, cy - 2 + bob, cx - 46, cy + 8 + bob + sway, 8, skin_d);
+		renderer->ThickLineColor(cx + 20, cy - 2 + bob, cx + 46, cy + 6 + bob - sway, 8, skin_d);
+		# hands with extended fingers (threatening gesture)
+		renderer->LineColor(cx - 46, cy + 8 + bob + sway, cx - 54, cy + 4 + bob, skin);
+		renderer->LineColor(cx - 46, cy + 8 + bob + sway, cx - 54, cy + 10 + bob, skin);
+		renderer->LineColor(cx - 46, cy + 8 + bob + sway, cx - 52, cy + 16 + bob, skin);
+		renderer->LineColor(cx + 46, cy + 6 + bob - sway, cx + 54, cy + 2 + bob, skin);
+		renderer->LineColor(cx + 46, cy + 6 + bob - sway, cx + 54, cy + 8 + bob, skin);
+		renderer->LineColor(cx + 46, cy + 6 + bob - sway, cx + 52, cy + 14 + bob, skin);
+
+		# neck
+		renderer->ThickLineColor(cx, cy - 16 + bob, cx, cy - 4 + bob, 10, skin_d);
+
+		# head
+		renderer->FilledEllipseColor(cx, cy - 28 + bob, 18, 20, skin);
+		# face details
+		renderer->FilledEllipseColor(cx, cy - 22 + bob, 10, 6, skin_d);
+		renderer->LineColor(cx - 7, cy - 16 + bob, cx + 7, cy - 16 + bob, Color->New(80, 60, 70));
+
+		# snake hair - multiple writhing serpents
+		renderer->ThickLineColor(cx - 14, cy - 44 + bob, cx - 28, cy - 60 + bob + sway, 5, snake_c);
+		renderer->ThickLineColor(cx - 28, cy - 60 + bob + sway, cx - 22, cy - 70 + bob, 3, snake_c);
+		renderer->FilledCircleColor(cx - 22, cy - 70 + bob, 4, snake_c);
+		renderer->FilledCircleColor(cx - 22, cy - 70 + bob, 2, Color->New(200, 20, 20));
+
+		renderer->ThickLineColor(cx, cy - 46 + bob, cx + 6, cy - 66 + bob - sway, 5, Color->New(70, 120, 55));
+		renderer->FilledCircleColor(cx + 6, cy - 66 + bob - sway, 4, Color->New(70, 120, 55));
+		renderer->FilledCircleColor(cx + 6, cy - 66 + bob - sway, 2, Color->New(200, 20, 20));
+
+		renderer->ThickLineColor(cx + 14, cy - 44 + bob, cx + 32, cy - 58 + bob + sway / 2, 5, Color->New(50, 100, 65));
+		renderer->ThickLineColor(cx + 32, cy - 58 + bob + sway / 2, cx + 26, cy - 68 + bob, 3, Color->New(50, 100, 65));
+		renderer->FilledCircleColor(cx + 26, cy - 68 + bob, 4, Color->New(50, 100, 65));
+		renderer->FilledCircleColor(cx + 26, cy - 68 + bob, 2, Color->New(200, 20, 20));
+
+		renderer->ThickLineColor(cx - 6, cy - 46 + bob, cx - 20, cy - 64 + bob - sway / 2, 4, Color->New(65, 115, 60));
+		renderer->FilledCircleColor(cx - 20, cy - 64 + bob - sway / 2, 3, Color->New(65, 115, 60));
+		renderer->FilledCircleColor(cx - 20, cy - 64 + bob - sway / 2, 1, Color->New(200, 20, 20));
+
+		# petrifying eyes - glowing green
+		renderer->FilledCircleColor(cx - 8,  cy - 30 + bob, 5, Color->New(40, eye_g, 50));
+		renderer->FilledCircleColor(cx + 8,  cy - 30 + bob, 5, Color->New(40, eye_g, 50));
+		renderer->FilledCircleColor(cx - 8,  cy - 30 + bob, 2, Color->New(10, 20, 10));
+		renderer->FilledCircleColor(cx + 8,  cy - 30 + bob, 2, Color->New(10, 20, 10));
+		renderer->FilledCircleColor(cx - 10, cy - 32 + bob, 1, Color->New(200, 255, 180));
+		renderer->FilledCircleColor(cx + 6,  cy - 32 + bob, 1, Color->New(200, 255, 180));
+	}
+
+	# Nightmare: undead fire horse, skeletal with blazing mane, charging stance
+	function : DrawNightmare(renderer : Renderer, cx : Int, cy : Int, frame : Int) ~ Nil {
+		bob    := (Float->Sin(frame->As(Float) * 0.22) * 5.0)->As(Int);
+		flame  := (Float->Sin(frame->As(Float) * 0.40) * 8.0)->As(Int);
+		pulse  := (Float->Sin(frame->As(Float) * 0.30) * 25.0)->As(Int);
+
+		bone   := Color->New(55, 50, 48);
+		bone_l := Color->New(80, 72, 68);
+		dark   := Color->New(30, 25, 22);
+		fire_o := Color->New(220, 100, 20);
+		fire_y := Color->New(255, 200, 40);
+		fire_r := Color->New(180, 40, 10);
+		eye_r  := 200 + pulse;
+		if(eye_r > 255) { eye_r := 255; };
+
+		# hind legs (skeletal)
+		renderer->ThickLineColor(cx - 14, cy + 20 + bob, cx - 18, cy + 48 + bob, 8, bone);
+		renderer->ThickLineColor(cx + 6,  cy + 20 + bob, cx + 8,  cy + 48 + bob, 8, bone);
+		# hoof
+		renderer->BoxColor(cx - 22, cy + 44 + bob, cx - 10, cy + 56 + bob, dark);
+		renderer->BoxColor(cx + 4,  cy + 44 + bob, cx + 14, cy + 56 + bob, dark);
+		# fetlock flame
+		fire_a1 := 120 + pulse / 2;
+		if(fire_a1 > 180) { fire_a1 := 180; };
+		renderer->FilledEllipseColor(cx - 16, cy + 44 + bob, 6, 5, Color->New(220, 100, 20, fire_a1));
+		renderer->FilledEllipseColor(cx + 9,  cy + 44 + bob, 6, 5, Color->New(220, 100, 20, fire_a1));
+
+		# body - skeletal barrel, gaunt ribs visible
+		renderer->FilledEllipseColor(cx, cy + 4 + bob, 38, 24, bone);
+		renderer->FilledEllipseColor(cx, cy + 4 + bob, 32, 18, dark);
+		# rib lines
+		rib_c := Color->New(70, 62, 58);
+		renderer->LineColor(cx - 20, cy - 8 + bob, cx - 26, cy + 12 + bob, rib_c);
+		renderer->LineColor(cx - 10, cy - 10 + bob, cx - 14, cy + 14 + bob, rib_c);
+		renderer->LineColor(cx + 2,  cy - 10 + bob, cx - 2,  cy + 14 + bob, rib_c);
+		renderer->LineColor(cx + 14, cy - 8 + bob,  cx + 10, cy + 14 + bob, rib_c);
+		renderer->LineColor(cx + 26, cy - 4 + bob,  cx + 22, cy + 14 + bob, rib_c);
+
+		# front legs (raised / charging)
+		renderer->ThickLineColor(cx - 28, cy + 10 + bob, cx - 40, cy - 10 + bob, 9, bone);
+		renderer->ThickLineColor(cx - 40, cy - 10 + bob, cx - 44, cy + 14 + bob, 8, bone_l);
+		renderer->BoxColor(cx - 48, cy + 10 + bob, cx - 38, cy + 22 + bob, dark);
+		renderer->ThickLineColor(cx + 22, cy + 8 + bob,  cx + 36, cy - 8 + bob,  9, bone);
+		renderer->ThickLineColor(cx + 36, cy - 8 + bob,  cx + 40, cy + 14 + bob, 8, bone_l);
+		renderer->BoxColor(cx + 36, cy + 10 + bob, cx + 46, cy + 22 + bob, dark);
+
+		# neck - arched
+		renderer->ThickLineColor(cx - 16, cy - 14 + bob, cx - 8, cy - 36 + bob, 16, bone);
+		renderer->ThickLineColor(cx - 8,  cy - 36 + bob, cx + 4, cy - 50 + bob, 14, bone_l);
+
+		# flaming mane - layered fire
+		renderer->ThickLineColor(cx - 8,  cy - 36 + bob, cx - 20, cy - 50 + bob + flame, 5, fire_r);
+		renderer->ThickLineColor(cx - 8,  cy - 36 + bob, cx - 14, cy - 56 + bob - flame, 4, fire_o);
+		renderer->ThickLineColor(cx - 2,  cy - 38 + bob, cx - 4,  cy - 60 + bob + flame, 4, fire_y);
+		renderer->ThickLineColor(cx + 4,  cy - 36 + bob, cx + 8,  cy - 52 + bob - flame, 4, fire_o);
+		renderer->ThickLineColor(cx + 4,  cy - 36 + bob, cx + 14, cy - 46 + bob + flame, 5, fire_r);
+		renderer->FilledCircleColor(cx - 4, cy - 60 + bob, 6, Color->New(255, 220, 60, 160));
+		renderer->FilledCircleColor(cx + 8, cy - 52 + bob, 5, Color->New(255, 160, 20, 140));
+
+		# skull head
+		renderer->FilledEllipseColor(cx + 4, cy - 60 + bob, 18, 16, bone);
+		renderer->FilledEllipseColor(cx + 4, cy - 60 + bob, 14, 12, dark);
+		# snout / jaw
+		renderer->FilledEllipseColor(cx + 4, cy - 50 + bob, 10, 8, bone_l);
+		renderer->LineColor(cx - 4, cy - 46 + bob, cx + 14, cy - 46 + bob, Color->New(30, 25, 22));
+		# teeth
+		renderer->VlineColor(cx - 2, cy - 46 + bob, cy - 42 + bob, Color->New(200, 195, 180));
+		renderer->VlineColor(cx + 4,  cy - 46 + bob, cy - 41 + bob, Color->New(200, 195, 180));
+		renderer->VlineColor(cx + 10, cy - 46 + bob, cy - 42 + bob, Color->New(200, 195, 180));
+
+		# blazing eye sockets
+		renderer->FilledEllipseColor(cx - 4, cy - 64 + bob, 6, 7, Color->New(eye_r, 60, 10));
+		renderer->FilledEllipseColor(cx + 14, cy - 64 + bob, 6, 7, Color->New(eye_r, 60, 10));
+		renderer->FilledCircleColor(cx - 4,  cy - 64 + bob, 3, Color->New(255, 200, 40, 200));
+		renderer->FilledCircleColor(cx + 14, cy - 64 + bob, 3, Color->New(255, 200, 40, 200));
+
+		# tail flame
+		renderer->ThickLineColor(cx + 30, cy + bob,      cx + 52, cy - 14 + bob, 5, fire_r);
+		renderer->ThickLineColor(cx + 52, cy - 14 + bob, cx + 62, cy - 22 + bob + flame, 4, fire_o);
+		renderer->ThickLineColor(cx + 52, cy - 14 + bob, cx + 58, cy - 28 + bob - flame, 3, fire_y);
+		renderer->FilledCircleColor(cx + 62, cy - 22 + bob, 5, Color->New(255, 180, 30, 150));
+	}
 }
 
 consts MonsterID {
@@ -2231,5 +2603,10 @@ consts MonsterID {
 	VAMPIRE := 23,
 	EYE_TYRANT := 24,
 	MUSHROOM := 25,
-	NUM_TYPES := 26
+	KOBOLD := 26,
+	BANSHEE := 27,
+	WEREWOLF := 28,
+	MEDUSA := 29,
+	NIGHTMARE := 30,
+	NUM_TYPES := 31
 }
