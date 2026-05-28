@@ -6,6 +6,8 @@ Copyright (c) 2020, 2022 Randy Hollines
 use Collection;
 use Game.SDL2;
 use Game.Framework;
+use Data.JSON;
+use System.IO.Filesystem;
 
 class TinyDungeon {
 	@framework : GameFramework;
@@ -138,6 +140,8 @@ class TinyDungeon {
 	@title_lore : TextSprite[];
 	@title_char_idx : Int;
 	@title_timer : Int;
+	@title_has_save : Bool;
+	@title_continue : TextSprite;
 
 	# --- Class Selection ---
 	@class_texts : TextSprite[];
@@ -208,7 +212,12 @@ class TinyDungeon {
 
 		@title_text->RenderedText("WARDEN OF GREYHOLD", Color->New(220, 180, 60));
 		@title_sub->RenderedText("A Dungeon of Darkness Awaits", Color->New(160, 140, 100));
-		@title_prompt->RenderedText("Press SPACE to descend", Color->New(245, 235, 200));
+		@title_prompt->RenderedText("Press SPACE to begin", Color->New(245, 235, 200));
+		@title_has_save := File->Exists("save.json");
+		@title_continue := @framework->AddTextSprite();
+		if(@title_has_save) {
+			@title_continue->RenderedText("C to continue saved game", Color->New(200, 175, 90));
+		};
 
 		@title_lore[0]->RenderedText("The ancient evil stirs beneath the city.", Color->New(140, 120, 90));
 		@title_lore[1]->RenderedText("Demons claw at the seals of binding.", Color->New(140, 120, 90));
@@ -614,6 +623,167 @@ class TinyDungeon {
 		@quest_text->RenderedText(quest_str, Color->New(180, 170, 130));
 	}
 
+	method : SaveGame() ~ Nil {
+		if(@player = Nil) { return; };
+
+		builder := JsonBuilder->New();
+		builder->PushObject();
+		builder->Insert("version", 1);
+		builder->Insert("floor", @current_floor);
+		builder->Insert("loc_row", @player_location[0]);
+		builder->Insert("loc_col", @player_location[1]);
+		builder->Insert("dir", @player_direction->As(Int));
+		builder->Insert("kills", @monsters_killed);
+
+		builder->PushObject("player");
+		builder->Insert("class_id", @player->GetClassId());
+		builder->Insert("hp", @player->GetHp());
+		builder->Insert("max_hp", @player->GetMaxHp());
+		builder->Insert("mp", @player->GetMp());
+		builder->Insert("max_mp", @player->GetMaxMp());
+		builder->Insert("level", @player->GetLevel());
+		builder->Insert("xp", @player->GetXP());
+		builder->Insert("gold", @player->GetGold());
+		builder->Insert("tents", @player->GetTents());
+		builder->Insert("str", @player->GetStrength());
+		builder->Insert("agi", @player->GetAgility());
+		builder->Insert("sta", @player->GetStamina());
+		builder->Insert("crit", @player->GetCritChance());
+		wpn := @player->GetWeapon();
+		builder->Insert("weapon_tier", wpn = Nil ? 0 : wpn->GetTier());
+		arm := @player->GetArmor();
+		builder->Insert("armor_tier", arm = Nil ? 0 : arm->GetTier());
+		p1 := @player->GetPotion1();
+		builder->Insert("p1_type", p1 = Nil ? 0 : p1->GetType()->As(Int));
+		builder->Insert("p1_count", p1 = Nil ? 0 : p1->GetCount());
+		p2 := @player->GetPotion2();
+		builder->Insert("p2_type", p2 = Nil ? 0 : p2->GetType()->As(Int));
+		builder->Insert("p2_count", p2 = Nil ? 0 : p2->GetCount());
+		p3 := @player->GetPotion3();
+		builder->Insert("p3_type", p3 = Nil ? 0 : p3->GetType()->As(Int));
+		builder->Insert("p3_count", p3 = Nil ? 0 : p3->GetCount());
+		builder->Insert("poison", @player->GetPoisonTurns());
+		builder->Insert("blind", @player->GetBlindTurns());
+		builder->Insert("confuse", @player->GetConfuseTurns());
+		builder->Insert("slow", @player->GetSlowTurns());
+		builder->Insert("defense", @player->GetDefenseBonus());
+		builder->Insert("cursed_wpn", @player->HasCursedWeapon());
+		builder->Insert("cursed_arm", @player->HasCursedArmor());
+		builder->Pop();
+
+		root := builder->PopAll();
+		FileWriter->WriteFile("save.json", root->ToString());
+		@title_has_save := true;
+	}
+
+	method : LoadGame() ~ Bool {
+		json_text := FileReader->ReadFile("save.json");
+		if(json_text = Nil) { return false; };
+
+		root := JsonParser->TextToElement(json_text);
+		if(root = Nil) { return false; };
+
+		floor_elem := root->Get("floor");
+		row_elem   := root->Get("loc_row");
+		col_elem   := root->Get("loc_col");
+		dir_elem   := root->Get("dir");
+		kills_elem := root->Get("kills");
+		p_root     := root->Get("player");
+		if(floor_elem = Nil | row_elem = Nil | col_elem = Nil | dir_elem = Nil | p_root = Nil) { return false; };
+
+		class_elem := p_root->Get("class_id");
+		if(class_elem = Nil) { return false; };
+
+		@current_floor  := floor_elem->GetInt();
+		@player_location[0] := row_elem->GetInt();
+		@player_location[1] := col_elem->GetInt();
+		@monsters_killed := kills_elem = Nil ? 0 : kills_elem->GetInt();
+
+		# restore player
+		class_id := class_elem->GetInt();
+		@player := Player->New("Warden", class_id);
+
+		lvl_elem := p_root->Get("level");
+		saved_level := lvl_elem = Nil ? 1 : lvl_elem->GetInt();
+
+		hp_e     := p_root->Get("hp");
+		maxhp_e  := p_root->Get("max_hp");
+		mp_e     := p_root->Get("mp");
+		maxmp_e  := p_root->Get("max_mp");
+		xp_e     := p_root->Get("xp");
+		gold_e   := p_root->Get("gold");
+		tents_e  := p_root->Get("tents");
+		str_e    := p_root->Get("str");
+		agi_e    := p_root->Get("agi");
+		sta_e    := p_root->Get("sta");
+		crit_e   := p_root->Get("crit");
+		wpn_e    := p_root->Get("weapon_tier");
+		arm_e    := p_root->Get("armor_tier");
+
+		if(hp_e <> Nil & maxhp_e <> Nil) { @player->SetHpDirect(hp_e->GetInt(), maxhp_e->GetInt()); };
+		if(mp_e <> Nil & maxmp_e <> Nil) { @player->SetMpDirect(mp_e->GetInt(), maxmp_e->GetInt()); };
+		if(xp_e <> Nil) { @player->SetXpDirect(xp_e->GetInt()); };
+		if(gold_e <> Nil) { @player->SetGoldDirect(gold_e->GetInt()); };
+		if(tents_e <> Nil) { @player->SetTentsDirect(tents_e->GetInt()); };
+		if(str_e <> Nil & agi_e <> Nil & sta_e <> Nil) { @player->SetStatsDirect(str_e->GetFloat(), agi_e->GetFloat(), sta_e->GetFloat()); };
+		if(crit_e <> Nil) { @player->SetCritChanceDirect(crit_e->GetInt()); };
+		@player->SetLevelDirect(saved_level);
+		@player->SetWeapon(TieredWeapon->Create(wpn_e = Nil ? 2 : wpn_e->GetInt()));
+		@player->SetArmor(TieredArmor->Create(arm_e = Nil ? 1 : arm_e->GetInt()));
+		@player->RestoreSpells(saved_level);
+
+		# potions
+		p1t := p_root->Get("p1_type"); p1c := p_root->Get("p1_count");
+		p2t := p_root->Get("p2_type"); p2c := p_root->Get("p2_count");
+		p3t := p_root->Get("p3_type"); p3c := p_root->Get("p3_count");
+		if(p1t <> Nil & p1c <> Nil) { @player->SetPotionDirect(0, p1t->GetInt()->As(Potion->Type), p1c->GetInt()); };
+		if(p2t <> Nil & p2c <> Nil) { @player->SetPotionDirect(1, p2t->GetInt()->As(Potion->Type), p2c->GetInt()); };
+		if(p3t <> Nil & p3c <> Nil) { @player->SetPotionDirect(2, p3t->GetInt()->As(Potion->Type), p3c->GetInt()); };
+
+		# status effects
+		pe := p_root->Get("poison"); be := p_root->Get("blind"); ce := p_root->Get("confuse");
+		se := p_root->Get("slow");  de := p_root->Get("defense");
+		cwe := p_root->Get("cursed_wpn"); cae := p_root->Get("cursed_arm");
+		@player->SetStatusDirect(
+			pe = Nil ? 0 : pe->GetInt(),
+			be = Nil ? 0 : be->GetInt(),
+			ce = Nil ? 0 : ce->GetInt(),
+			se = Nil ? 0 : se->GetInt(),
+			de = Nil ? 0 : de->GetInt(),
+			cwe = Nil ? false : cwe->GetBool(),
+			cae = Nil ? false : cae->GetBool()
+		);
+
+		# restore direction
+		dir_int := dir_elem->GetInt();
+		select(dir_int) {
+			label 1 { @player_direction := MapManager->Direction->SOUTH; }
+			label 2 { @player_direction := MapManager->Direction->EAST; }
+			label 3 { @player_direction := MapManager->Direction->WEST; }
+			other   { @player_direction := MapManager->Direction->NORTH; }
+		};
+
+		# restore map state
+		@map_manager->SetFloor(@current_floor);
+		@player_nav_map := Int->New[MapManager->Type->MAP_SIZE, MapManager->Type->MAP_SIZE];
+		@player_nav_map[@player_location[0], @player_location[1]] := 1;
+		@can_show_item := false;
+		@has_dungeon_key := false;
+		@puzzle_active := false;
+		@puzzle_timer := 0;
+		@monster := Nil;
+		@boss_fight := false;
+		@mini_boss_fight := false;
+		UpdateFloorText();
+		UpdateQuestText();
+		UpdateCompass();
+		UpdateView();
+		RefreshStats();
+		RefreshItems();
+
+		return true;
+	}
+
 	method : GetPlayerClassName() ~ String {
 		if(@player = Nil) { return "Adventurer"; };
 		select(@player->GetClassId()) {
@@ -684,16 +854,22 @@ class TinyDungeon {
 
 		MoveForward();
 		UpdateView();
+		if(inc_level <> 0) { SaveGame(); };
 	}
 
 	method : GetInput(e : Event) ~ Nil {
 		# title screen
 		if(@game_state = -1) {
-			if(e->GetKey()->GetKeysym()->GetScancode() = Scancode->SDL_SCANCODE_SPACE |
-				e->GetKey()->GetKeysym()->GetScancode() = Scancode->SDL_SCANCODE_RETURN) {
+			code := e->GetKey()->GetKeysym()->GetScancode();
+			if(code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_RETURN) {
 				@game_state := -2;
 			}
-			else if(e->GetKey()->GetKeysym()->GetScancode() = Scancode->SDL_SCANCODE_ESCAPE) {
+			else if(code = Scancode->SDL_SCANCODE_C & @title_has_save) {
+				if(LoadGame()) {
+					@game_state := 0;
+				};
+			}
+			else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
 				@quit := true;
 			};
 			return;
@@ -881,6 +1057,12 @@ class TinyDungeon {
         	label Scancode->SDL_SCANCODE_F7
         	label Scancode->SDL_SCANCODE_Q {
         		DoFlee();
+        	}
+
+        	# Use tent (F8/T) — only outside combat
+        	label Scancode->SDL_SCANCODE_F8
+        	label Scancode->SDL_SCANCODE_T {
+        		DoTent();
         	}
 
 			# Search wall / bash (F1) - find secret walls
@@ -1127,6 +1309,7 @@ class TinyDungeon {
 	        				@monster := Nil;
 	        				@player_hit := @monster_hit := 0;
 	        				@monster_defending := false;
+	        				SaveGame();
 	        			};
 	        		};
 
@@ -1525,6 +1708,7 @@ class TinyDungeon {
         							if(was_boss) { @game_state := 2; ShowTerminalScreen(); };
         							@monster := Nil;
         							@player_hit := @monster_hit := 0;
+        							SaveGame();
         						};
         					};
         				}
@@ -1550,6 +1734,30 @@ class TinyDungeon {
         			RefreshStats();
         		};
         	
+	}
+
+	method : DoTent() ~ Nil {
+		if(@player = Nil) { return; };
+		if(@monster <> Nil) {
+			@damage_text->RenderedText("Can't rest during combat!", Color->New(255, 100, 60));
+			@damage_timer := 20;
+			@damage_is_player := false;
+			return;
+		};
+		if(@player->GetTents() = 0) {
+			@damage_text->RenderedText("No tents remaining.", Color->New(140, 130, 110));
+			@damage_timer := 20;
+			@damage_is_player := false;
+			return;
+		};
+		if(@player->UseTent()) {
+			@damage_text->RenderedText("You camp and rest fully. HP & MP restored.", Color->New(100, 220, 100));
+			@damage_timer := 50;
+			@damage_is_player := false;
+			RefreshStats();
+			RefreshItems();
+			@sound_manager->TakeLoot();
+		};
 	}
 
 	method : DoFlee() ~ Nil {
@@ -2660,6 +2868,10 @@ class TinyDungeon {
 			if((frame / 30) % 2 = 0) {
 				px := Game->SCREEN_WIDTH / 2 - @title_prompt->GetWidth() / 2;
 				@title_prompt->Render(px, 400);
+				if(@title_has_save) {
+					cx := Game->SCREEN_WIDTH / 2 - @title_continue->GetWidth() / 2;
+					@title_continue->Render(cx, 425);
+				};
 			};
 		};
 

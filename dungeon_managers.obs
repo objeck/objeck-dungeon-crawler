@@ -48,8 +48,14 @@ class MapManager from Manager {
 		if((inc_level < 0 & @map_index - inc_level > -1) | (inc_level > 0 & @map_index + inc_level < @maps->Size())) {
 			@map_index += inc_level;
 		};
-		
+
 		return @maps->Get(@map_index)->GetStart();
+	}
+
+	method : public : SetFloor(floor_num : Int) ~ Nil {
+		if(floor_num >= 1 & floor_num <= @maps->Size()) {
+			@map_index := floor_num - 1;
+		};
 	}
 
 	method : GetMap() ~ Byte[,] {

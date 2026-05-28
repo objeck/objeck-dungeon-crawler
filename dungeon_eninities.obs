@@ -478,6 +478,43 @@ class Player from Entity {
 	method : public : HasCursedArmor() ~ Bool { return @cursed_armor; }
 	method : public : HasAnyCurse() ~ Bool { return @cursed_weapon | @cursed_armor; }
 
+	method : public : GetMaxMp() ~ Int { return @max_mp; }
+	method : public : GetPoisonTurns() ~ Int { return @poison_turns; }
+	method : public : GetBlindTurns() ~ Int { return @blind_turns; }
+	method : public : GetConfuseTurns() ~ Int { return @confuse_turns; }
+	method : public : GetSlowTurns() ~ Int { return @slow_turns; }
+
+	method : public : SetMpDirect(mp : Int, max_mp : Int) ~ Nil { @mp := mp; @max_mp := max_mp; }
+	method : public : SetXpDirect(xp : Int) ~ Nil { @xp := xp; }
+	method : public : SetGoldDirect(gold : Int) ~ Nil { @gold := gold; }
+	method : public : SetTentsDirect(count : Int) ~ Nil { @tents := count; }
+	method : public : SetCritChanceDirect(chance : Int) ~ Nil { @crit_chance := chance; }
+
+	method : public : SetStatusDirect(poison : Int, blind : Int, confuse : Int, slow : Int, defense : Int, cursed_wpn : Bool, cursed_arm : Bool) ~ Nil {
+		@poison_turns := poison; @blind_turns := blind; @confuse_turns := confuse; @slow_turns := slow;
+		@defense_bonus := defense; @cursed_weapon := cursed_wpn; @cursed_armor := cursed_arm;
+	}
+
+	method : public : SetPotionDirect(index : Int, type : Potion->Type, count : Int) ~ Nil {
+		if(index >= 0 & index < @potions->Size() & count > 0) {
+			@potions[index] := Potion->New(type);
+			@potions[index]->Add(count);
+		};
+	}
+
+	method : public : RestoreSpells(level : Int) ~ Nil {
+		@num_spells := 0;
+		select(@class_id) {
+			label PlayerClass->MAGE { LearnSpellForLevel(2); }
+			label PlayerClass->NINJA { }
+			other { LearnSpellForLevel(1); }
+		};
+		for(l := 2; l <= level; l += 1;) {
+			if(@class_id = PlayerClass->MAGE & l = 2) { }
+			else { LearnSpellForLevel(l); };
+		};
+	}
+
 	method : public : UseTent() ~ Bool {
 		if(@tents > 0) {
 			@tents -= 1;
@@ -765,6 +802,13 @@ class Entity {
 	method : public : UpdateHp(update : Int) ~ Nil {
 		@hp -= update;
 	}
+
+	method : public : GetStrength() ~ Float { return @strength; }
+	method : public : GetAgility() ~ Float { return @agility; }
+	method : public : GetStamina() ~ Float { return @stamina; }
+	method : public : SetHpDirect(hp : Int, max_hp : Int) ~ Nil { @hp := hp; @max_hp := max_hp; }
+	method : public : SetLevelDirect(level : Int) ~ Nil { @level := level; }
+	method : public : SetStatsDirect(str : Float, agi : Float, sta : Float) ~ Nil { @strength := str; @agility := agi; @stamina := sta; }
 
 	method : public : GetAttack() ~ Int {
 		return (@strength * 0.40 + @agility * 0.15 + @weapon_hit * 0.45) * @levels[Int->Random(@level - 1, @level + 1)];
