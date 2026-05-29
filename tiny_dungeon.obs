@@ -196,6 +196,7 @@ class TinyDungeon {
 	@ow_player_c         : Int;
 	@ow_move_cooldown    : Int;
 	@came_from_overworld : Bool;
+	@ow_encounter_tile   : Int;    # tile type where surface encounter started
 	@ow_world_name       : String;
 	@ow_encounter_banner : TextSprite;
 
@@ -738,8 +739,9 @@ class TinyDungeon {
 		else if(tile = OverworldTile->GRASS) { rate := 7; };
 		if(rate > 0 & @monster = Nil & Int->Random(99) < rate) {
 			@came_from_overworld := true;
-			@game_state := 0;
 			@current_floor := 1;
+			StartLevel(0);        # initializes player_location, nav_map, view state
+			@game_state := 0;     # switch to dungeon render AFTER state is ready
 			SpawnOverworldEncounter();
 		};
 	}
@@ -747,11 +749,26 @@ class TinyDungeon {
 	method : SpawnOverworldEncounter() ~ Nil {
 		fl := 1;
 		roll := Int->Random(99);
-		if(roll < 30)      { @monster := Monster->CreateByFloor("Giant Rat",      fl, 8,  12, 10, 5,  30.0, 10.0, 13, false); @monster_sprint_index := MonsterID->RAT; }
-		else if(roll < 55) { @monster := Monster->CreateByFloor("Cave Bat",       fl, 6,  9,  13, 4,  25.0, 8.0,  10, false); @monster_sprint_index := MonsterID->BAT; }
-		else if(roll < 75) { @monster := Monster->CreateByFloor("Skeleton",       fl, 10, 11, 8,  7,  32.0, 14.0, 15, false); @monster_sprint_index := MonsterID->SKELETON; }
-		else if(roll < 90) { @monster := Monster->CreateByFloor("Dungeon Spider", fl, 7,  10, 12, 5,  28.0, 9.0,  12, false); @monster_sprint_index := MonsterID->SPIDER; }
-		else               { @monster := Monster->CreateByFloor("Goblin",         fl, 9,  11, 11, 6,  30.0, 11.0, 14, false); @monster_sprint_index := MonsterID->ZOMBIE; };
+		@ow_encounter_tile := @overworld_manager->GetTile(@ow_player_r, @ow_player_c);
+
+		if(@ow_encounter_tile = OverworldTile->FOREST) {
+			# Forest: larger predators, humanoid raiders, giant arachnids
+			if(roll < 20)      { @monster := Monster->CreateByFloor("Giant Spider",   fl, 9,  10, 14, 5,  28.0, 9.0,  12, false); @monster_sprint_index := MonsterID->SPIDER; }
+			else if(roll < 38) { @monster := Monster->CreateByFloor("Dire Wolf",      fl, 11, 13, 12, 7,  32.0, 10.0, 15, false); @monster_sprint_index := MonsterID->HELLHOUND; }
+			else if(roll < 55) { @monster := Monster->CreateByFloor("Forest Troll",   fl, 18, 14, 6,  12, 36.0, 18.0, 22, false); @monster_sprint_index := MonsterID->TROLL; }
+			else if(roll < 70) { @monster := Monster->CreateByFloor("Bandit Archer",  fl, 8,  11, 12, 6,  30.0, 11.0, 14, false); @monster_sprint_index := MonsterID->SHADOW; }
+			else if(roll < 83) { @monster := Monster->CreateByFloor("Kobold Shaman",  fl, 7,  9,  13, 5,  26.0, 8.0,  13, false); @monster_sprint_index := MonsterID->KOBOLD; }
+			else               { @monster := Monster->CreateByFloor("Werewolf",       fl, 14, 15, 12, 9,  40.0, 16.0, 25, false); @monster_sprint_index := MonsterID->WEREWOLF; };
+		}
+		else {
+			# Grassland: small pests, brigands, scouts
+			if(roll < 22)      { @monster := Monster->CreateByFloor("Wild Rat",      fl, 7,  11, 10, 4,  26.0, 8.0,  11, false); @monster_sprint_index := MonsterID->RAT; }
+			else if(roll < 42) { @monster := Monster->CreateByFloor("Giant Bat",     fl, 6,  9,  14, 4,  24.0, 7.0,  10, false); @monster_sprint_index := MonsterID->BAT; }
+			else if(roll < 58) { @monster := Monster->CreateByFloor("Kobold Scout",  fl, 6,  8,  14, 4,  22.0, 7.0,  11, false); @monster_sprint_index := MonsterID->KOBOLD; }
+			else if(roll < 72) { @monster := Monster->CreateByFloor("Highwayman",    fl, 9,  12, 10, 7,  30.0, 12.0, 14, false); @monster_sprint_index := MonsterID->DARK_KNIGHT; }
+			else if(roll < 85) { @monster := Monster->CreateByFloor("Road Bandit",   fl, 8,  11, 9,  6,  28.0, 10.0, 13, false); @monster_sprint_index := MonsterID->ZOMBIE; }
+			else               { @monster := Monster->CreateByFloor("Giant Spider",  fl, 8,  9,  13, 5,  26.0, 9.0,  12, false); @monster_sprint_index := MonsterID->SPIDER; };
+		};
 		monster_name := @monster->GetName();
 		@monster_name_text->RenderedText(monster_name, Color->New(255, 200, 200));
 		@quip_pending := false;   # battle cry takes AI display priority
@@ -3430,8 +3447,13 @@ class TinyDungeon {
 		# update animations
 		UpdateAnimation();
 
-		# dungeon view
-		RenderDungeon(frame_count);
+		# background view — wilderness when overworld encounter, dungeon otherwise
+		if(@came_from_overworld & @monster <> Nil) {
+			RenderWilderness(frame_count);
+		}
+		else {
+			RenderDungeon(frame_count);
+		};
 
 		# movement transition overlay
 		if(@anim_counter > 0) {
@@ -3949,6 +3971,66 @@ class TinyDungeon {
 		};
 		# border
 		renderer->RectangleColor(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, Color->New(120, 100, 80));
+	}
+
+	method : RenderWilderness(frame : Int) ~ Nil {
+		renderer := @framework->GetRenderer();
+		is_forest := @ow_encounter_tile = OverworldTile->FOREST;
+
+		# Sky — deep blue fading to horizon
+		sky_top := is_forest ? Color->New(20, 35, 55) : Color->New(38, 80, 140);
+		sky_mid := is_forest ? Color->New(35, 55, 40) : Color->New(90, 140, 190);
+		renderer->BoxColor(15, 7, 429, 160, sky_top);
+		renderer->BoxColor(15, 160, 429, 210, sky_mid);
+
+		# Ground — grass or forest floor
+		ground_c := is_forest ? Color->New(18, 48, 18) : Color->New(42, 95, 35);
+		ground_hi := is_forest ? Color->New(25, 68, 22) : Color->New(55, 118, 44);
+		renderer->BoxColor(15, 210, 429, 303, ground_c);
+		# Ground texture bands
+		for(gy := 215; gy < 303; gy += 8;) {
+			renderer->HLineColor(15, 429, gy, ground_hi);
+		};
+
+		# Horizon line
+		renderer->HLineColor(15, 429, 210, is_forest ? Color->New(30, 70, 25) : Color->New(60, 130, 50));
+
+		# Forest: tree silhouettes along horizon
+		if(is_forest) {
+			tree_offsets := Int->New[9];
+			tree_offsets[0]:=30; tree_offsets[1]:=70; tree_offsets[2]:=110;
+			tree_offsets[3]:=160; tree_offsets[4]:=210; tree_offsets[5]:=260;
+			tree_offsets[6]:=305; tree_offsets[7]:=350; tree_offsets[8]:=395;
+			for(ti := 0; ti < tree_offsets->Size(); ti += 1;) {
+				tx := 15 + tree_offsets[ti];
+				th := 40 + (ti % 3) * 15;
+				renderer->BoxColor(tx - 6, 210 - th, tx + 6, 210, Color->New(14, 35, 14));
+				renderer->FilledCircleColor(tx, 210 - th, 14 + (ti % 2) * 5, Color->New(20, 52, 18));
+				renderer->FilledCircleColor(tx - 5, 210 - th + 8, 10, Color->New(16, 42, 14));
+				renderer->FilledCircleColor(tx + 5, 210 - th + 6, 12, Color->New(22, 55, 20));
+			};
+		}
+		else {
+			# Grassland: rolling hills and tall grass tufts
+			for(hx := 15; hx < 429; hx += 20;) {
+				hh := (Float->Sin(hx->As(Float) * 0.08) * 8.0)->As(Int) + 5;
+				renderer->VlineColor(hx, 212 - hh, 212 + hh, Color->New(65, 138, 52));
+				renderer->VlineColor(hx + 3, 215 - hh / 2, 215 + hh / 2, Color->New(50, 110, 40));
+			};
+			# Distant low hills
+			renderer->FilledEllipseColor(150, 212, 120, 12, Color->New(48, 110, 38));
+			renderer->FilledEllipseColor(320, 210, 90, 10, Color->New(40, 98, 32));
+		};
+
+		# Sun or moon hint at top
+		if(<>is_forest) {
+			renderer->FilledCircleColor(380, 40, 22, Color->New(240, 220, 120, 80));
+			renderer->FilledCircleColor(380, 40, 16, Color->New(255, 240, 160, 140));
+		};
+
+		# Atmospheric fog at ground level
+		fog_c := is_forest ? Color->New(15, 30, 15, 60) : Color->New(200, 220, 180, 30);
+		renderer->BoxColor(15, 200, 429, 220, fog_c);
 	}
 
 	method : RenderDungeon(frame_count : Int) ~ Nil {
