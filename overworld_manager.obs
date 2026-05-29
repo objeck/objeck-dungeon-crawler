@@ -15,7 +15,8 @@ consts OverworldTile {
 	TOWN       := 5,
 	CASTLE     := 6,
 	DUNGEON    := 7,
-	SKYPORT    := 8
+	SKYPORT    := 8,
+	BRIDGE     := 9
 }
 
 consts OverworldEvent {
@@ -109,6 +110,25 @@ class WorldGen {
 					   map[r-1,c] = OverworldTile->MOUNTAIN | map[r+1,c] = OverworldTile->MOUNTAIN |
 					   map[r,c-1] = OverworldTile->MOUNTAIN | map[r,c+1] = OverworldTile->MOUNTAIN) {
 						map[r, c] := OverworldTile->SHALLOW_SEA;
+					};
+				};
+			};
+		};
+
+		# Pass 4b: bridges — place at narrow SHALLOW_SEA crossings between GRASS landmasses
+		for(br := 2; br < 62; br += 1;) {
+			for(bc := 2; bc < 62; bc += 1;) {
+				if(map[br, bc] = OverworldTile->SHALLOW_SEA) {
+					# Narrow horizontal crossing: GRASS on left and right, sea above and below
+					h_bridge := map[br, bc - 1] = OverworldTile->GRASS & map[br, bc + 1] = OverworldTile->GRASS &
+					            (map[br-1,bc] = OverworldTile->SHALLOW_SEA | map[br-1,bc] = OverworldTile->DEEP_SEA) &
+					            (map[br+1,bc] = OverworldTile->SHALLOW_SEA | map[br+1,bc] = OverworldTile->DEEP_SEA);
+					# Narrow vertical crossing: GRASS above and below, sea on sides
+					v_bridge := map[br-1, bc] = OverworldTile->GRASS & map[br+1, bc] = OverworldTile->GRASS &
+					            (map[br,bc-1] = OverworldTile->SHALLOW_SEA | map[br,bc-1] = OverworldTile->DEEP_SEA) &
+					            (map[br,bc+1] = OverworldTile->SHALLOW_SEA | map[br,bc+1] = OverworldTile->DEEP_SEA);
+					if(h_bridge | v_bridge) {
+						map[br, bc] := OverworldTile->BRIDGE;
 					};
 				};
 			};
@@ -218,9 +238,10 @@ class OverworldManager {
 
 	method : public : IsPassable(r : Int, c : Int) ~ Bool {
 		t := GetTile(r, c);
-		return t = OverworldTile->GRASS | t = OverworldTile->FOREST |
-		       t = OverworldTile->TOWN  | t = OverworldTile->CASTLE  |
-		       t = OverworldTile->DUNGEON | t = OverworldTile->SKYPORT;
+		return t = OverworldTile->GRASS   | t = OverworldTile->FOREST  |
+		       t = OverworldTile->TOWN    | t = OverworldTile->CASTLE   |
+		       t = OverworldTile->DUNGEON | t = OverworldTile->SKYPORT  |
+		       t = OverworldTile->BRIDGE;
 	}
 
 	method : public : GetEvent(r : Int, c : Int) ~ Int {
@@ -409,6 +430,26 @@ class OverworldRenderer {
 				@tri_vx[1] := cx - 8; @tri_vy[1] := cy;
 				@tri_vx[2] := cx;     @tri_vy[2] := y2 - 3;
 				@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(60, 160, 185));
+			}
+
+			label OverworldTile->BRIDGE {
+				# Water/void base
+				@renderer->BoxColor(x1, y1, x2, y2, Color->New(38, 80, 140));
+				# Stone arch supports (vertical pillars on sides)
+				@renderer->BoxColor(x1,     y1 + 4, x1 + 5, y2 - 4, Color->New(88, 82, 74));
+				@renderer->BoxColor(x2 - 5, y1 + 4, x2,     y2 - 4, Color->New(88, 82, 74));
+				# Bridge deck (wooden planks across the center)
+				@renderer->BoxColor(x1 + 5, cy - 3, x2 - 5, cy + 3, Color->New(110, 75, 35));
+				# Plank lines
+				for(px := x1 + 7; px < x2 - 7; px += 4;) {
+					@renderer->VlineColor(px, cy - 3, cy + 3, Color->New(80, 52, 22));
+				};
+				# Railings (top + bottom edge of deck)
+				@renderer->HLineColor(x1 + 5, x2 - 5, cy - 3, Color->New(140, 100, 50));
+				@renderer->HLineColor(x1 + 5, x2 - 5, cy + 3, Color->New(140, 100, 50));
+				# Rope hints
+				@renderer->LineColor(x1 + 5, cy - 3, cx, cy - 5, Color->New(100, 72, 30));
+				@renderer->LineColor(cx, cy - 5, x2 - 5, cy - 3, Color->New(100, 72, 30));
 			}
 		};
 	}

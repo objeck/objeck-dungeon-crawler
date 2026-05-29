@@ -81,7 +81,7 @@ class WorldGenTest {
         for(r := 0; r < 64 & <>bad_tile; r += 1;) {
             for(c := 0; c < 64 & <>bad_tile; c += 1;) {
                 tile := map[r, c];
-                if(tile < 0 | tile > OverworldTile->SKYPORT) {
+                if(tile < 0 | tile > OverworldTile->BRIDGE) {
                     Fail("Out-of-range tile {$tile} at [{$r},{$c}]");
                     bad_tile := true;
                 };

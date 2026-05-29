@@ -18,13 +18,14 @@ class OverworldTest {
         map := gen->Generate();
 
         # Passability logic (inline, matches OverworldManager->IsPassable)
-        passable := Int->New[6];
+        passable := Int->New[7];
         passable[0] := OverworldTile->GRASS;
         passable[1] := OverworldTile->FOREST;
         passable[2] := OverworldTile->TOWN;
         passable[3] := OverworldTile->CASTLE;
         passable[4] := OverworldTile->DUNGEON;
         passable[5] := OverworldTile->SKYPORT;
+        passable[6] := OverworldTile->BRIDGE;
 
         blocked := Int->New[3];
         blocked[0] := OverworldTile->MOUNTAIN;
@@ -35,14 +36,14 @@ class OverworldTest {
             tv := passable[i];
             is_p := tv = OverworldTile->GRASS | tv = OverworldTile->FOREST |
                     tv = OverworldTile->TOWN  | tv = OverworldTile->CASTLE  |
-                    tv = OverworldTile->DUNGEON | tv = OverworldTile->SKYPORT;
+                    tv = OverworldTile->DUNGEON | tv = OverworldTile->SKYPORT | tv = OverworldTile->BRIDGE;
             if(<>is_p) { Fail("Tile {$tv} should be passable"); };
         };
         for(i := 0; i < blocked->Size(); i += 1;) {
             tv := blocked[i];
             is_p := tv = OverworldTile->GRASS | tv = OverworldTile->FOREST |
                     tv = OverworldTile->TOWN  | tv = OverworldTile->CASTLE  |
-                    tv = OverworldTile->DUNGEON | tv = OverworldTile->SKYPORT;
+                    tv = OverworldTile->DUNGEON | tv = OverworldTile->SKYPORT | tv = OverworldTile->BRIDGE;
             if(is_p) { Fail("Tile {$tv} should be blocked"); };
         };
 
@@ -60,7 +61,7 @@ class OverworldTest {
         if(cevt <> OverworldEvent->CASTLE) { Fail("CASTLE tile should fire CASTLE event"); };
 
         # OverworldTile consts are distinct
-        tiles := Int->New[9];
+        tiles := Int->New[10];
         tiles[0] := OverworldTile->GRASS;
         tiles[1] := OverworldTile->FOREST;
         tiles[2] := OverworldTile->MOUNTAIN;
@@ -70,6 +71,7 @@ class OverworldTest {
         tiles[6] := OverworldTile->CASTLE;
         tiles[7] := OverworldTile->DUNGEON;
         tiles[8] := OverworldTile->SKYPORT;
+        tiles[9] := OverworldTile->BRIDGE;
         for(i := 0; i < tiles->Size(); i += 1;) {
             for(j := i + 1; j < tiles->Size(); j += 1;) {
                 if(tiles[i] = tiles[j]) {

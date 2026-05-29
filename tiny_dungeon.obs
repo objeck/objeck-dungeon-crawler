@@ -3302,7 +3302,7 @@ class TinyDungeon {
 	method : IsOpen(player_view : Int) ~ Bool {
 		return player_view >= MapManager->Type->OPEN & player_view <> MapManager->Type->NONE &
 			player_view <> MapManager->Type->BLOCKED & player_view <> MapManager->Type->SECRET_WALL &
-			player_view <> MapManager->Type->PLAQUE;
+			player_view <> MapManager->Type->PLAQUE | player_view = MapManager->Type->BRIDGE;
 	}
 
 	method : MoveLeft() ~ Nil {
@@ -4068,6 +4068,12 @@ class TinyDungeon {
 								# small red X
 								renderer->LineColor(dot_x - 2, dot_y - 2, dot_x + 2, dot_y + 2, Color->New(200, 50, 40, 150));
 								renderer->LineColor(dot_x + 2, dot_y - 2, dot_x - 2, dot_y + 2, Color->New(200, 50, 40, 150));
+							}
+
+							label MapManager->Type->BRIDGE {
+								# tan bridge plank indicator
+								renderer->BoxColor(dot_x - 4, dot_y - 1, dot_x + 4, dot_y + 1, Color->New(140, 95, 45, 220));
+								renderer->BoxColor(dot_x - 3, dot_y - 3, dot_x + 3, dot_y + 3, Color->New(110, 75, 35, 180));
 							}
 						};
 

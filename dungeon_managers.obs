@@ -228,6 +228,7 @@ class MapManager from Manager {
 			map_start := Int->New[2];
 
 			GenerateFloor(map, map_start, floor);
+			PlaceBridges(map);
 			@maps->AddBack(MapHolder->New(map, map_start));
 		};
 
@@ -624,6 +625,28 @@ class MapManager from Manager {
 		};
 	}
 
+	# Place dungeon bridges: replace single-width corridor tiles with BRIDGE (2-4 per floor)
+	method : PlaceBridges(map : Byte[,]) ~ Nil {
+		sz := Type->MAP_SIZE;
+		placed := 0;
+		for(attempts := 0; attempts < 120 & placed < 4; attempts += 1;) {
+			ry := Int->Random(2, sz - 3);
+			rx := Int->Random(2, sz - 3);
+			if(map[ry, rx] = Type->OPEN) {
+				# Narrow horizontal corridor: blocked above and below, open left and right
+				horiz := map[ry - 1, rx] = Type->BLOCKED & map[ry + 1, rx] = Type->BLOCKED &
+				         map[ry, rx - 1] = Type->OPEN     & map[ry, rx + 1] = Type->OPEN;
+				# Narrow vertical corridor: blocked left and right, open above and below
+				vert  := map[ry, rx - 1] = Type->BLOCKED  & map[ry, rx + 1] = Type->BLOCKED &
+				         map[ry - 1, rx] = Type->OPEN      & map[ry + 1, rx] = Type->OPEN;
+				if(horiz | vert) {
+					map[ry, rx] := Type->BRIDGE;
+					placed += 1;
+				};
+			};
+		};
+	}
+
 	method : public : Unload() ~ Nil {
 	}
 
@@ -785,7 +808,8 @@ class MapManager from Manager {
 		PLAQUE := 22,
 		SLOPE_UP := 23,
 		SLOPE_DOWN := 24,
-		SAFE_ROOM := 25
+		SAFE_ROOM := 25,
+		BRIDGE := 26
 	}
 
 	enum Direction {
@@ -1169,8 +1193,13 @@ class DungeonRenderer {
 			# ceiling band (trapezoid between depth d+1 and d)
 			DrawCeiling(d, fi);
 
-			# floor band
-			DrawFloor(d, fi);
+			# floor band — bridge gets plank texture instead of stone
+			if(mid = MapManager->Type->BRIDGE) {
+				DrawBridgeFloor(d);
+			}
+			else {
+				DrawFloor(d, fi);
+			};
 
 			# side walls where blocked; "opening" fill when the adjacent tile
 			# is open (corridor intersections, rooms) so players see a visible
@@ -1250,6 +1279,33 @@ class DungeonRenderer {
 		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
 		@vx[3] := L(d+1); @vy[3] := B(d+1) + sf;
 		@renderer->FilledPolygonColor(@vx, @vy, color);
+	}
+
+	method : DrawBridgeFloor(d : Int) ~ Nil {
+		# Base: dark abyss below the bridge
+		sn := @shift[d]; sf := @shift[d+1];
+		@vx[0] := L(d);   @vy[0] := B(d) + sn;
+		@vx[1] := R(d);   @vy[1] := B(d) + sn;
+		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
+		@vx[3] := L(d+1); @vy[3] := B(d+1) + sf;
+		@renderer->FilledPolygonColor(@vx, @vy, Color->New(15, 10, 8));
+
+		# Wood planks: horizontal brown bands across the floor trapezoid
+		plank_steps := 4 - d;
+		if(plank_steps < 1) { plank_steps := 1; };
+		for(p := 0; p <= plank_steps; p += 1;) {
+			t := p->As(Float) / (plank_steps->As(Float) + 0.5);
+			px_l := L(d) + ((L(d+1) - L(d))->As(Float) * t)->As(Int);
+			px_r := R(d) + ((R(d+1) - R(d))->As(Float) * t)->As(Int);
+			py   := B(d) + sn + ((B(d+1) + sf - B(d) - sn)->As(Float) * t)->As(Int);
+			dark := p % 2 = 0;
+			plank_c := dark ? Color->New(80, 50, 22) : Color->New(105, 68, 30);
+			@renderer->HLineColor(px_l, px_r, py,     plank_c);
+			@renderer->HLineColor(px_l, px_r, py + 1, plank_c);
+		};
+
+		# Plank gap lines (darker separators)
+		@renderer->HLineColor(L(d), R(d), B(d) + sn, Color->New(40, 25, 10));
 	}
 
 	method : DrawLeftWall(d : Int, fi : Int) ~ Nil {
