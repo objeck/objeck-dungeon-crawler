@@ -3651,58 +3651,59 @@ class TinyDungeon {
 			@plaque_timer -= 1;
 		};
 
-		# damage text
+		# damage text — monster hit upper-left, player hit right side
 		if(@damage_timer > 0) {
 			if(@damage_is_player) {
-				@damage_text->Render(350, 200);
+				@damage_text->Render(340, 195);
 			}
 			else {
-				@damage_text->Render(200, 150);
+				@damage_text->Render(160, 140);
 			};
 			@damage_timer -= 1;
 		};
 
-		# reward text
+		# reward text — bottom-left of viewport (clear of center clash)
 		if(@reward_timer > 0) {
-			@reward_text->Render(200, 280);
+			@reward_text->Render(20, 268);
 			@reward_timer -= 1;
 		};
 
-		# level up text
+		# level up text — center viewport, distinct row above reward
 		if(@levelup_timer > 0) {
-			@levelup_text->Render(200, 250);
+			@levelup_text->Render(160, 238);
 			@levelup_timer -= 1;
 		};
 
-		# AI dialogue placard - centered on screen with decorative frame
-		if(@ai_timer > 0) {
+		# AI dialogue placard — shown in UPPER zone (y~100-160) so it never
+		# clashes with reward (y=268), levelup (y=238), or damage texts
+		if(@ai_timer > 0 & @levelup_timer = 0 & @reward_timer = 0) {
 			ai_tw := @ai_text->GetWidth();
-			p_w := ai_tw + 96;
-			if(p_w < 400) { p_w := 400; };
-			p_x1 := Game->SCREEN_WIDTH / 2 - p_w / 2;
-			p_x2 := p_x1 + p_w;
-			p_y1 := Game->SCREEN_HEIGHT / 2 - 34;
-			p_y2 := Game->SCREEN_HEIGHT / 2 + 34;
-			text_x := Game->SCREEN_WIDTH / 2 - ai_tw / 2;
-			text_y := Game->SCREEN_HEIGHT / 2 - 10;
+			p_w := ai_tw + 80;
+			if(p_w < 360) { p_w := 360; };
+			if(p_w > 414) { p_w := 414; };
+			p_cx := 222;   # viewport center x
+			p_x1 := p_cx - p_w / 2;
+			p_x2 := p_cx + p_w / 2;
+			p_y1 := 104;   # upper zone — above damage/monster area
+			p_y2 := p_y1 + 38;
+			text_x := p_cx - ai_tw / 2;
+			text_y := p_y1 + (p_y2 - p_y1 - @ai_text->GetHeight()) / 2;
 
 			rend := @framework->GetRenderer();
-			# dark parchment fill
-			rend->BoxColor(p_x1, p_y1, p_x2, p_y2, Color->New(18, 10, 28, 238));
-			# outer gold border
+			rend->BoxColor(p_x1, p_y1, p_x2, p_y2, Color->New(18, 10, 28, 230));
 			rend->RectangleColor(p_x1, p_y1, p_x2, p_y2, Color->New(180, 140, 50));
-			# inner inset border
-			rend->RectangleColor(p_x1 + 5, p_y1 + 5, p_x2 - 5, p_y2 - 5, Color->New(100, 75, 25));
-			# top and bottom decorative rules
-			rend->HLineColor(p_x1 + 10, p_x2 - 10, p_y1 + 15, Color->New(150, 115, 40));
-			rend->HLineColor(p_x1 + 10, p_x2 - 10, p_y2 - 15, Color->New(150, 115, 40));
-			# corner accent squares
-			rend->BoxColor(p_x1 + 1, p_y1 + 1, p_x1 + 7, p_y1 + 7, Color->New(180, 140, 50));
-			rend->BoxColor(p_x2 - 7, p_y1 + 1, p_x2 - 1, p_y1 + 7, Color->New(180, 140, 50));
-			rend->BoxColor(p_x1 + 1, p_y2 - 7, p_x1 + 7, p_y2 - 1, Color->New(180, 140, 50));
-			rend->BoxColor(p_x2 - 7, p_y2 - 7, p_x2 - 1, p_y2 - 1, Color->New(180, 140, 50));
-			@ai_text->Render(text_x, text_y);
+			rend->RectangleColor(p_x1 + 4, p_y1 + 4, p_x2 - 4, p_y2 - 4, Color->New(100, 75, 25));
+			rend->HLineColor(p_x1 + 8, p_x2 - 8, p_y1 + 12, Color->New(140, 105, 35));
+			rend->HLineColor(p_x1 + 8, p_x2 - 8, p_y2 - 12, Color->New(140, 105, 35));
+			rend->BoxColor(p_x1 + 1, p_y1 + 1, p_x1 + 6, p_y1 + 6, Color->New(180, 140, 50));
+			rend->BoxColor(p_x2 - 6, p_y1 + 1, p_x2 - 1, p_y1 + 6, Color->New(180, 140, 50));
+			rend->BoxColor(p_x1 + 1, p_y2 - 6, p_x1 + 6, p_y2 - 1, Color->New(180, 140, 50));
+			rend->BoxColor(p_x2 - 6, p_y2 - 6, p_x2 - 1, p_y2 - 1, Color->New(180, 140, 50));
+			@ai_text->Render(text_x, text_y + 4);
 			@ai_timer -= 1;
+		}
+		else if(@ai_timer > 0 & (@levelup_timer > 0 | @reward_timer > 0)) {
+			@ai_timer -= 1;  # still count down, just don't render during overlap
 		};
 
 		# Poll async AI results

@@ -612,47 +612,60 @@ class OverworldRenderer {
 	method : DrawPlayer(px : Int, py : Int, frame : Int,
 	                    step_count : Int, last_dr : Int, last_dc : Int) ~ Nil {
 		bob := (Float->Sin(step_count->As(Float) * 1.1) * 2.0)->As(Int);
-		cx := px + 12; cy := py + 12 + bob;
+		cx := px + 12; cy := py + 14 + bob;
 
-		# Cape direction (trails opposite to movement)
-		cape_ox := 0; cape_oy := 0;
-		if(last_dc > 0) { cape_ox := -5; }
-		else if(last_dc < 0) { cape_ox := 5; };
-		if(last_dr > 0) { cape_oy := -4; }
-		else if(last_dr < 0) { cape_oy := 4; };
-		# Flutter offset
-		flutter := (Float->Sin(frame->As(Float) * 0.22) * 2.0)->As(Int);
-
-		# Cape (behind body)
-		@tri_vx[0] := cx;
-		@tri_vy[0] := cy;
-		@tri_vx[1] := cx + cape_ox - 3 + flutter;
-		@tri_vy[1] := cy + cape_oy + 6 + bob;
-		@tri_vx[2] := cx + cape_ox + 3 + flutter;
-		@tri_vy[2] := cy + cape_oy + 6 + bob;
-		@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(90, 20, 20));
-
-		# Legs — alternating walk cycle
+		# Walk swing (legs alternate forward/back)
 		leg_phase := step_count % 2;
-		l_ext := leg_phase = 0 ? 5 : -2;
-		r_ext := leg_phase = 0 ? -2 : 5;
-		@renderer->ThickLineColor(cx - 2, cy + 4, cx - 4, cy + 10 + l_ext, 2, Color->New(55, 45, 80));
-		@renderer->ThickLineColor(cx + 2, cy + 4, cx + 4, cy + 10 + r_ext, 2, Color->New(55, 45, 80));
+		l_sw := leg_phase = 0 ?  3 : -3;
+		r_sw := leg_phase = 0 ? -3 :  3;
 
-		# Body
-		@renderer->FilledCircleColor(cx, cy, 5, Color->New(180, 155, 60));
-		@renderer->FilledCircleColor(cx, cy, 4, Color->New(210, 185, 70));
+		# Cape: trails opposite to movement direction, flutters
+		flutter := (Float->Sin(frame->As(Float) * 0.25) * 2.0)->As(Int);
+		cape_ox := flutter;
+		if(last_dc > 0) { cape_ox := -5 + flutter; }
+		else if(last_dc < 0) { cape_ox := 5 + flutter; };
 
-		# Head
-		@renderer->FilledCircleColor(cx, cy - 7, 4, Color->New(205, 182, 138));
+		# --- Draw back-to-front ---
 
-		# Hat brim + crown
-		@renderer->BoxColor(cx - 5, cy - 12, cx + 5, cy - 10, Color->New(55, 35, 18));
-		@renderer->BoxColor(cx - 3, cy - 16, cx + 3, cy - 12, Color->New(55, 35, 18));
+		# Cape (behind everything)
+		@tri_vx[0] := cx - 1; @tri_vy[0] := cy - 6;
+		@tri_vx[1] := cx + cape_ox - 4; @tri_vy[1] := cy + 4;
+		@tri_vx[2] := cx + cape_ox + 2; @tri_vy[2] := cy + 4;
+		@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(100, 18, 18));
 
-		# Sword hilt hint (right side)
-		@renderer->LineColor(cx + 5, cy,     cx + 8, cy - 3,  Color->New(180, 160, 80));
-		@renderer->LineColor(cx + 6, cy - 1, cx + 8, cy + 1,  Color->New(140, 125, 60));
+		# Boots (end of legs)
+		@renderer->BoxColor(cx - 5 + l_sw, cy + 7, cx     + l_sw, cy + 10, Color->New(45, 32, 20));
+		@renderer->BoxColor(cx + 1  + r_sw, cy + 7, cx + 6 + r_sw, cy + 10, Color->New(45, 32, 20));
+
+		# Legs (trousers)
+		@renderer->ThickLineColor(cx - 2, cy + 1, cx - 3 + l_sw, cy + 7, 2, Color->New(50, 40, 75));
+		@renderer->ThickLineColor(cx + 2, cy + 1, cx + 3 + r_sw, cy + 7, 2, Color->New(50, 40, 75));
+
+		# Sword (drawn before torso so arm overlaps hilt naturally)
+		@renderer->ThickLineColor(cx + 7, cy - 8, cx + 7, cy + 2, 1, Color->New(190, 185, 175));
+		@renderer->LineColor(cx + 4, cy - 4, cx + 10, cy - 4, Color->New(160, 155, 140));
+		@renderer->BoxColor(cx + 6, cy - 7, cx + 8, cy - 5, Color->New(160, 130, 50));
+
+		# Torso — rectangular armour, clear shoulder/waist shape
+		@renderer->BoxColor(cx - 5, cy - 7, cx + 5, cy - 3, Color->New(70, 90, 110));   # shoulders
+		@renderer->BoxColor(cx - 4, cy - 3, cx + 4, cy + 1, Color->New(60, 78, 96));    # waist
+		# Tunic belt
+		@renderer->BoxColor(cx - 4, cy - 2, cx + 4, cy,     Color->New(100, 70, 30));
+
+		# Left arm (carrying side)
+		@renderer->ThickLineColor(cx - 5, cy - 6, cx - 7, cy - 1, 2, Color->New(70, 90, 110));
+
+		# Head — clearly above torso, skin colour
+		@renderer->FilledCircleColor(cx, cy - 11, 3, Color->New(210, 185, 145));
+		# Neck connector
+		@renderer->BoxColor(cx - 1, cy - 8, cx + 1, cy - 7, Color->New(190, 165, 128));
+
+		# Hat (brim wide, crown tall — clear adventurer silhouette)
+		@renderer->BoxColor(cx - 5, cy - 16, cx + 5, cy - 14, Color->New(48, 30, 14));   # brim
+		@renderer->BoxColor(cx - 3, cy - 21, cx + 3, cy - 16, Color->New(48, 30, 14));   # crown
+		# Feather
+		@renderer->LineColor(cx + 3, cy - 21, cx + 7, cy - 24, Color->New(210, 180, 50));
+		@renderer->LineColor(cx + 5, cy - 22, cx + 8, cy - 20, Color->New(190, 160, 40));
 	}
 
 	method : DrawHUD(world_name : String, player_r : Int, player_c : Int,
@@ -661,32 +674,34 @@ class OverworldRenderer {
 		@renderer->HLineColor(0, 768, OW->HUD_Y,     Color->New(60, 50, 100));
 		@renderer->HLineColor(0, 768, OW->HUD_Y + 1, Color->New(40, 32, 72));
 
-		# World name (left)
+		# Layout: LEFT = world+weather | CENTER = coords | RIGHT = HP
+		# Two rows, each element in its own column/row slot — no overlap
+		base := OW->HUD_Y + 6;
+
+		# Left col: world name row1, weather row2
 		wn := world_name = Nil ? "World of Greyhold" : world_name;
 		@hud_name->RenderedText(wn, Color->New(200, 175, 90));
-		@hud_name->Render(12, OW->HUD_Y + 10);
+		@hud_name->Render(10, base);
 
-		# Weather indicator (after world name)
 		weather_lbl : String;
 		weather_clr : Color;
-		if(@weather = 2) { weather_lbl := "Rain"; weather_clr := Color->New(100, 150, 220); }
+		if(@weather = 2)      { weather_lbl := "Rain";  weather_clr := Color->New(100, 150, 220); }
 		else if(@weather = 1) { weather_lbl := "Windy"; weather_clr := Color->New(180, 200, 220); }
-		else { weather_lbl := "Clear"; weather_clr := Color->New(240, 220, 120); };
+		else                  { weather_lbl := "Clear"; weather_clr := Color->New(240, 220, 120); };
 		@hud_weather->RenderedText(weather_lbl, weather_clr);
-		@hud_weather->Render(12, OW->HUD_Y + 28);
+		@hud_weather->Render(10, base + 22);
 
-		# Coords (center)
-		coord_str := "X:{$player_c} Y:{$player_r}";
+		# Center col: coordinates (both rows — single centred line)
+		coord_str := "X: {$player_c}   Y: {$player_r}";
 		@hud_coords->RenderedText(coord_str, Color->New(140, 130, 100));
 		cw := @hud_coords->GetWidth();
-		@hud_coords->Render(384 - cw / 2, OW->HUD_Y + 10);
+		@hud_coords->Render(384 - cw / 2, base + 11);
 
-		# HP bar (right)
-		bar_x := 620; bar_y := OW->HUD_Y + 8;
-		bar_w := 130; bar_h := 10;
-		hp_text := "HP: {$hp}/{$max_hp}";
+		# Right col: HP label row1, HP bar row2
+		hp_text := "HP: {$hp} / {$max_hp}";
 		@hud_hp->RenderedText(hp_text, Color->New(140, 200, 130));
-		@hud_hp->Render(bar_x, OW->HUD_Y + 24);
+		@hud_hp->Render(610, base);
+		bar_x := 610; bar_y := base + 22; bar_w := 148; bar_h := 10;
 		perc : Float;
 		if(max_hp > 0) { perc := hp->As(Float) / max_hp->As(Float); } else { perc := 0.0; };
 		fill := (bar_w->As(Float) * perc)->As(Int);
