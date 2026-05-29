@@ -282,6 +282,7 @@ class OverworldManager {
 
 	method : public : GetDungeonPos() ~ Int[] { return @dungeon_pos; }
 	method : public : GetCastlePos()  ~ Int[] { return @castle_pos; }
+	method : public : GetWeather()    ~ Int   { return @renderer->GetWeather(); }
 
 	method : public : GetStartPos() ~ Int[] {
 		# spawn player 3 tiles NW of dungeon entrance
@@ -294,8 +295,10 @@ class OverworldManager {
 	}
 
 	method : public : Render(player_r : Int, player_c : Int, frame : Int,
-	                         world_name : String, hp : Int, max_hp : Int) ~ Nil {
-		@renderer->Render(@tiles, player_r, player_c, frame, world_name, hp, max_hp);
+	                         world_name : String, hp : Int, max_hp : Int,
+	                         step_count : Int, last_dr : Int, last_dc : Int) ~ Nil {
+		@renderer->Render(@tiles, player_r, player_c, frame, world_name, hp, max_hp,
+		                  step_count, last_dr, last_dc);
 	}
 }
 
@@ -312,12 +315,23 @@ class OverworldRenderer {
 	@hud_name    : TextSprite;
 	@hud_coords  : TextSprite;
 	@hud_hp      : TextSprite;
+	@hud_weather : TextSprite;
+
+	# Weather / atmosphere
+	@weather     : Int;   # 0=clear 1=windy 2=rain
+	@weather_cd  : Int;   # frames until next change
+	@cloud_x     : Int[];
+	@cloud_y     : Int[];
+	@wind_x      : Int[];
+	@wind_y      : Int[];
+	@rain_x      : Int[];
+	@rain_y      : Int[];
 
 	consts OW {
-		TILE_SIZE    := 24,
-		COLS         := 32,
-		ROWS         := 19,
-		HUD_Y        := 456
+		TILE_SIZE := 24,
+		COLS      := 32,
+		ROWS      := 19,
+		HUD_Y     := 456
 	}
 
 	New(framework : GameFramework) {
@@ -325,17 +339,113 @@ class OverworldRenderer {
 		@renderer  := framework->GetRenderer();
 		@tri_vx := Int->New[3];
 		@tri_vy := Int->New[3];
-		@hud_name   := framework->AddTextSprite();
-		@hud_coords := framework->AddTextSprite();
-		@hud_hp     := framework->AddTextSprite();
+		@hud_name    := framework->AddTextSprite();
+		@hud_coords  := framework->AddTextSprite();
+		@hud_hp      := framework->AddTextSprite();
+		@hud_weather := framework->AddTextSprite();
+
+		# Weather init
+		@weather    := 0;
+		@weather_cd := 1800 + Int->Random(600);
+
+		# Clouds: 3, spread across sky
+		@cloud_x := Int->New[3]; @cloud_y := Int->New[3];
+		@cloud_x[0] := 80;   @cloud_y[0] := 25;
+		@cloud_x[1] := 360;  @cloud_y[1] := 42;
+		@cloud_x[2] := 620;  @cloud_y[2] := 18;
+
+		# Wind particles: 30
+		@wind_x := Int->New[30]; @wind_y := Int->New[30];
+		for(i := 0; i < 30; i += 1;) {
+			@wind_x[i] := Int->Random(0, 767);
+			@wind_y[i] := Int->Random(0, 455);
+		};
+
+		# Rain particles: 40
+		@rain_x := Int->New[40]; @rain_y := Int->New[40];
+		for(i := 0; i < 40; i += 1;) {
+			@rain_x[i] := Int->Random(0, 779);
+			@rain_y[i] := Int->Random(0, 455);
+		};
+	}
+
+	method : public : GetWeather() ~ Int { return @weather; }
+
+	method : TickWeather(frame : Int) ~ Nil {
+		@weather_cd -= 1;
+		if(@weather_cd <= 0) {
+			@weather    := Int->Random(0, 2);
+			@weather_cd := 1800 + Int->Random(1200);
+		};
+		# Drift clouds
+		if(frame % 3 = 0) {
+			for(i := 0; i < 3; i += 1;) {
+				@cloud_x[i] += 1;
+				if(@cloud_x[i] > 840) { @cloud_x[i] := -70; };
+			};
+		};
+		# Wind particles
+		if(@weather >= 1) {
+			speed := @weather = 2 ? 3 : 2;
+			for(i := 0; i < 30; i += 1;) {
+				@wind_x[i] += speed;
+				@wind_y[i] += 1;
+				if(@wind_x[i] > 768 | @wind_y[i] > 456) {
+					@wind_x[i] := Int->Random(0, 60);
+					@wind_y[i] := Int->Random(0, 455);
+				};
+			};
+		};
+		# Rain particles
+		if(@weather = 2) {
+			for(i := 0; i < 40; i += 1;) {
+				@rain_x[i] += 2;
+				@rain_y[i] += 9;
+				if(@rain_y[i] > 456) {
+					@rain_y[i] := 0;
+					@rain_x[i] := Int->Random(0, 779);
+				};
+			};
+		};
+	}
+
+	method : DrawClouds() ~ Nil {
+		for(i := 0; i < 3; i += 1;) {
+			cx := @cloud_x[i]; cy := @cloud_y[i];
+			ca := @weather = 2 ? 55 : 38;
+			cr := @weather = 2 ? 175 : 235;
+			cg := @weather = 2 ? 180 : 238;
+			cb := @weather = 2 ? 195 : 255;
+			@renderer->FilledEllipseColor(cx,      cy,     28, 12, Color->New(cr, cg, cb, ca));
+			@renderer->FilledEllipseColor(cx + 20, cy - 5, 18,  9, Color->New(cr, cg, cb, ca - 8));
+			@renderer->FilledEllipseColor(cx - 16, cy - 3, 16,  8, Color->New(cr, cg, cb, ca - 8));
+		};
+	}
+
+	method : DrawWeatherFX() ~ Nil {
+		if(@weather >= 1) {
+			wa := @weather = 2 ? 80 : 45;
+			for(i := 0; i < 30; i += 1;) {
+				@renderer->FilledCircleColor(@wind_x[i], @wind_y[i], 1, Color->New(210, 220, 235, wa));
+			};
+		};
+		if(@weather = 2) {
+			for(i := 0; i < 40; i += 1;) {
+				@renderer->LineColor(@rain_x[i],     @rain_y[i],
+				                    @rain_x[i] + 3,  @rain_y[i] + 9,
+				                    Color->New(140, 170, 215, 150));
+			};
+		};
 	}
 
 	method : public : Render(tiles : Byte[,], player_r : Int, player_c : Int, frame : Int,
-	                         world_name : String, hp : Int, max_hp : Int) ~ Nil {
+	                         world_name : String, hp : Int, max_hp : Int,
+	                         step_count : Int, last_dr : Int, last_dc : Int) ~ Nil {
 		@framework->SetClearColor(Color->New(10, 8, 20));
 		@framework->Clear();
+		TickWeather(frame);
 
-		# camera: center player on screen
+		# camera
 		cam_r := player_r - OW->ROWS / 2;
 		cam_c := player_c - OW->COLS / 2;
 		if(cam_r < 0) { cam_r := 0; };
@@ -346,21 +456,25 @@ class OverworldRenderer {
 		for(sr := 0; sr < OW->ROWS; sr += 1;) {
 			for(sc := 0; sc < OW->COLS; sc += 1;) {
 				wr := cam_r + sr; wc := cam_c + sc;
-				t : Int;
-				if(wr >= 0 & wr < 64 & wc >= 0 & wc < 64) { t := tiles[wr, wc]; }
-				else { t := OverworldTile->DEEP_SEA; };
-				px := sc * OW->TILE_SIZE;
-				py := sr * OW->TILE_SIZE;
-				DrawTile(t, px, py, frame);
+				tile : Int;
+				if(wr >= 0 & wr < 64 & wc >= 0 & wc < 64) { tile := tiles[wr, wc]; }
+				else { tile := OverworldTile->DEEP_SEA; };
+				DrawTile(tile, sc * OW->TILE_SIZE, sr * OW->TILE_SIZE, frame);
 			};
 		};
 
-		# player dot (screen center)
-		px := (player_c - cam_c) * OW->TILE_SIZE;
-		py := (player_r - cam_r) * OW->TILE_SIZE;
-		DrawPlayer(px, py, frame);
+		# Clouds above everything
+		DrawClouds();
 
-		DrawHUD(world_name, player_r, player_c, hp, max_hp, frame);
+		# Player
+		ppx := (player_c - cam_c) * OW->TILE_SIZE;
+		ppy := (player_r - cam_r) * OW->TILE_SIZE;
+		DrawPlayer(ppx, ppy, frame, step_count, last_dr, last_dc);
+
+		# Weather particles on top
+		DrawWeatherFX();
+
+		DrawHUD(world_name, player_r, player_c, hp, max_hp);
 
 		@framework->Show();
 	}
@@ -372,17 +486,23 @@ class OverworldRenderer {
 		select(t) {
 			label OverworldTile->GRASS {
 				@renderer->BoxColor(x1, y1, x2, y2, Color->New(48, 108, 38));
-				@renderer->FilledCircleColor(cx - 5, cy - 4, 2, Color->New(58, 125, 45));
-				@renderer->FilledCircleColor(cx + 4, cy + 3, 2, Color->New(58, 125, 45));
-				@renderer->FilledCircleColor(cx + 2, cy - 6, 2, Color->New(42, 95, 33));
+				# Animated grass blades (phase varies per tile via position hash)
+				th := (px * 7 + py * 13) % 32;
+				sway := (Float->Sin(frame->As(Float) * 0.05 + th->As(Float) * 0.4) * 2.5)->As(Int);
+				@renderer->LineColor(cx - 5, cy,     cx - 5 + sway, cy - 4, Color->New(68, 138, 52));
+				@renderer->LineColor(cx + 3, cy + 2, cx + 3 + sway, cy - 3, Color->New(58, 122, 45));
+				@renderer->LineColor(cx - 1, cy - 2, cx - 1 + sway, cy - 6, Color->New(62, 128, 48));
+				@renderer->FilledCircleColor(cx + 5, cy + 3, 2, Color->New(55, 118, 42));
 			}
 
 			label OverworldTile->FOREST {
 				@renderer->BoxColor(x1, y1, x2, y2, Color->New(22, 68, 22));
-				# 3 small tree triangles
-				DrawTreeShape(cx - 5, cy + 4, 5);
-				DrawTreeShape(cx + 5, cy + 2, 5);
-				DrawTreeShape(cx,     cy - 4, 6);
+				# Trees sway with phase per tile
+				th := (px * 11 + py * 7) % 32;
+				sw := (Float->Sin(frame->As(Float) * 0.04 + th->As(Float) * 0.5) * 3.0)->As(Int);
+				DrawTreeShape(cx - 5 + sw, cy + 4, 5);
+				DrawTreeShape(cx + 5 + sw, cy + 2, 5);
+				DrawTreeShape(cx     + sw, cy - 4, 6);
 			}
 
 			label OverworldTile->MOUNTAIN {
@@ -489,29 +609,73 @@ class OverworldRenderer {
 		@renderer->VlineColor(tx, ty + 2, ty + 5, Color->New(90, 65, 35));
 	}
 
-	method : DrawPlayer(px : Int, py : Int, frame : Int) ~ Nil {
-		bob := (Float->Sin(frame->As(Float) * 0.18) * 1.5)->As(Int);
+	method : DrawPlayer(px : Int, py : Int, frame : Int,
+	                    step_count : Int, last_dr : Int, last_dc : Int) ~ Nil {
+		bob := (Float->Sin(step_count->As(Float) * 1.1) * 2.0)->As(Int);
 		cx := px + 12; cy := py + 12 + bob;
-		# player body
-		@renderer->FilledCircleColor(cx, cy, 5, Color->New(220, 200, 80));
-		@renderer->FilledCircleColor(cx, cy - 7, 4, Color->New(200, 180, 70));
-		# outline
-		@renderer->CircleColor(cx, cy, 5, Color->New(160, 140, 50));
+
+		# Cape direction (trails opposite to movement)
+		cape_ox := 0; cape_oy := 0;
+		if(last_dc > 0) { cape_ox := -5; }
+		else if(last_dc < 0) { cape_ox := 5; };
+		if(last_dr > 0) { cape_oy := -4; }
+		else if(last_dr < 0) { cape_oy := 4; };
+		# Flutter offset
+		flutter := (Float->Sin(frame->As(Float) * 0.22) * 2.0)->As(Int);
+
+		# Cape (behind body)
+		@tri_vx[0] := cx;
+		@tri_vy[0] := cy;
+		@tri_vx[1] := cx + cape_ox - 3 + flutter;
+		@tri_vy[1] := cy + cape_oy + 6 + bob;
+		@tri_vx[2] := cx + cape_ox + 3 + flutter;
+		@tri_vy[2] := cy + cape_oy + 6 + bob;
+		@renderer->FilledPolygonColor(@tri_vx, @tri_vy, Color->New(90, 20, 20));
+
+		# Legs — alternating walk cycle
+		leg_phase := step_count % 2;
+		l_ext := leg_phase = 0 ? 5 : -2;
+		r_ext := leg_phase = 0 ? -2 : 5;
+		@renderer->ThickLineColor(cx - 2, cy + 4, cx - 4, cy + 10 + l_ext, 2, Color->New(55, 45, 80));
+		@renderer->ThickLineColor(cx + 2, cy + 4, cx + 4, cy + 10 + r_ext, 2, Color->New(55, 45, 80));
+
+		# Body
+		@renderer->FilledCircleColor(cx, cy, 5, Color->New(180, 155, 60));
+		@renderer->FilledCircleColor(cx, cy, 4, Color->New(210, 185, 70));
+
+		# Head
+		@renderer->FilledCircleColor(cx, cy - 7, 4, Color->New(205, 182, 138));
+
+		# Hat brim + crown
+		@renderer->BoxColor(cx - 5, cy - 12, cx + 5, cy - 10, Color->New(55, 35, 18));
+		@renderer->BoxColor(cx - 3, cy - 16, cx + 3, cy - 12, Color->New(55, 35, 18));
+
+		# Sword hilt hint (right side)
+		@renderer->LineColor(cx + 5, cy,     cx + 8, cy - 3,  Color->New(180, 160, 80));
+		@renderer->LineColor(cx + 6, cy - 1, cx + 8, cy + 1,  Color->New(140, 125, 60));
 	}
 
 	method : DrawHUD(world_name : String, player_r : Int, player_c : Int,
-	                 hp : Int, max_hp : Int, frame : Int) ~ Nil {
-		# HUD background strip
+	                 hp : Int, max_hp : Int) ~ Nil {
 		@renderer->BoxColor(0, OW->HUD_Y, 768, 512, Color->New(12, 10, 22));
-		@renderer->HLineColor(0, 768, OW->HUD_Y, Color->New(60, 50, 100));
+		@renderer->HLineColor(0, 768, OW->HUD_Y,     Color->New(60, 50, 100));
 		@renderer->HLineColor(0, 768, OW->HUD_Y + 1, Color->New(40, 32, 72));
 
-		# world name (left)
+		# World name (left)
 		wn := world_name = Nil ? "World of Greyhold" : world_name;
 		@hud_name->RenderedText(wn, Color->New(200, 175, 90));
 		@hud_name->Render(12, OW->HUD_Y + 10);
 
-		# coords (center)
+		# Weather indicator (after world name)
+		weather_lbl : String;
+		weather_clr : Color;
+		if(@weather = 2) { weather_lbl := "Rain"; weather_clr := Color->New(100, 150, 220); }
+		else if(@weather = 1) { weather_lbl := "Windy"; weather_clr := Color->New(180, 200, 220); }
+		else { weather_lbl := "Clear"; weather_clr := Color->New(240, 220, 120); };
+		@hud_weather->RenderedText(weather_lbl, weather_clr);
+		@hud_weather->Render(12, OW->HUD_Y + 28);
+
+		# Coords (center)
 		coord_str := "X:{$player_c} Y:{$player_r}";
 		@hud_coords->RenderedText(coord_str, Color->New(140, 130, 100));
 		cw := @hud_coords->GetWidth();
@@ -523,13 +687,15 @@ class OverworldRenderer {
 		hp_text := "HP: {$hp}/{$max_hp}";
 		@hud_hp->RenderedText(hp_text, Color->New(140, 200, 130));
 		@hud_hp->Render(bar_x, OW->HUD_Y + 24);
-		perc := max_hp > 0 ? hp->As(Float) / max_hp->As(Float) : 0.0;
+		perc : Float;
+		if(max_hp > 0) { perc := hp->As(Float) / max_hp->As(Float); } else { perc := 0.0; };
 		fill := (bar_w->As(Float) * perc)->As(Int);
 		@renderer->BoxColor(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, Color->New(40, 20, 20));
-		hp_r := perc > 0.5 ? 40 : (perc > 0.25 ? 200 : 210);
-		hp_g := perc > 0.5 ? 180 : (perc > 0.25 ? 180 : 35);
-		hp_b := 40;
-		if(fill > 0) { @renderer->BoxColor(bar_x, bar_y, bar_x + fill, bar_y + bar_h, Color->New(hp_r, hp_g, hp_b)); };
+		hp_r := 0; hp_g := 0;
+		if(perc > 0.5) { hp_r := 40;  hp_g := 180; }
+		else if(perc > 0.25) { hp_r := 200; hp_g := 180; }
+		else { hp_r := 210; hp_g := 35; };
+		if(fill > 0) { @renderer->BoxColor(bar_x, bar_y, bar_x + fill, bar_y + bar_h, Color->New(hp_r, hp_g, 40)); };
 		@renderer->RectangleColor(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h, Color->New(90, 80, 70));
 	}
 }

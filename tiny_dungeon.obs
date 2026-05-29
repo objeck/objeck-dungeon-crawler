@@ -197,6 +197,9 @@ class TinyDungeon {
 	@ow_move_cooldown    : Int;
 	@came_from_overworld : Bool;
 	@ow_encounter_tile   : Int;    # tile type where surface encounter started
+	@ow_step_count       : Int;
+	@ow_last_dr          : Int;
+	@ow_last_dc          : Int;
 	@ow_world_name       : String;
 	@ow_encounter_banner : TextSprite;
 
@@ -1663,6 +1666,8 @@ class TinyDungeon {
 				boat_ok := @has_boat & (sea = OverworldTile->SHALLOW_SEA | sea = OverworldTile->DEEP_SEA);
 				if(@overworld_manager->IsPassable(nr, nc) | boat_ok) {
 					@ow_player_r := nr; @ow_player_c := nc;
+					@ow_last_dr := dr; @ow_last_dc := dc;
+					@ow_step_count += 1;
 					@ow_move_cooldown := 6;
 					OverworldCheckEvent();
 				};
@@ -2714,6 +2719,8 @@ class TinyDungeon {
 				boat_ok := @has_boat & (sea = OverworldTile->SHALLOW_SEA | sea = OverworldTile->DEEP_SEA);
 				if(@overworld_manager->IsPassable(nr, nc) | boat_ok) {
 					@ow_player_r := nr; @ow_player_c := nc;
+					@ow_last_dr := dr; @ow_last_dc := dc;
+					@ow_step_count += 1;
 					@ow_move_cooldown := 6;
 					OverworldCheckEvent();
 				};
@@ -3452,7 +3459,7 @@ class TinyDungeon {
 			wn := DungeonAI->IsWorldReady() ? DungeonAI->GetWorldName() : @ow_world_name;
 			hp  := @player <> Nil ? @player->GetHp()    : 0;
 			mhp := @player <> Nil ? @player->GetMaxHp() : 1;
-			@overworld_manager->Render(@ow_player_r, @ow_player_c, frame_count, wn, hp, mhp);
+			@overworld_manager->Render(@ow_player_r, @ow_player_c, frame_count, wn, hp, mhp, @ow_step_count, @ow_last_dr, @ow_last_dc);
 			return;
 		};
 
@@ -4007,61 +4014,101 @@ class TinyDungeon {
 	method : RenderWilderness(frame : Int) ~ Nil {
 		renderer := @framework->GetRenderer();
 		is_forest := @ow_encounter_tile = OverworldTile->FOREST;
+		weather := @overworld_manager->GetWeather();
 
-		# Sky — deep blue fading to horizon
-		sky_top := is_forest ? Color->New(20, 35, 55) : Color->New(38, 80, 140);
-		sky_mid := is_forest ? Color->New(35, 55, 40) : Color->New(90, 140, 190);
-		renderer->BoxColor(15, 7, 429, 160, sky_top);
-		renderer->BoxColor(15, 160, 429, 210, sky_mid);
+		# Sky — tone shifts with weather
+		rain_tint := weather = 2 ? 20 : 0;
+		sky_top_c := is_forest ? Color->New(18 + rain_tint, 32, 52) : Color->New(35 + rain_tint, 75, 138);
+		sky_mid_c := is_forest ? Color->New(32, 52, 38) : Color->New(82, 135, 188);
+		renderer->BoxColor(15, 7, 429, 160, sky_top_c);
+		renderer->BoxColor(15, 160, 429, 210, sky_mid_c);
 
-		# Ground — grass or forest floor
-		ground_c := is_forest ? Color->New(18, 48, 18) : Color->New(42, 95, 35);
-		ground_hi := is_forest ? Color->New(25, 68, 22) : Color->New(55, 118, 44);
-		renderer->BoxColor(15, 210, 429, 303, ground_c);
-		# Ground texture bands
-		for(gy := 215; gy < 303; gy += 8;) {
-			renderer->HLineColor(15, 429, gy, ground_hi);
+		# Drifting clouds (3, animated)
+		cloud_bases := Int->New[3]; cloud_bases[0] := 80; cloud_bases[1] := 220; cloud_bases[2] := 360;
+		for(ci := 0; ci < 3; ci += 1;) {
+			drift := (frame / 4 + cloud_bases[ci]) % 440;
+			ccy := 30 + ci * 18;
+			ca := weather = 2 ? 50 : 35;
+			cr := weather = 2 ? 170 : 232;
+			renderer->FilledEllipseColor(15 + drift,      ccy,     26, 10, Color->New(cr, cr, 255, ca));
+			renderer->FilledEllipseColor(15 + drift + 18, ccy - 4, 18,  8, Color->New(cr, cr, 255, ca - 8));
+			renderer->FilledEllipseColor(15 + drift - 14, ccy - 2, 15,  7, Color->New(cr, cr, 255, ca - 8));
 		};
 
-		# Horizon line
+		# Sun (grassland + clear/windy)
+		if(<>is_forest & weather < 2) {
+			renderer->FilledCircleColor(380, 42, 22, Color->New(240, 220, 120, 80));
+			renderer->FilledCircleColor(380, 42, 16, Color->New(255, 240, 160, 140));
+		};
+
+		# Ground
+		ground_c  := is_forest ? Color->New(18, 48, 18) : Color->New(42, 95, 35);
+		ground_hi := is_forest ? Color->New(25, 68, 22) : Color->New(55, 118, 44);
+		renderer->BoxColor(15, 210, 429, 303, ground_c);
 		renderer->HLineColor(15, 429, 210, is_forest ? Color->New(30, 70, 25) : Color->New(60, 130, 50));
 
-		# Forest: tree silhouettes along horizon
+		# Animated environment
 		if(is_forest) {
+			# Swaying trees
 			tree_offsets := Int->New[9];
-			tree_offsets[0]:=30; tree_offsets[1]:=70; tree_offsets[2]:=110;
+			tree_offsets[0]:=30;  tree_offsets[1]:=70;  tree_offsets[2]:=110;
 			tree_offsets[3]:=160; tree_offsets[4]:=210; tree_offsets[5]:=260;
 			tree_offsets[6]:=305; tree_offsets[7]:=350; tree_offsets[8]:=395;
 			for(ti := 0; ti < tree_offsets->Size(); ti += 1;) {
 				tx := 15 + tree_offsets[ti];
 				th := 40 + (ti % 3) * 15;
+				sway := (Float->Sin(frame->As(Float) * 0.04 + ti->As(Float) * 2.1) * (weather + 2)->As(Float))->As(Int);
 				renderer->BoxColor(tx - 6, 210 - th, tx + 6, 210, Color->New(14, 35, 14));
-				renderer->FilledCircleColor(tx, 210 - th, 14 + (ti % 2) * 5, Color->New(20, 52, 18));
-				renderer->FilledCircleColor(tx - 5, 210 - th + 8, 10, Color->New(16, 42, 14));
-				renderer->FilledCircleColor(tx + 5, 210 - th + 6, 12, Color->New(22, 55, 20));
+				renderer->FilledCircleColor(tx + sway,     210 - th,     14 + (ti % 2) * 5, Color->New(20, 52, 18));
+				renderer->FilledCircleColor(tx + sway - 5, 210 - th + 8, 10,                Color->New(16, 42, 14));
+				renderer->FilledCircleColor(tx + sway + 5, 210 - th + 6, 12,                Color->New(22, 55, 20));
 			};
+			# Ground texture
+			for(gy := 215; gy < 303; gy += 8;) { renderer->HLineColor(15, 429, gy, ground_hi); };
 		}
 		else {
-			# Grassland: rolling hills and tall grass tufts
-			for(hx := 15; hx < 429; hx += 20;) {
+			# Animated grass tufts
+			for(hx := 15; hx < 429; hx += 18;) {
+				sway := (Float->Sin(frame->As(Float) * 0.06 + hx->As(Float) * 0.09) * (weather + 2)->As(Float))->As(Int);
 				hh := (Float->Sin(hx->As(Float) * 0.08) * 8.0)->As(Int) + 5;
-				renderer->VlineColor(hx, 212 - hh, 212 + hh, Color->New(65, 138, 52));
-				renderer->VlineColor(hx + 3, 215 - hh / 2, 215 + hh / 2, Color->New(50, 110, 40));
+				renderer->VlineColor(hx + sway,     212 - hh,      212 + hh,      Color->New(65, 138, 52));
+				renderer->VlineColor(hx + sway + 3, 215 - hh / 2,  215 + hh / 2,  Color->New(52, 114, 42));
 			};
-			# Distant low hills
 			renderer->FilledEllipseColor(150, 212, 120, 12, Color->New(48, 110, 38));
-			renderer->FilledEllipseColor(320, 210, 90, 10, Color->New(40, 98, 32));
+			renderer->FilledEllipseColor(320, 210, 90,  10, Color->New(40,  98, 32));
 		};
 
-		# Sun or moon hint at top
-		if(<>is_forest) {
-			renderer->FilledCircleColor(380, 40, 22, Color->New(240, 220, 120, 80));
-			renderer->FilledCircleColor(380, 40, 16, Color->New(255, 240, 160, 140));
-		};
+		# Atmospheric fog
+		fog_a := is_forest ? 65 : 28;
+		fog_c : Color;
+		if(is_forest) { fog_c := Color->New(15, 30, 15, fog_a); }
+		else           { fog_c := Color->New(200, 220, 180, fog_a); };
+		renderer->BoxColor(15, 200, 429, 222, fog_c);
 
-		# Atmospheric fog at ground level
-		fog_c := is_forest ? Color->New(15, 30, 15, 60) : Color->New(200, 220, 180, 30);
-		renderer->BoxColor(15, 200, 429, 220, fog_c);
+		# Weather particles over the encounter scene
+		if(weather >= 1) {
+			# Wind streaks
+			wa := weather = 2 ? 90 : 55;
+			for(wi := 0; wi < 25; wi += 1;) {
+				wx := (frame * 2 + wi * 31) % 414 + 15;
+				wy := (frame + wi * 17) % 200 + 10;
+				renderer->LineColor(wx, wy, wx + 8, wy + 3, Color->New(210, 225, 240, wa));
+			};
+		};
+		if(weather = 2) {
+			# Rain streaks
+			for(ri := 0; ri < 35; ri += 1;) {
+				rx := (frame * 3 + ri * 23) % 414 + 15;
+				ry := (frame * 9 + ri * 41) % 296 + 7;
+				renderer->LineColor(rx, ry, rx + 3, ry + 10, Color->New(140, 170, 215, 155));
+			};
+			# Puddle ripples on ground
+			for(pi := 0; pi < 4; pi += 1;) {
+				px := 40 + pi * 95;
+				ripple := (frame / 8 + pi * 3) % 5;
+				renderer->CircleColor(px, 295, ripple * 3, Color->New(100, 140, 200, 80));
+			};
+		};
 	}
 
 	method : RenderDungeon(frame_count : Int) ~ Nil {
