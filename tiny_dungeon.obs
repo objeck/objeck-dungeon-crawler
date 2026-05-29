@@ -1182,6 +1182,37 @@ class TinyDungeon {
 		};
 	}
 
+	method : SetSpeechWrapped(text : String, color : Color) ~ Nil {
+		if(text = Nil | text->IsEmpty()) { return; };
+		max_len := 52;
+		sz := text->Size();
+		if(sz <= max_len) {
+			@castle_speech->RenderedText(text, color);
+			@castle_speech2->RenderedText("", Color->New(0, 0, 0));
+			return;
+		};
+		# Find last space at or before max_len
+		bp := max_len;
+		found := false;
+		i := max_len < sz ? max_len : sz - 1;
+		while(i > 10 & <>found) {
+			ch := text->SubString(i, 1);
+			if(ch <> Nil & ch->Equals(" ")) { bp := i; found := true; };
+			i -= 1;
+		};
+		line1 := text->SubString(0, bp);
+		rest_start := bp + 1;
+		rest_len := sz - rest_start;
+		if(line1 <> Nil) { @castle_speech->RenderedText(line1->Trim(), color); };
+		if(rest_len > 0) {
+			line2 := text->SubString(rest_start, rest_len);
+			if(line2 <> Nil) { @castle_speech2->RenderedText(line2->Trim(), color); };
+		}
+		else {
+			@castle_speech2->RenderedText("", Color->New(0, 0, 0));
+		};
+	}
+
 	method : CastleSpeakLord() ~ Nil {
 		@castle_state := 1;
 		# Check if boss defeated — different speech
@@ -1189,10 +1220,10 @@ class TinyDungeon {
 			# Player has likely cleared the dungeon — offer reward speech
 			reward := DungeonAI->GetTownMsg("lord_reward");
 			if(reward <> Nil) {
-				@castle_speech->RenderedText(reward, Color->New(255, 220, 100));
+				SetSpeechWrapped(reward, Color->New(255, 220, 100));
 			}
 			else {
-				@castle_speech->RenderedText("You have saved the realm! Malachar is defeated!", Color->New(255, 220, 100));
+				SetSpeechWrapped("You have saved the realm! Malachar is defeated!", Color->New(255, 220, 100));
 			};
 			@castle_speech2->RenderedText("The kingdom is in your debt.", Color->New(200, 185, 140));
 			# Gift boat if player doesn't have one
@@ -1204,10 +1235,10 @@ class TinyDungeon {
 		else {
 			speech := DungeonAI->GetTownMsg("lord_speech");
 			if(speech <> Nil) {
-				@castle_speech->RenderedText(speech, Color->New(220, 200, 140));
+				SetSpeechWrapped(speech, Color->New(220, 200, 140));
 			}
 			else {
-				@castle_speech->RenderedText("Brave adventurer — only you can stop Malachar!", Color->New(220, 200, 140));
+				SetSpeechWrapped("Brave adventurer — only you can stop Malachar!", Color->New(220, 200, 140));
 			};
 			threat := DungeonAI->GetWorldThreat();
 			if(threat <> Nil) {
@@ -1222,7 +1253,7 @@ class TinyDungeon {
 			@castle_speech2->RenderedText("", Color->New(0, 0, 0));
 		}
 		else {
-			@castle_speech->RenderedText("Prove yourself by defeating Malachar first.", Color->New(255, 160, 80));
+			SetSpeechWrapped("Prove yourself by defeating Malachar first.", Color->New(255, 160, 80));
 			@castle_speech2->RenderedText("Return victorious and a boat shall be yours.", Color->New(180, 155, 115));
 		};
 		@castle_state := 1;

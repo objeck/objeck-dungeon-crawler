@@ -172,6 +172,33 @@ class WorldGen {
 		PlaceTile(map, OverworldTile->TOWN, 14, 50, 14, 50, t1[0], t1[1], @castle_pos[0], @castle_pos[1], t2);
 		@town_pos[1, 0] := t2[0]; @town_pos[1, 1] := t2[1];
 
+		# Pass 7: guarantee dungeon approach — clear mountains only (sea preserved for coastline)
+		# Clear 5-tile radius around dungeon of any blocking mountains
+		dr := @dungeon_pos[0]; dc := @dungeon_pos[1];
+		for(r := dr - 5; r <= dr + 2; r += 1;) {
+			for(c := dc - 5; c <= dc + 2; c += 1;) {
+				if(r > 0 & r < 63 & c > 0 & c < 63) {
+					if(map[r, c] = OverworldTile->MOUNTAIN) {
+						map[r, c] := OverworldTile->GRASS;
+					};
+				};
+			};
+		};
+		# Clear L-shaped path from player start to dungeon (mountains only)
+		sr := dr - 3; sc := dc - 3;
+		if(sr < 2) { sr := 2; };
+		if(sc < 2) { sc := 2; };
+		for(rr := sr; rr <= dr; rr += 1;) {
+			if(rr > 0 & rr < 63 & sc > 0 & sc < 63) {
+				if(map[rr, sc] = OverworldTile->MOUNTAIN) { map[rr, sc] := OverworldTile->GRASS; };
+			};
+		};
+		for(cc := sc; cc <= dc; cc += 1;) {
+			if(dr > 0 & dr < 63 & cc > 0 & cc < 63) {
+				if(map[dr, cc] = OverworldTile->MOUNTAIN) { map[dr, cc] := OverworldTile->GRASS; };
+			};
+		};
+
 		return map;
 	}
 
