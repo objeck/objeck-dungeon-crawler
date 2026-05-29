@@ -716,8 +716,8 @@ class TinyDungeon {
 	method : OverworldCheckEvent() ~ Nil {
 		evt := @overworld_manager->GetEvent(@ow_player_r, @ow_player_c);
 		if(evt = OverworldEvent->DUNGEON) {
-			# descend into Greyhold
-			@came_from_overworld := true;
+			# descend into Greyhold — NOT a surface encounter; player stays underground
+			@came_from_overworld := false;
 			@game_state := 0;
 			@current_floor := 1;
 			StartLevel(0);
