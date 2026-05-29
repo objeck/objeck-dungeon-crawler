@@ -2205,10 +2205,18 @@ class TinyDungeon {
 	        		    };
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_UP) {
-	        			StartLevel(1);
+	        			StartLevel(1);      # LATTER_UP = descend deeper
 	        		}
 	        		else if(@view_type = MapManager->Type->LATTER_DOWN) {
-	        			StartLevel(-1);
+	        			if(@current_floor <= 1) {
+	        				# Floor 1 staircase up = exit to overworld
+	        				@game_state := 3;
+	        				@ai_text->RenderedText("You ascend to the surface...", Color->New(200, 220, 180));
+	        				@ai_timer := 140;
+	        			}
+	        			else {
+	        				StartLevel(-1);     # LATTER_DOWN = ascend one floor
+	        			};
 	        		}
 					else if(@view_type = MapManager->Type->END) {
 						if(@current_floor >= @max_floors & @monster = Nil) {
@@ -3544,6 +3552,15 @@ class TinyDungeon {
 		}
 		else if(@puzzle_active) {
 			@hud_hint_text->RenderedText("[Arrows/D-Pad] Match sequence  [ESC] Cancel", hint_clr);
+		}
+		else if(@view_type = MapManager->Type->LATTER_DOWN & @current_floor <= 1) {
+			@hud_hint_text->RenderedText("[SPC/E] Ascend to surface", Color->New(180, 220, 160));
+		}
+		else if(@view_type = MapManager->Type->LATTER_DOWN) {
+			@hud_hint_text->RenderedText("[SPC/E] Climb up one floor", hint_clr);
+		}
+		else if(@view_type = MapManager->Type->LATTER_UP) {
+			@hud_hint_text->RenderedText("[SPC/E] Descend deeper", hint_clr);
 		}
 		else {
 			@hud_hint_text->RenderedText("[W/S] Move  [A/D] Turn  [E/RB] Read  [P/Y] Potion  [F1] Search", hint_clr);

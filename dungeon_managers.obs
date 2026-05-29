@@ -348,12 +348,25 @@ class MapManager from Manager {
 			map[end_y, end_x] := Type->END;
 		};
 
-		# place ladder back up (on floors 1+, near the start)
-		if(floor > 0) {
+		# place surface/up ladder near entrance on EVERY floor
+		# (floor 0 = Floor 1 = exits to overworld; floor 1+ = exits to previous floor)
+		placed := 0; attempts := 0;
+		while(placed < 1 & attempts < 60) {
+			ry := Int->Random(1, 5);
+			rx := Int->Random(1, 5);
+			if(map[ry, rx] = Type->OPEN) {
+				map[ry, rx] := Type->LATTER_DOWN;
+				placed += 1;
+			};
+			attempts += 1;
+		};
+
+		# place 1 extra "emergency exit" ladder mid-dungeon on deeper floors
+		if(floor >= 1) {
 			placed := 0; attempts := 0;
-			while(placed < 1 & attempts < 50) {
-				ry := Int->Random(1, 4);
-				rx := Int->Random(1, 4);
+			while(placed < 1 & attempts < 60) {
+				ry := Int->Random(sz / 3, sz * 2 / 3);
+				rx := Int->Random(sz / 3, sz * 2 / 3);
 				if(map[ry, rx] = Type->OPEN) {
 					map[ry, rx] := Type->LATTER_DOWN;
 					placed += 1;
