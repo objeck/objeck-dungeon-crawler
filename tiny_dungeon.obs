@@ -188,7 +188,9 @@ class TinyDungeon {
 	@castle_speech2 : TextSprite;
 
 	# --- Vehicles ---
-	@has_boat : Bool;
+	@has_boat    : Bool;
+	@has_airship : Bool;
+	@in_airship  : Bool;   # currently flying
 
 	# --- Overworld ---
 	@overworld_manager   : OverworldManager;
@@ -734,12 +736,16 @@ class TinyDungeon {
 			EnterCastle();
 			return;
 		};
+		if(evt = OverworldEvent->SKYPORT) {
+			EnterSkyport();
+			return;
+		};
 
-		# random encounter on GRASS/FOREST
+		# random encounter on GRASS/FOREST (balanced rates)
 		tile := @overworld_manager->GetTile(@ow_player_r, @ow_player_c);
 		rate := 0;
-		if(tile = OverworldTile->FOREST) { rate := 18; }
-		else if(tile = OverworldTile->GRASS) { rate := 7; };
+		if(tile = OverworldTile->FOREST) { rate := 12; }   # was 18 — 1-in-8 steps
+		else if(tile = OverworldTile->GRASS) { rate := 6; };  # was 7 — 1-in-17 steps
 		if(rate > 0 & @monster = Nil & Int->Random(99) < rate) {
 			@came_from_overworld := true;
 			@current_floor := 1;
@@ -1343,17 +1349,65 @@ class TinyDungeon {
 		@framework->Show();
 	}
 
+	method : EnterSkyport() ~ Nil {
+		if(@player = Nil) { return; };
+		if(@in_airship) {
+			@in_airship := false;
+			@ai_text->RenderedText("Airship docked at skyport.", Color->New(140, 200, 255));
+			@ai_timer := 110;
+			SaveGame();
+			return;
+		};
+		if(@has_airship) {
+			@in_airship := true;
+			@ai_text->RenderedText("You board the airship. The sky awaits!", Color->New(140, 200, 255));
+			@ai_timer := 120;
+			return;
+		};
+		# Purchase
+		airship_cost := 500;
+		if(@player->GetGold() >= airship_cost) {
+			@player->AddGold(-airship_cost);
+			@has_airship := true;
+			@in_airship := true;
+			msg := DungeonAI->IsReady() ? DungeonAI->GetCached("airship_bought") : Nil;
+			if(msg = Nil) {
+				@ai_text->RenderedText("Airship purchased! The sky is yours!", Color->New(140, 200, 255));
+			}
+			else {
+				@ai_text->RenderedText(msg, Color->New(140, 200, 255));
+			};
+			@ai_timer := 140;
+			if(DungeonAI->IsReady()) {
+				DungeonAI->PostRequest("airship_bought",
+					"An adventurer just bought an airship. ONE excited exclamation, max 9 words. No quotes.");
+			};
+			SaveGame();
+		}
+		else {
+			remaining := airship_cost - @player->GetGold();
+			@ai_text->RenderedText("An airship is 500g. You need {$remaining}g more.", Color->New(200, 160, 80));
+			@ai_timer := 120;
+		};
+	}
+
 	method : SaveGame() ~ Nil {
 		if(@player = Nil) { return; };
 
 		builder := JsonBuilder->New();
 		builder->PushObject();
-		builder->Insert("version", 1);
-		builder->Insert("floor", @current_floor);
-		builder->Insert("loc_row", @player_location[0]);
-		builder->Insert("loc_col", @player_location[1]);
-		builder->Insert("dir", @player_direction->As(Int));
-		builder->Insert("kills", @monsters_killed);
+		builder->Insert("version",    1);
+		builder->Insert("floor",      @current_floor);
+		builder->Insert("loc_row",    @player_location[0]);
+		builder->Insert("loc_col",    @player_location[1]);
+		builder->Insert("dir",        @player_direction->As(Int));
+		builder->Insert("kills",      @monsters_killed);
+		# Overworld state
+		builder->Insert("in_dungeon",  @game_state = 0);
+		builder->Insert("ow_r",        @ow_player_r);
+		builder->Insert("ow_c",        @ow_player_c);
+		builder->Insert("has_boat",    @has_boat);
+		builder->Insert("has_airship", @has_airship);
 
 		builder->PushObject("player");
 		builder->Insert("class_id", @player->GetClassId());
@@ -1418,6 +1472,19 @@ class TinyDungeon {
 		@player_location[0] := row_elem->GetInt();
 		@player_location[1] := col_elem->GetInt();
 		@monsters_killed := kills_elem = Nil ? 0 : kills_elem->GetInt();
+
+		# Overworld state
+		in_dungeon_e  := root->Get("in_dungeon");
+		ow_r_e        := root->Get("ow_r");
+		ow_c_e        := root->Get("ow_c");
+		has_boat_e    := root->Get("has_boat");
+		has_air_e     := root->Get("has_airship");
+		@has_boat    := has_boat_e <> Nil & has_boat_e->GetBool();
+		@has_airship := has_air_e  <> Nil & has_air_e->GetBool();
+		@in_airship  := false;  # never resume mid-flight
+		if(ow_r_e <> Nil) { @ow_player_r := ow_r_e->GetInt(); };
+		if(ow_c_e <> Nil) { @ow_player_c := ow_c_e->GetInt(); };
+		@was_in_dungeon := in_dungeon_e <> Nil & in_dungeon_e->GetBool();
 
 		# restore player
 		class_id := class_elem->GetInt();
@@ -1503,6 +1570,8 @@ class TinyDungeon {
 
 		return true;
 	}
+
+	@was_in_dungeon : Bool;   # used during LoadGame to route to correct state
 
 	method : GetPlayerClassName() ~ String {
 		if(@player = Nil) { return "Adventurer"; };
@@ -1595,7 +1664,9 @@ class TinyDungeon {
 			}
 			else if(code = Scancode->SDL_SCANCODE_C & @title_has_save) {
 				if(LoadGame()) {
-					@game_state := 0;
+					# Route to dungeon or overworld based on where save was made
+					if(@was_in_dungeon) { @game_state := 0; }
+					else                { @game_state := 3; };
 				};
 			}
 			else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
@@ -1653,8 +1724,35 @@ class TinyDungeon {
 
 		# --- Overworld input ---
 		if(@game_state = 3) {
-			if(@ow_move_cooldown > 0) { return; };
 			code := e->GetKey()->GetKeysym()->GetScancode();
+			# SPACE/E: toggle airship boarding/landing
+			if(code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_E) {
+				if(@in_airship) {
+					# Land only on passable ground tiles
+					curr := @overworld_manager->GetTile(@ow_player_r, @ow_player_c);
+					can_land := @overworld_manager->IsPassable(@ow_player_r, @ow_player_c) &
+					            curr <> OverworldTile->DEEP_SEA & curr <> OverworldTile->SHALLOW_SEA;
+					if(can_land) {
+						@in_airship := false;
+						@ai_text->RenderedText("Airship moored. You touch down.", Color->New(140, 200, 255));
+						@ai_timer := 110;
+					}
+					else {
+						@ai_text->RenderedText("Find land to disembark.", Color->New(200, 180, 100));
+						@ai_timer := 80;
+					};
+				}
+				else if(@has_airship) {
+					@in_airship := true;
+					@ai_text->RenderedText("You soar into the sky!", Color->New(140, 200, 255));
+					@ai_timer := 100;
+				}
+				else {
+					OverworldCheckEvent();   # interact with underlying tile
+				};
+				return;
+			};
+			if(@ow_move_cooldown > 0) { return; };
 			dr := 0; dc := 0;
 			if(code = Scancode->SDL_SCANCODE_UP    | code = Scancode->SDL_SCANCODE_W) { dr := -1; }
 			else if(code = Scancode->SDL_SCANCODE_DOWN  | code = Scancode->SDL_SCANCODE_S) { dr :=  1; }
@@ -1664,12 +1762,14 @@ class TinyDungeon {
 				nr := @ow_player_r + dr; nc := @ow_player_c + dc;
 				sea := @overworld_manager->GetTile(nr, nc);
 				boat_ok := @has_boat & (sea = OverworldTile->SHALLOW_SEA | sea = OverworldTile->DEEP_SEA);
-				if(@overworld_manager->IsPassable(nr, nc) | boat_ok) {
+				air_ok  := @in_airship;
+				if(@overworld_manager->IsPassable(nr, nc) | boat_ok | air_ok) {
 					@ow_player_r := nr; @ow_player_c := nc;
 					@ow_last_dr := dr; @ow_last_dc := dc;
 					@ow_step_count += 1;
-					@ow_move_cooldown := 6;
-					OverworldCheckEvent();
+					@ow_move_cooldown := @in_airship ? 3 : 6;
+					if(<>@in_airship) { OverworldCheckEvent(); };
+					if(@ow_step_count % 20 = 0 & @player <> Nil) { SaveGame(); };
 				};
 			};
 			return;
@@ -2039,7 +2139,7 @@ class TinyDungeon {
 	        			if(<>@monster->IsAlive()) {
 							# monster defeated
 							xp_reward := @monster->GetWinExp();
-							gold_reward := Int->Random(0, 2) * 10 + @current_floor * 5;
+							gold_reward := Int->Random(1, 3) * 8 + @current_floor * 6;
 							was_boss := @monster->IsBoss();
 							@monsters_killed += 1;
 
@@ -2126,7 +2226,7 @@ class TinyDungeon {
 	        		}
 	        		else if(@view_type = MapManager->Type->LOOT) {
 	        			# mimic chance: 15% on floor 2+, the chest fights back!
-	        			if(@current_floor >= 2 & Int->Random(99) < 15 & @monster = Nil) {
+	        			if(@current_floor >= 2 & Int->Random(99) < 10 & @monster = Nil) {
 	        				fl := @current_floor;
 	        				@monster := Monster->CreateByFloor("Mimic", fl, 16 + fl * 4, 14, 10, 10, 36.0 + fl->As(Float) * 4.0, 16.0 + fl->As(Float) * 3.0, 25 + fl * 5, false);
 	        				@monster_sprint_index := MonsterID->MIMIC;
@@ -2531,7 +2631,7 @@ class TinyDungeon {
 
 				if(<>@monster->IsAlive()) {
 					xp_reward := @monster->GetWinExp();
-					gold_reward := Int->Random(0, 2) * 10 + @current_floor * 5;
+					gold_reward := Int->Random(1, 3) * 8 + @current_floor * 6;
 					was_boss := @monster->IsBoss();
 					@monsters_killed += 1;
 					leveled_up := @player->AddXP(xp_reward);
@@ -2725,12 +2825,14 @@ class TinyDungeon {
 				nr := @ow_player_r + dr; nc := @ow_player_c + dc;
 				sea := @overworld_manager->GetTile(nr, nc);
 				boat_ok := @has_boat & (sea = OverworldTile->SHALLOW_SEA | sea = OverworldTile->DEEP_SEA);
-				if(@overworld_manager->IsPassable(nr, nc) | boat_ok) {
+				air_ok  := @in_airship;
+				if(@overworld_manager->IsPassable(nr, nc) | boat_ok | air_ok) {
 					@ow_player_r := nr; @ow_player_c := nc;
 					@ow_last_dr := dr; @ow_last_dc := dc;
 					@ow_step_count += 1;
-					@ow_move_cooldown := 6;
-					OverworldCheckEvent();
+					@ow_move_cooldown := @in_airship ? 3 : 6;
+					if(<>@in_airship) { OverworldCheckEvent(); };
+					if(@ow_step_count % 20 = 0 & @player <> Nil) { SaveGame(); };
 				};
 			};
 			return;
@@ -3240,8 +3342,8 @@ class TinyDungeon {
 			return;
 		};
 
-		# encounter chance increases with floor depth
-		enc_chance := 10 + @current_floor * 2;
+		# encounter chance increases with floor depth — 9/11/13/15% across F1-F4
+		enc_chance := 7 + @current_floor * 2;
 		if(<>OnItem() & @monster = Nil & Int->Random(99) < enc_chance) {
 			roll := Int->Random(99);
 			fl := @current_floor;
@@ -3467,7 +3569,7 @@ class TinyDungeon {
 			wn := DungeonAI->IsWorldReady() ? DungeonAI->GetWorldName() : @ow_world_name;
 			hp  := @player <> Nil ? @player->GetHp()    : 0;
 			mhp := @player <> Nil ? @player->GetMaxHp() : 1;
-			@overworld_manager->Render(@ow_player_r, @ow_player_c, frame_count, wn, hp, mhp, @ow_step_count, @ow_last_dr, @ow_last_dc);
+			@overworld_manager->Render(@ow_player_r, @ow_player_c, frame_count, wn, hp, mhp, @ow_step_count, @ow_last_dr, @ow_last_dc, @in_airship);
 			return;
 		};
 

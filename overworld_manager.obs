@@ -296,9 +296,10 @@ class OverworldManager {
 
 	method : public : Render(player_r : Int, player_c : Int, frame : Int,
 	                         world_name : String, hp : Int, max_hp : Int,
-	                         step_count : Int, last_dr : Int, last_dc : Int) ~ Nil {
+	                         step_count : Int, last_dr : Int, last_dc : Int,
+	                         in_airship : Bool) ~ Nil {
 		@renderer->Render(@tiles, player_r, player_c, frame, world_name, hp, max_hp,
-		                  step_count, last_dr, last_dc);
+		                  step_count, last_dr, last_dc, in_airship);
 	}
 }
 
@@ -440,7 +441,8 @@ class OverworldRenderer {
 
 	method : public : Render(tiles : Byte[,], player_r : Int, player_c : Int, frame : Int,
 	                         world_name : String, hp : Int, max_hp : Int,
-	                         step_count : Int, last_dr : Int, last_dc : Int) ~ Nil {
+	                         step_count : Int, last_dr : Int, last_dc : Int,
+	                         in_airship : Bool) ~ Nil {
 		@framework->SetClearColor(Color->New(10, 8, 20));
 		@framework->Clear();
 		TickWeather(frame);
@@ -466,15 +468,20 @@ class OverworldRenderer {
 		# Clouds above everything
 		DrawClouds();
 
-		# Player
+		# Player / Airship
 		ppx := (player_c - cam_c) * OW->TILE_SIZE;
 		ppy := (player_r - cam_r) * OW->TILE_SIZE;
-		DrawPlayer(ppx, ppy, frame, step_count, last_dr, last_dc);
+		if(in_airship) {
+			DrawAirship(ppx, ppy, frame);
+		}
+		else {
+			DrawPlayer(ppx, ppy, frame, step_count, last_dr, last_dc);
+		};
 
 		# Weather particles on top
 		DrawWeatherFX();
 
-		DrawHUD(world_name, player_r, player_c, hp, max_hp);
+		DrawHUD(world_name, player_r, player_c, hp, max_hp, in_airship);
 
 		@framework->Show();
 	}
@@ -668,24 +675,61 @@ class OverworldRenderer {
 		@renderer->LineColor(cx + 5, cy - 22, cx + 8, cy - 20, Color->New(190, 160, 40));
 	}
 
+	method : DrawAirship(px : Int, py : Int, frame : Int) ~ Nil {
+		cx := px + 12; cy := py + 10;
+
+		# Ground shadow (indicates altitude)
+		@renderer->FilledEllipseColor(cx, py + 22, 9, 3, Color->New(0, 0, 0, 40));
+
+		# Balloon envelope (main gas bag)
+		@renderer->FilledEllipseColor(cx, cy - 5, 11, 8, Color->New(165, 50, 28));
+		@renderer->FilledEllipseColor(cx, cy - 5, 9,  6, Color->New(195, 68, 40));
+		# Panel seams on balloon
+		@renderer->VlineColor(cx - 4, cy - 12, cy + 1, Color->New(110, 32, 18));
+		@renderer->VlineColor(cx + 4, cy - 12, cy + 1, Color->New(110, 32, 18));
+		@renderer->HLineColor(cx - 9, cx + 9, cy - 5, Color->New(110, 32, 18));
+
+		# Suspension ropes
+		@renderer->LineColor(cx - 4, cy + 1, cx - 4, cy + 5, Color->New(90, 65, 30));
+		@renderer->LineColor(cx + 4, cy + 1, cx + 4, cy + 5, Color->New(90, 65, 30));
+
+		# Gondola (passenger cabin)
+		@renderer->BoxColor(cx - 5, cy + 4, cx + 5, cy + 10, Color->New(105, 80, 50));
+		@renderer->BoxColor(cx - 4, cy + 5, cx + 4, cy + 9,  Color->New(125, 95, 60));
+		# Porthole window
+		@renderer->FilledCircleColor(cx, cy + 7, 2, Color->New(180, 210, 240));
+		@renderer->CircleColor(cx, cy + 7, 2, Color->New(70, 55, 35));
+
+		# Animated propellers (sine rotation)
+		prop_s := (Float->Sin(frame->As(Float) * 0.35) * 5.0)->As(Int);
+		prop_c2 := (Float->Sin(frame->As(Float) * 0.35 + 1.57) * 5.0)->As(Int);
+		# Left propeller
+		@renderer->LineColor(cx - 10, cy + 6 - prop_s, cx - 10, cy + 6 + prop_s, Color->New(150, 140, 120));
+		@renderer->LineColor(cx - 10 - prop_c2, cy + 6, cx - 10 + prop_c2, cy + 6, Color->New(150, 140, 120));
+		@renderer->FilledCircleColor(cx - 10, cy + 6, 2, Color->New(80, 75, 65));
+		# Right propeller (opposite phase)
+		@renderer->LineColor(cx + 10, cy + 6 + prop_s, cx + 10, cy + 6 - prop_s, Color->New(150, 140, 120));
+		@renderer->LineColor(cx + 10 - prop_c2, cy + 6, cx + 10 + prop_c2, cy + 6, Color->New(150, 140, 120));
+		@renderer->FilledCircleColor(cx + 10, cy + 6, 2, Color->New(80, 75, 65));
+	}
+
 	method : DrawHUD(world_name : String, player_r : Int, player_c : Int,
-	                 hp : Int, max_hp : Int) ~ Nil {
+	                 hp : Int, max_hp : Int, in_airship : Bool) ~ Nil {
 		@renderer->BoxColor(0, OW->HUD_Y, 768, 512, Color->New(12, 10, 22));
 		@renderer->HLineColor(0, 768, OW->HUD_Y,     Color->New(60, 50, 100));
 		@renderer->HLineColor(0, 768, OW->HUD_Y + 1, Color->New(40, 32, 72));
 
-		# Layout: LEFT = world+weather | CENTER = coords | RIGHT = HP
-		# Two rows, each element in its own column/row slot — no overlap
 		base := OW->HUD_Y + 6;
 
-		# Left col: world name row1, weather row2
+		# Left col: world name row1, weather/airship row2
 		wn := world_name = Nil ? "World of Greyhold" : world_name;
 		@hud_name->RenderedText(wn, Color->New(200, 175, 90));
 		@hud_name->Render(10, base);
 
 		weather_lbl : String;
 		weather_clr : Color;
-		if(@weather = 2)      { weather_lbl := "Rain";  weather_clr := Color->New(100, 150, 220); }
+		if(in_airship) { weather_lbl := "Airborne";  weather_clr := Color->New(140, 200, 255); }
+		else if(@weather = 2)      { weather_lbl := "Rain";  weather_clr := Color->New(100, 150, 220); }
 		else if(@weather = 1) { weather_lbl := "Windy"; weather_clr := Color->New(180, 200, 220); }
 		else                  { weather_lbl := "Clear"; weather_clr := Color->New(240, 220, 120); };
 		@hud_weather->RenderedText(weather_lbl, weather_clr);
