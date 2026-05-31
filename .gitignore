@@ -1,12 +1,18 @@
+# Build artifacts
 *.obe
 *.obm
+
+# Runtime state
+save.json
+
+# Logs / debug
 *.log
 crash_log.txt
 debug.txt
-save.json
+
+# Screenshots / captures
 .frames/
-stage2_*.py
-tiny_dungeon_original.obs
-tiny_dungeon_original.obe
-tiny_dungeon_fixed.obm
-tiny_dungeon_s0.obm
+
+# Legacy directories (no longer used — kept ignored for local convenience)
+images/
+maps/
