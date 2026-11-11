@@ -1,0 +1,866 @@
+#~
+# Tiny Dungeon: Depths -- the monsters' minds, built on the System.AI library.
+#
+#   brain            how the monster moves                     System.AI class used
+#   ---------------  ----------------------------------------  --------------------
+#   rat              fewest steps to the hero                  BreadthFirst
+#   goblin, skeleton, spider, yeti   a route over the map     AStar
+#   orc              A* to a free square beside the hero, so   AStar
+#                    a pack surrounds you instead of queueing
+#   ghost            a route that may cross walls (a wall      Dijkstra
+#                    costs 3, a floor 1)
+#   archer, mage, imp  a minimax search of a small "duel"      Minimax
+#                    (DgDuel below): shoot, close in, back
+#                    off, blink: it kites you
+#   Orc Warlord      the same duel with a charge and a         Minimax
+#                    roar that summons goblins
+#   Lich King        the duel with bolts, summons, drains      MonteCarloTreeSearch
+#                    and blinks, chosen by playouts
+#
+# The difficulty buys better thinking: deeper minimax, more playouts, a longer
+# memory (monsters that lose sight of you keep coming on Hard and Nightmare).
+#
+# DgDuel is a System.AI.GameState: an abstract picture of one monster against the
+# hero (distance, hit points, cooldowns, helpers). The search plays both sides on
+# that picture; the monster then does the first move of the best line for real.
+~#
+
+use Collection;
+use System.AI;
+
+# the monster's options in the duel
+consts DgDm {
+  SHOOT := 0,
+  APPROACH := 1,
+  RETREAT := 2,
+  MELEE := 3,
+  WAIT := 4,
+  SPECIAL_A := 5,    # Warlord: charge. Mage, Lich: blink
+  SPECIAL_B := 6,    # Warlord, Lich: call for help
+  SPECIAL_C := 7     # Lich: drain life
+}
+
+# the abstract fight. p: 0 monster max hp, 1 hero max hp, 2 shot damage, 3 melee damage,
+# 4 hero melee damage, 5 hero reach, 6 monster range, 7 monster type (0 shooter, 1 mage,
+# 2 warlord, 3 lich), 8 drain damage, 9 hero ranged damage
+class DgDuel implements GameState {
+  @p : Int[];
+  @d : Int;
+  @mhp : Int;
+  @hhp : Int;
+  @cd1 : Int;
+  @cd2 : Int;
+  @cd3 : Int;
+  @mn : Int;
+  @turn : Int;
+  @ply : Int;
+
+  New(p : Int[], d : Int, mhp : Int, hhp : Int, cd1 : Int, cd2 : Int, cd3 : Int, mn : Int, turn : Int, ply : Int) {
+    @p := p;
+    @d := d;
+    @mhp := mhp;
+    @hhp := hhp;
+    @cd1 := cd1;
+    @cd2 := cd2;
+    @cd3 := cd3;
+    @mn := mn;
+    @turn := turn;
+    @ply := ply;
+  }
+
+  method : public : GetMoves() ~ Int[] {
+    if(IsTerminal()) {
+      return Int->New[0];
+    };
+    moves := Int->New[8];
+    n := 0;
+    if(@turn = 0) {
+      t := @p[7];
+      if(@cd1 = 0 & @p[6] > 0 & @d <= @p[6]) {
+        moves[n] := DgDm->SHOOT;
+        n += 1;
+      };
+      if(@d = 1) {
+        moves[n] := DgDm->MELEE;
+        n += 1;
+      };
+      if(@d > 1) {
+        moves[n] := DgDm->APPROACH;
+        n += 1;
+      };
+      if(@d < 9) {
+        moves[n] := DgDm->RETREAT;
+        n += 1;
+      };
+      moves[n] := DgDm->WAIT;
+      n += 1;
+      # specials
+      if(t = 1 & @cd2 = 0 & @d <= 2) {
+        moves[n] := DgDm->SPECIAL_A;
+        n += 1;
+      };
+      if(t = 2 & @cd2 = 0 & @d >= 2 & @d <= 4) {
+        moves[n] := DgDm->SPECIAL_A;
+        n += 1;
+      };
+      if(t = 3 & @cd2 = 0 & @d <= 3) {
+        moves[n] := DgDm->SPECIAL_A;
+        n += 1;
+      };
+      if((t = 2 | t = 3) & @cd3 = 0 & @mn < 4) {
+        moves[n] := DgDm->SPECIAL_B;
+        n += 1;
+      };
+      if(t = 3 & @cd1 = 0 & @d <= 3 & @cd2 = 0) {
+        moves[n] := DgDm->SPECIAL_C;
+        n += 1;
+      };
+    }
+    else {
+      if(@d > 1) {
+        moves[n] := 0;
+        n += 1;
+      };
+      if(@d < 9) {
+        moves[n] := 1;
+        n += 1;
+      };
+      if(@d <= @p[5]) {
+        moves[n] := 2;
+        n += 1;
+      };
+      moves[n] := 3;
+      n += 1;
+    };
+
+    out := Int->New[n];
+    each(i : n) {
+      out[i] := moves[i];
+    };
+    return out;
+  }
+
+  method : public : Apply(move : Int) ~ GameState {
+    d := @d;
+    mhp := @mhp;
+    hhp := @hhp;
+    cd1 := @cd1;
+    cd2 := @cd2;
+    cd3 := @cd3;
+    mn := @mn;
+    if(@turn = 0) {
+      # the monster's move; its cooldowns tick first
+      if(cd1 > 0) { cd1 -= 1; };
+      if(cd2 > 0) { cd2 -= 1; };
+      if(cd3 > 0) { cd3 -= 1; };
+      select(move) {
+        label 0: {
+          hhp -= @p[2];
+          cd1 := 2;
+        }
+        label 1: {
+          d -= 1;
+        }
+        label 2: {
+          d += 1;
+        }
+        label 3: {
+          hhp -= @p[3];
+        }
+        label 5: {
+          t := @p[7];
+          if(t = 2) {
+            d := 1;
+            hhp -= @p[3] * 3 / 2;
+            cd2 := 4;
+          }
+          else {
+            d := 6;
+            cd2 := 4;
+          };
+        }
+        label 6: {
+          mn += 2;
+          cd3 := 7;
+        }
+        label 7: {
+          hhp -= @p[8];
+          mhp := DgUtil->Min(@p[0], mhp + @p[8] / 2);
+          cd2 := 3;
+          cd1 := 2;
+        }
+        other: {
+        }
+      };
+      # helpers nibble at the hero each round
+      hhp -= mn;
+    }
+    else {
+      select(move) {
+        label 0: {
+          d -= 1;
+        }
+        label 1: {
+          d += 1;
+        }
+        label 2: {
+          if(d <= 1 & mn > 0) {
+            mn -= 1;
+          }
+          else if(d <= 1) {
+            mhp -= @p[4];
+          }
+          else {
+            mhp -= @p[9];
+          };
+        }
+        other: {
+        }
+      };
+    };
+
+    if(d < 1) { d := 1; };
+    if(d > 9) { d := 9; };
+    return DgDuel->New(@p, d, mhp, hhp, cd1, cd2, cd3, mn, 1 - @turn, @ply + 1);
+  }
+
+  method : public : IsTerminal() ~ Bool {
+    return @mhp <= 0 | @hhp <= 0 | @ply >= 30;
+  }
+
+  # +1 when the monster has won, -1 when the hero has, otherwise the lead in hit points
+  method : public : Evaluate() ~ Float {
+    if(@hhp <= 0) {
+      return 1.0;
+    };
+    if(@mhp <= 0) {
+      return -1.0;
+    };
+    lead := @mhp->As(Float) / @p[0]->As(Float) - @hhp->As(Float) / @p[1]->As(Float);
+    # a shooter wants distance: out of the hero's reach but within its own
+    bonus := 0.0;
+    if(@d > @p[5] & @d <= @p[6]) {
+      bonus := 0.05;
+    };
+    return lead * 0.85 + bonus;
+  }
+
+  method : public : IsMaximizing() ~ Bool {
+    return @turn = 0;
+  }
+}
+
+# The monsters' turn.
+class DgBrain {
+  # all the monsters act, each at its own speed
+  function : Turn(g : DgGame) ~ Nil {
+    each(i : g->MonSlots()) {
+      if(g->MonKind(i) >= 0 & g->Stat(DgStat->STATE) = 0) {
+        kind := g->MonKind(i);
+        spd := DgData->MonStat(kind, 4);
+        acts := 1;
+        if(spd = 2) {
+          acts := 2;
+        }
+        else if(spd = 0 & g->Stat(DgStat->TURNS) % 2 = 1) {
+          acts := 0;
+        };
+        each(a : acts) {
+          if(g->MonKind(i) >= 0 & g->Stat(DgStat->STATE) = 0) {
+            Act(g, i, a);
+          };
+        };
+      };
+    };
+    g->MonFlashTick();
+  }
+
+  function : Act(g : DgGame, i : Int, round : Int) ~ Nil {
+    kind := g->MonKind(i);
+    hx := g->HeroX();
+    hy := g->HeroY();
+    mx := g->MonX(i);
+    my := g->MonY(i);
+    dist := DgUtil->Cheb(mx, my, hx, hy);
+    sense := DgData->MonStat(kind, 6);
+    lvl := g->Level();
+
+    # cooldowns tick on the first action of the turn
+    if(round = 0) {
+      if(g->MonCd(i) > 0) { g->MonSetCd(i, g->MonCd(i) - 1); };
+      if(g->MonCd2(i) > 0) { g->MonSetCd2(i, g->MonCd2(i) - 1); };
+      if(g->MonRage(i) > 0) { g->MonSetRage(i, g->MonRage(i) - 1); };
+    };
+
+    # asleep: wake when the hero comes close or walks in sight
+    if(<>g->MonAwake(i)) {
+      seen := dist <= sense & lvl->LineClear(mx, my, hx, hy);
+      if(dist <= 2 | (seen & g->Rng()->Chance(45)) | (DgData->IsBoss(kind) & seen)) {
+        g->MonWake(i);
+        if(DgData->IsBoss(kind)) {
+          g->Log("The " + DgData->MonName(kind) + " awakens!");
+          g->Ev(DgEv->ROAR, mx, my, 0, 0);
+        };
+      }
+      else {
+        return;
+      };
+    };
+
+    # awake but far away and out of sight: loiter, unless the difficulty gives it a nose
+    sees := dist <= sense & lvl->LineClear(mx, my, hx, hy);
+    memory := [1, 1, 2, 3];
+    if(<>sees & dist > sense * memory[g->Diff()] / 1) {
+      Wander(g, i, kind);
+      return;
+    };
+    if(<>sees & dist > sense & g->Diff() < 2) {
+      Wander(g, i, kind);
+      return;
+    };
+
+    ai := DgData->MonStat(kind, 5);
+    if(ai = DgAi->TACTICAL | ai = DgAi->BOSS_MINIMAX | ai = DgAi->BOSS_MCTS) {
+      Tactical(g, i, kind, ai, dist, sees);
+      return;
+    };
+
+    # the melee brains: hit when adjacent, otherwise find a way
+    if(dist <= 1) {
+      g->MonsterHits(i, 100);
+      return;
+    };
+
+    if(ai = DgAi->ERRATIC) {
+      if(g->Rng()->Chance(40)) {
+        RandomStep(g, i, true);
+      }
+      else {
+        Greedy(g, i, true);
+      };
+    }
+    else if(ai = DgAi->GREEDY) {
+      Greedy(g, i, false);
+    }
+    else if(ai = DgAi->BFS) {
+      Route(g, i, 0, hx, hy);
+    }
+    else if(ai = DgAi->ASTAR) {
+      # a goblin that is nearly dead runs
+      if(kind = DgMon->GOBLIN & g->MonHp(i) * 100 / g->MonMax(i) < 30 & g->Diff() >= 1) {
+        Retreat(g, i, hx, hy);
+      }
+      else {
+        Route(g, i, 1, hx, hy);
+      };
+    }
+    else if(ai = DgAi->FLANK) {
+      FlankStep(g, i, hx, hy);
+    }
+    else if(ai = DgAi->DIJKSTRA) {
+      GhostStep(g, i, hx, hy);
+    };
+  }
+
+  # ---- moving ----
+
+  function : Wander(g : DgGame, i : Int, kind : Int) ~ Nil {
+    if(g->Rng()->Chance(30)) {
+      RandomStep(g, i, kind = DgMon->BAT);
+    };
+  }
+
+  function : RandomStep(g : DgGame, i : Int, flying : Bool) ~ Nil {
+    start := g->Rng()->Next(4);
+    each(k : 4) {
+      d := (k + start) % 4;
+      dx := 0;
+      dy := 0;
+      if(d = 0) { dx := -1; }
+      else if(d = 1) { dx := 1; }
+      else if(d = 2) { dy := -1; }
+      else { dy := 1; };
+      if(g->MonStep(i, g->MonX(i) + dx, g->MonY(i) + dy, flying)) {
+        return;
+      };
+    };
+  }
+
+  # a step straight at the hero, the longer axis first
+  function : Greedy(g : DgGame, i : Int, flying : Bool) ~ Nil {
+    mx := g->MonX(i);
+    my := g->MonY(i);
+    dx := DgUtil->Sign(g->HeroX() - mx);
+    dy := DgUtil->Sign(g->HeroY() - my);
+    adx := DgUtil->Abs(g->HeroX() - mx);
+    ady := DgUtil->Abs(g->HeroY() - my);
+    if(adx >= ady) {
+      if(dx <> 0 & g->MonStep(i, mx + dx, my, flying)) { return; };
+      if(dy <> 0 & g->MonStep(i, mx, my + dy, flying)) { return; };
+    }
+    else {
+      if(dy <> 0 & g->MonStep(i, mx, my + dy, flying)) { return; };
+      if(dx <> 0 & g->MonStep(i, mx + dx, my, flying)) { return; };
+    };
+    RandomStep(g, i, flying);
+  }
+
+  # one step along a System.AI route (0 breadth first, 1 A*) to a square
+  function : Route(g : DgGame, i : Int, algo : Int, gx : Int, gy : Int) ~ Nil {
+    next := g->PathNext(algo, g->MonX(i), g->MonY(i), gx, gy);
+    if(next >= 0) {
+      nx := next % g->Level()->W();
+      ny := next / g->Level()->W();
+      if(g->MonStep(i, nx, ny, false)) {
+        return;
+      };
+      # something stands in the way: sidestep greedily
+    };
+    Greedy(g, i, false);
+  }
+
+  # an orc heads for the free square beside the hero that is nearest to it, and
+  # prefers one not already taken by another monster: a pack spreads out around you
+  function : FlankStep(g : DgGame, i : Int, hx : Int, hy : Int) ~ Nil {
+    best_x := hx;
+    best_y := hy;
+    best_d := 1000;
+    mx := g->MonX(i);
+    my := g->MonY(i);
+    each(k : 8) {
+      dx := 0;
+      dy := 0;
+      select(k) {
+        label 0: { dx := -1; }
+        label 1: { dx := 1; }
+        label 2: { dy := -1; }
+        label 3: { dy := 1; }
+        label 4: { dx := -1; dy := -1; }
+        label 5: { dx := 1; dy := -1; }
+        label 6: { dx := -1; dy := 1; }
+        other: { dx := 1; dy := 1; }
+      };
+      cx := hx + dx;
+      cy := hy + dy;
+      if(g->Level()->Walkable(cx, cy) & (g->MonAt(cx, cy) < 0 | g->MonAt(cx, cy) = i)) {
+        d := DgUtil->Manhattan(mx, my, cx, cy);
+        if(d < best_d) {
+          best_d := d;
+          best_x := cx;
+          best_y := cy;
+        };
+      };
+    };
+    if(best_x = mx & best_y = my) {
+      return;
+    };
+    Route(g, i, 1, best_x, best_y);
+  }
+
+  # a Dijkstra route over the ghost graph; the ghost glides through stone
+  function : GhostStep(g : DgGame, i : Int, hx : Int, hy : Int) ~ Nil {
+    next := g->PathNext(2, g->MonX(i), g->MonY(i), hx, hy);
+    if(next >= 0) {
+      nx := next % g->Level()->W();
+      ny := next / g->Level()->W();
+      if(g->MonPhase(i, nx, ny)) {
+        return;
+      };
+    };
+  }
+
+  # step to the neighbour farthest from the hero; false when cornered
+  function : Retreat(g : DgGame, i : Int, hx : Int, hy : Int) ~ Bool {
+    mx := g->MonX(i);
+    my := g->MonY(i);
+    best := DgUtil->Manhattan(mx, my, hx, hy);
+    bx := -1;
+    by := -1;
+    each(k : 4) {
+      dx := 0;
+      dy := 0;
+      if(k = 0) { dx := -1; }
+      else if(k = 1) { dx := 1; }
+      else if(k = 2) { dy := -1; }
+      else { dy := 1; };
+      nx := mx + dx;
+      ny := my + dy;
+      if(g->Level()->Walkable(nx, ny) & g->MonAt(nx, ny) < 0 & <>(nx = hx & ny = hy)) {
+        d := DgUtil->Manhattan(nx, ny, hx, hy);
+        if(d > best) {
+          best := d;
+          bx := nx;
+          by := ny;
+        };
+      };
+    };
+    if(bx >= 0) {
+      return g->MonStep(i, bx, by, false);
+    };
+    return false;
+  }
+
+  # ---- the thinkers ----
+
+  function : Tactical(g : DgGame, i : Int, kind : Int, ai : Int, dist : Int, sees : Bool) ~ Nil {
+    hx := g->HeroX();
+    hy := g->HeroY();
+    range := DgData->MonStat(kind, 7);
+    mtype := 0;
+    if(kind = DgMon->MAGE) { mtype := 1; }
+    else if(kind = DgMon->WARLORD) { mtype := 2; }
+    else if(kind = DgMon->LICH) { mtype := 3; };
+
+    # what the duel believes about the hero
+    cls := g->Cls();
+    reach := 1;
+    hranged := 0;
+    if(cls = DgCls->MAGE & g->Stat(DgStat->MP) >= g->SpecialCost()) {
+      reach := 7;
+      hranged := 7 + g->Stat(DgStat->LEVEL) * 2;
+    };
+    mdef := DgData->MonStat(kind, 2);
+    hmelee := DgUtil->Max(1, g->Stat(DgStat->ATK) + g->Stat(DgStat->ATK) / 4 - mdef);
+    atk := g->MonAtk(i);
+    dmg := DgUtil->Max(1, atk - g->Stat(DgStat->DEF) / 2 + 1);
+    p := Int->New[10];
+    p[0] := g->MonMax(i);
+    p[1] := g->Stat(DgStat->MAXHP);
+    p[2] := dmg;
+    p[3] := dmg + 1;
+    p[4] := hmelee;
+    p[5] := reach;
+    p[6] := range;
+    p[7] := mtype;
+    p[8] := dmg + 2;
+    p[9] := hranged;
+
+    d := DgUtil->Min(9, DgUtil->Max(1, dist));
+    state := DgDuel->New(p, d, g->MonHp(i), g->Stat(DgStat->HP), g->MonCd(i), g->MonCd2(i), g->MonRage(i), 0, 0, 0);
+    depth := [2, 4, 6, 7];
+    move := -1;
+    if(ai = DgAi->BOSS_MCTS) {
+      playouts := [60, 200, 500, 1000];
+      mcts := MonteCarloTreeSearch->New(playouts[g->Diff()], 1.2, g->Stat(DgStat->TURNS) + i);
+      move := mcts->FindBestMove(state);
+    }
+    else {
+      searcher := Minimax->New(depth[g->Diff()]);
+      move := searcher->FindBestMove(state);
+    };
+    if(move < 0) {
+      move := DgDm->APPROACH;
+    };
+
+    Execute(g, i, kind, mtype, move, dist, sees, dmg);
+  }
+
+  # do, for real, the first move of the line the search chose
+  function : Execute(g : DgGame, i : Int, kind : Int, mtype : Int, move : Int, dist : Int, sees : Bool, dmg : Int) ~ Nil {
+    hx := g->HeroX();
+    hy := g->HeroY();
+    mx := g->MonX(i);
+    my := g->MonY(i);
+    shot_cd := 2;
+
+    if(move = DgDm->SHOOT) {
+      if(sees) {
+        g->Ev(DgEv->SHOT, mx, my, hx, hy);
+        g->MonsterHits(i, 100);
+        g->MonSetCd(i, shot_cd + 1);
+        return;
+      };
+      Route(g, i, 1, hx, hy);
+    }
+    else if(move = DgDm->MELEE) {
+      if(dist <= 1) {
+        g->MonsterHits(i, 100);
+      }
+      else {
+        Route(g, i, 1, hx, hy);
+      };
+    }
+    else if(move = DgDm->APPROACH) {
+      Route(g, i, 1, hx, hy);
+    }
+    else if(move = DgDm->RETREAT) {
+      if(<>Retreat(g, i, hx, hy)) {
+        # cornered: fight
+        if(dist <= 1) {
+          g->MonsterHits(i, 100);
+        }
+        else if(sees & DgData->MonStat(kind, 7) >= dist & g->MonCd(i) = 0) {
+          g->Ev(DgEv->SHOT, mx, my, hx, hy);
+          g->MonsterHits(i, 100);
+          g->MonSetCd(i, shot_cd + 1);
+        };
+      };
+    }
+    else if(move = DgDm->SPECIAL_A) {
+      if(mtype = 2) {
+        Charge(g, i);
+      }
+      else {
+        Blink(g, i);
+        g->MonSetCd2(i, 5);
+      };
+    }
+    else if(move = DgDm->SPECIAL_B) {
+      if(mtype = 2) {
+        g->Summon(i, DgMon->GOBLIN, 2);
+        g->MonSetRage(i, 9);
+      }
+      else {
+        g->Summon(i, DgMon->SKELETON, 2);
+        g->MonSetRage(i, 8);
+      };
+    }
+    else if(move = DgDm->SPECIAL_C) {
+      if(dist <= 3 & sees) {
+        g->Ev(DgEv->SHOT, mx, my, hx, hy);
+        if(g->MonsterHits(i, 130)) {
+          g->MonHeal(i, dmg / 2 + 1);
+        };
+        g->MonSetCd2(i, 4);
+        g->MonSetCd(i, 3);
+      };
+    };
+    # WAIT does nothing
+  }
+
+  # the Warlord lunges up to three squares and hits hard
+  function : Charge(g : DgGame, i : Int) ~ Nil {
+    each(step : 3) {
+      if(DgUtil->Cheb(g->MonX(i), g->MonY(i), g->HeroX(), g->HeroY()) > 1) {
+        Route(g, i, 1, g->HeroX(), g->HeroY());
+      };
+    };
+    g->Ev(DgEv->ROAR, g->MonX(i), g->MonY(i), 0, 1);
+    if(DgUtil->Cheb(g->MonX(i), g->MonY(i), g->HeroX(), g->HeroY()) <= 1) {
+      g->Log("The Orc Warlord charges!");
+      g->MonsterHits(i, 160);
+    };
+    g->MonSetCd2(i, 5);
+  }
+
+  # vanish and reappear a few squares from the hero
+  function : Blink(g : DgGame, i : Int) ~ Nil {
+    lvl := g->Level();
+    each(attempt : 40) {
+      x := g->HeroX() + g->Rng()->Range(-6, 6);
+      y := g->HeroY() + g->Rng()->Range(-5, 5);
+      d := DgUtil->Cheb(x, y, g->HeroX(), g->HeroY());
+      if(d >= 3 & lvl->Walkable(x, y) & g->MonAt(x, y) < 0 & lvl->Tile(x, y) <> DgTile->SPIKES) {
+        g->Ev(DgEv->BLINK, g->MonX(i), g->MonY(i), 0, 0);
+        g->MonMove(i, x, y);
+        g->Ev(DgEv->BLINK, x, y, 1, 0);
+        return;
+      };
+    };
+  }
+}
+
+# A bot that plays the game: for the demo and for the tests. It looks for the nearest
+# thing worth having, fights what is in the way, drinks a potion when it is hurt, and
+# takes the stairs; it knows where the stairs are (a human has to explore). The route
+# is an AStar over a Graph of the whole floor.
+class DgBot {
+  @g : DgGame;
+  @graph : Graph;
+  @graph_depth : Int;
+  @stuck : Int;
+  @last_x : Int;
+  @last_y : Int;
+
+  New(g : DgGame) {
+    @g := g;
+    @graph_depth := -1;
+  }
+
+  method : BuildGraph() ~ Nil {
+    lvl := @g->Level();
+    w := lvl->W();
+    h := lvl->H();
+    @graph := Graph->New(w * h);
+    each(y : h) {
+      each(x : w) {
+        if(lvl->Passable(x, y)) {
+          if(x + 1 < w & lvl->Passable(x + 1, y)) {
+            @graph->AddEdge(y * w + x, y * w + x + 1, 1.0);
+            @graph->AddEdge(y * w + x + 1, y * w + x, 1.0);
+          };
+          if(y + 1 < h & lvl->Passable(x, y + 1)) {
+            @graph->AddEdge(y * w + x, (y + 1) * w + x, 1.0);
+            @graph->AddEdge((y + 1) * w + x, y * w + x, 1.0);
+          };
+        };
+      };
+    };
+    @graph_depth := @g->Stat(DgStat->DEPTH);
+  }
+
+  # the first step of an A* route to a square: its y * w + x, or -1
+  method : StepToward(gx : Int, gy : Int) ~ Int {
+    lvl := @g->Level();
+    if(@graph_depth <> @g->Stat(DgStat->DEPTH)) {
+      BuildGraph();
+    };
+    w := lvl->W();
+    h := lvl->H();
+    heur := Float->New[w * h];
+    each(y : h) {
+      each(x : w) {
+        heur[y * w + x] := DgUtil->Manhattan(x, y, gx, gy)->As(Float);
+      };
+    };
+    result := AStar->FindPath(@graph, @g->HeroY() * w + @g->HeroX(), gy * w + gx, heur);
+    if(<>result->Found()) {
+      return -1;
+    };
+    path := result->GetPath();
+    if(path->Size() < 2) {
+      return -1;
+    };
+    return path[1];
+  }
+
+  method : Go(cell : Int) ~ Bool {
+    w := @g->Level()->W();
+    dx := cell % w - @g->HeroX();
+    dy := cell / w - @g->HeroY();
+    return @g->Move(dx, dy);
+  }
+
+  # one action; false when it could not do anything
+  method : public : Step() ~ Bool {
+    g := @g;
+    if(g->IsOver()) {
+      return false;
+    };
+    hp_pct := g->Stat(DgStat->HP) * 100 / g->Stat(DgStat->MAXHP);
+
+    # stuck in place: shake loose
+    if(g->HeroX() = @last_x & g->HeroY() = @last_y) {
+      @stuck += 1;
+    }
+    else {
+      @stuck := 0;
+    };
+    @last_x := g->HeroX();
+    @last_y := g->HeroY();
+    if(@stuck > 12) {
+      @stuck := 0;
+      each(k : 8) {
+        if(g->Move(g->Rng()->Range(-1, 1), g->Rng()->Range(-1, 1))) {
+          return true;
+        };
+      };
+      return g->Wait();
+    };
+
+    near := g->NearestVisible(6);
+    adjacent := -1;
+    each(i : g->MonSlots()) {
+      if(g->MonKind(i) >= 0 & DgUtil->Cheb(g->MonX(i), g->MonY(i), g->HeroX(), g->HeroY()) <= 1) {
+        adjacent := i;
+      };
+    };
+
+    # hurt: drink
+    if(hp_pct < 45 & (near >= 0 | hp_pct < 25)) {
+      each(i : g->PackSize()) {
+        if(g->PackKind(i) = DgIt->POTION_HEAL) {
+          return g->UseItem(i);
+        };
+      };
+    };
+
+    # use gear and potions that help
+    each(i : g->PackSize()) {
+      k := g->PackKind(i);
+      if(k = DgIt->WEAPON & g->PackTier(i) > g->Stat(DgStat->WEAPON)) {
+        return g->UseItem(i);
+      };
+      if(k = DgIt->ARMOR & g->PackTier(i) > g->Stat(DgStat->ARMOR)) {
+        return g->UseItem(i);
+      };
+      if(k = DgIt->POTION_STR) {
+        return g->UseItem(i);
+      };
+    };
+    if(g->Stat(DgStat->MP) < g->SpecialCost() & near >= 0) {
+      each(i : g->PackSize()) {
+        if(g->PackKind(i) = DgIt->POTION_MANA & g->Cls() = DgCls->MAGE) {
+          return g->UseItem(i);
+        };
+      };
+    };
+
+    # fight
+    if(near >= 0 & g->Stat(DgStat->MP) >= g->SpecialCost()) {
+      d := DgUtil->Cheb(g->MonX(near), g->MonY(near), g->HeroX(), g->HeroY());
+      if((g->Cls() = DgCls->MAGE & d >= 2) | (g->Cls() = DgCls->ROGUE & d >= 2 & d <= 5) |
+          (g->Cls() = DgCls->WARRIOR & d <= 1)) {
+        if(g->Special()) {
+          return true;
+        };
+      };
+    };
+    if(adjacent >= 0) {
+      return g->Move(g->MonX(adjacent) - g->HeroX(), g->MonY(adjacent) - g->HeroY());
+    };
+
+    # something worth fetching close by? (loot we have seen, not yet taken)
+    target_x := -1;
+    target_y := -1;
+    best := 14;
+    each(i : g->ItemSlots()) {
+      if(g->FloorItemKind(i) >= 0) {
+        ix := g->FloorItemX(i);
+        iy := g->FloorItemY(i);
+        d := DgUtil->Manhattan(ix, iy, g->HeroX(), g->HeroY());
+        if(g->Level()->Seen(ix, iy) > 0 & d < best & g->Level()->Passable(ix, iy)) {
+          best := d;
+          target_x := ix;
+          target_y := iy;
+        };
+      };
+    };
+    if(g->Level()->Dist(g->HeroX(), g->HeroY()) >= 0 & near >= 0 & adjacent < 0 & g->Stat(DgStat->DEPTH) = 8) {
+      target_x := g->MonX(near);
+      target_y := g->MonY(near);
+    };
+
+    # the stairs
+    lvl := g->Level();
+    if(target_x < 0) {
+      target_x := lvl->ExitX();
+      target_y := lvl->ExitY();
+      if(g->HeroX() = target_x & g->HeroY() = target_y) {
+        if(lvl->Tile(target_x, target_y) = DgTile->STAIRS_DOWN) {
+          return g->Descend();
+        };
+        # the throne: wait for the Lich or take his crown
+        return g->Wait();
+      };
+    };
+
+    if(g->MonCount() > 0 & g->Stat(DgStat->DEPTH) = 8 & near < 0) {
+      # seek the Lich
+      each(i : g->MonSlots()) {
+        if(g->MonKind(i) = DgMon->LICH) {
+          target_x := g->MonX(i);
+          target_y := g->MonY(i);
+        };
+      };
+    };
+
+    cell := StepToward(target_x, target_y);
+    if(cell >= 0) {
+      if(Go(cell)) {
+        return true;
+      };
+    };
+    return g->Wait();
+  }
+}

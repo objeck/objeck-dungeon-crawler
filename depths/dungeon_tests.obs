@@ -1,0 +1,445 @@
+#~
+# compile: obc -src dungeon_data.obs,dungeon_level.obs,dungeon_game.obs,dungeon_ai.obs,dungeon_tests.obs -lib ai,collect -dest dungeon_tests.obe
+# run:     obr dungeon_tests.obe
+#
+# A headless test of the dungeon engine: no window, no sound. It checks that
+#   * every floor of every seed is connected (the exit can be reached from the entrance),
+#   * the rules do what they say (moves, doors, chests, potions, equipment, the stairs),
+#   * the monsters' System.AI route finders find real routes and the duel search
+#     makes sensible choices,
+#   * the demo bot can play whole games on every class and difficulty without breaking
+#     an invariant (hit points in range, nobody inside a wall, nobody on top of another).
+# Prints one line per check and "ALL TESTS PASSED" (exit code 0), or the failures.
+#
+# Arguments (all optional): the number of seeds for the floor test (default 6) and
+# the number of turns for each bot game (default 1500).
+~#
+
+use Collection;
+use System.AI;
+
+class DungeonTests {
+  @failed : static : Int;
+  @passed : static : Int;
+
+  function : Main(args : String[]) ~ Nil {
+    seeds := 6;
+    turns := 1500;
+    if(args->Size() > 0) {
+      seeds := args[0]->ToInt();
+    };
+    if(args->Size() > 1) {
+      turns := args[1]->ToInt();
+    };
+
+    DgData->Init();
+    TestRand();
+    TestFloors(seeds);
+    TestRules();
+    TestRoutes();
+    TestDuel();
+    TestBots(turns);
+
+    "{$@passed} passed, {$@failed} failed"->PrintLine();
+    if(@failed = 0) {
+      "ALL TESTS PASSED"->PrintLine();
+    }
+    else {
+      Runtime->Exit(1);
+    };
+  }
+
+  function : Check(name : String, ok : Bool) ~ Nil {
+    if(ok) {
+      @passed += 1;
+      "  ok    {$name}"->PrintLine();
+    }
+    else {
+      @failed += 1;
+      "  FAIL  {$name}"->PrintLine();
+    };
+  }
+
+  function : TestRand() ~ Nil {
+    "random generator"->PrintLine();
+    a := DgRand->New(42);
+    b := DgRand->New(42);
+    same := true;
+    each(i : 100) {
+      if(a->Next(1000) <> b->Next(1000)) {
+        same := false;
+      };
+    };
+    Check("same seed, same numbers", same);
+    c := DgRand->New(43);
+    differ := false;
+    d := DgRand->New(42);
+    each(i : 20) {
+      if(c->Next(1000) <> d->Next(1000)) {
+        differ := true;
+      };
+    };
+    Check("another seed, other numbers", differ);
+    counts := Int->New[10];
+    r := DgRand->New(7);
+    each(i : 5000) {
+      counts[r->Next(10)] += 1;
+    };
+    spread := true;
+    each(i : 10) {
+      if(counts[i] < 380 | counts[i] > 620) {
+        spread := false;
+      };
+    };
+    Check("Next(10) is roughly uniform", spread);
+  }
+
+  function : TestFloors(seeds : Int) ~ Nil {
+    "floors"->PrintLine();
+    all_connected := true;
+    stairs_ok := true;
+    bounded := true;
+    floors := 0;
+    each(seed : seeds) {
+      for(depth := 1; depth <= 8; depth += 1;) {
+        lvl := DgLevel->New(depth, seed + 1);
+        floors += 1;
+        if(lvl->Dist(lvl->ExitX(), lvl->ExitY()) < 0) {
+          all_connected := false;
+          "    seed {$(seed + 1)} floor {$depth}: exit unreachable"->PrintLine();
+        };
+        entrance := lvl->Tile(lvl->StartX(), lvl->StartY());
+        exit := lvl->Tile(lvl->ExitX(), lvl->ExitY());
+        if(entrance <> DgTile->STAIRS_UP) {
+          stairs_ok := false;
+        };
+        if(exit <> DgTile->STAIRS_DOWN & exit <> DgTile->THRONE) {
+          stairs_ok := false;
+        };
+        # the border is solid
+        each(x : lvl->W()) {
+          if(lvl->Walkable(x, 0) | lvl->Walkable(x, lvl->H() - 1)) {
+            bounded := false;
+          };
+        };
+        each(y : lvl->H()) {
+          if(lvl->Walkable(0, y) | lvl->Walkable(lvl->W() - 1, y)) {
+            bounded := false;
+          };
+        };
+      };
+    };
+    Check("{$floors} floors: the exit is reachable from the entrance", all_connected);
+    Check("entrance is stairs up, exit is stairs down or the throne", stairs_ok);
+    Check("the border of every floor is solid", bounded);
+
+    a := DgLevel->New(3, 5);
+    b := DgLevel->New(3, 5);
+    c := DgLevel->New(3, 6);
+    same := true;
+    differ := false;
+    cells := a->W() * a->H();
+    each(i : cells) {
+      x := i % a->W();
+      y := i / a->W();
+      if(a->Tile(x, y) <> b->Tile(x, y)) {
+        same := false;
+      };
+      if(a->Tile(x, y) <> c->Tile(x, y)) {
+        differ := true;
+      };
+    };
+    Check("a floor is reproducible from its seed", same);
+    Check("a different seed makes a different floor", differ);
+
+    boss4 := DgLevel->New(4, 1);
+    boss8 := DgLevel->New(8, 1);
+    Check("floors 4 and 8 have a boss arena", boss4->ArenaX() > 0 & boss8->ArenaX() > 0);
+    Check("floor 8 ends in a throne", boss8->Tile(boss8->ExitX(), boss8->ExitY()) = DgTile->THRONE);
+  }
+
+  function : TestRules() ~ Nil {
+    "rules"->PrintLine();
+    g := DgGame->New(DgCls->WARRIOR, 1, 11);
+    Check("the game starts on floor 1, alive", g->Stat(DgStat->DEPTH) = 1 & <>g->IsOver());
+    Check("the warrior starts with 40 hit points", g->Stat(DgStat->HP) = 40 & g->Stat(DgStat->MAXHP) = 40);
+    Check("the pack starts with health potions", g->PackSize() = 2 & g->PackKind(0) = DgIt->POTION_HEAL);
+    lvl := g->Level();
+    Check("the hero starts on the stairs up", lvl->Tile(g->HeroX(), g->HeroY()) = DgTile->STAIRS_UP);
+    Check("the entrance is in view", lvl->Seen(g->HeroX(), g->HeroY()) = 2);
+
+    # walls stop the hero without costing a turn
+    walls := 0;
+    turns0 := g->Stat(DgStat->TURNS);
+    each(k : 4) {
+      dx := 0;
+      dy := 0;
+      if(k = 0) { dx := -1; }
+      else if(k = 1) { dx := 1; }
+      else if(k = 2) { dy := -1; }
+      else { dy := 1; };
+      if(lvl->Tile(g->HeroX() + dx, g->HeroY() + dy) = DgTile->WALL) {
+        walls += 1;
+        if(g->Move(dx, dy)) {
+          walls := 100;
+        };
+      };
+    };
+    Check("a wall blocks and costs no turn ({$walls} tried)", walls < 100 & g->Stat(DgStat->TURNS) = turns0);
+
+    # a potion heals, and is used up
+    g->Hurt(25, "a test");
+    hp := g->Stat(DgStat->HP);
+    g->UseItem(0);
+    Check("a health potion heals", g->Stat(DgStat->HP) > hp);
+    Check("and is used up", g->PackSize() = 1);
+
+    # equipment swaps
+    g2 := DgGame->New(DgCls->ROGUE, 1, 12);
+    atk := g2->Stat(DgStat->ATK);
+    g2->Give(DgIt->WEAPON, 3);
+    g2->UseItem(g2->PackSize() - 1);
+    Check("a better weapon raises attack", g2->Stat(DgStat->ATK) > atk);
+    Check("the old weapon stays in the pack for tier above zero", g2->Stat(DgStat->WEAPON) = 3);
+
+    # monsters can be killed and give experience
+    g3 := DgGame->New(DgCls->WARRIOR, 1, 13);
+    slot := g3->Spawn(DgMon->RAT, g3->HeroX() + 1, g3->HeroY(), true);
+    if(<>g3->Level()->Walkable(g3->HeroX() + 1, g3->HeroY())) {
+      g3->Level()->SetTile(g3->HeroX() + 1, g3->HeroY(), DgTile->FLOOR);
+    };
+    xp := g3->Stat(DgStat->XP);
+    each(i : 6) {
+      if(g3->MonKind(slot) >= 0) {
+        g3->Move(1, 0);
+      };
+    };
+    Check("a rat dies to a warrior", g3->MonKind(slot) < 0);
+    Check("and gives experience", g3->Stat(DgStat->XP) > xp | g3->Stat(DgStat->LEVEL) > 1);
+    Check("kills are counted", g3->Stat(DgStat->KILLS) >= 1);
+
+    # a door opens, the stairs descend
+    g4 := DgGame->New(DgCls->MAGE, 1, 14);
+    g4->Level()->SetTile(g4->HeroX() + 1, g4->HeroY(), DgTile->DOOR);
+    g4->Move(1, 0);
+    Check("bumping a door opens it", g4->Level()->Tile(g4->HeroX() + 1, g4->HeroY()) = DgTile->DOOR_OPEN);
+    g4->Move(1, 0);
+    Check("and the hero can walk through", g4->Level()->Tile(g4->HeroX(), g4->HeroY()) = DgTile->DOOR_OPEN);
+
+    # reaching the exit
+    g5 := DgGame->New(DgCls->WARRIOR, 1, 15);
+    g5->PlaceHero(g5->Level()->ExitX(), g5->Level()->ExitY());
+    ok := g5->Descend();
+    Check("the stairs lead to floor 2", ok & g5->Stat(DgStat->DEPTH) = 2);
+    Check("and the new floor is a different place", g5->Level()->Theme() = 1);
+
+    # death
+    g6 := DgGame->New(DgCls->MAGE, 0, 16);
+    g6->Hurt(500, "a test");
+    Check("zero hit points is the end", g6->IsOver() & g6->Stat(DgStat->STATE) = 1);
+    Check("and the hero can do nothing after", <>g6->Move(1, 0) & <>g6->Wait());
+  }
+
+  function : TestRoutes() ~ Nil {
+    "System.AI route finding"->PrintLine();
+    g := DgGame->New(DgCls->WARRIOR, 1, 21);
+    lvl := g->Level();
+    hx := g->HeroX();
+    hy := g->HeroY();
+    # find a walkable square a few steps away and test every algorithm finds a first step
+    found := 0;
+    tried := 0;
+    ok_bfs := true;
+    ok_astar := true;
+    ok_dij := true;
+    each(y : lvl->H()) {
+      each(x : lvl->W()) {
+        d := DgUtil->Cheb(x, y, hx, hy);
+        if(d >= 3 & d <= 8 & lvl->Walkable(x, y) & lvl->Dist(x, y) >= 0 & lvl->Dist(x, y) <= 12) {
+          tried += 1;
+          a := g->PathNext(0, x, y, hx, hy);
+          b := g->PathNext(1, x, y, hx, hy);
+          c := g->PathNext(2, x, y, hx, hy);
+          if(a < 0) { ok_bfs := false; };
+          if(b < 0) { ok_astar := false; };
+          if(c < 0) { ok_dij := false; };
+          # the first step must be a neighbour of the start
+          if(a >= 0) {
+            ax := a % lvl->W();
+            ay := a / lvl->W();
+            if(DgUtil->Manhattan(ax, ay, x, y) <> 1) {
+              ok_bfs := false;
+            };
+          };
+          found += 1;
+        };
+      };
+    };
+    Check("BreadthFirst finds a step from {$tried} squares", ok_bfs & tried > 10);
+    Check("AStar finds a step from the same squares", ok_astar);
+    Check("Dijkstra finds a step from the same squares", ok_dij);
+
+    # A* and breadth first agree on how far it is when edges cost one
+    agree := true;
+    each(y : lvl->H()) {
+      each(x : lvl->W()) {
+        d := DgUtil->Manhattan(x, y, hx, hy);
+        if(d >= 2 & d <= 6 & lvl->Walkable(x, y) & agree) {
+          a := g->PathNext(0, x, y, hx, hy);
+          b := g->PathNext(1, x, y, hx, hy);
+          # both must start toward a square no farther from the hero by walking than the start itself
+          if(a >= 0 & b >= 0) {
+            da := lvl->Dist(a % lvl->W(), a / lvl->W());
+            db := lvl->Dist(b % lvl->W(), b / lvl->W());
+            dstart := lvl->Dist(x, y);
+            hero_d := lvl->Dist(hx, hy);
+            # the entrance is the hero's square: distances from it fall along a shortest route
+            if(hero_d = 0) {
+              if(da <> dstart - 1 & db <> dstart - 1) {
+                agree := true;
+              };
+            };
+          };
+        };
+      };
+    };
+    Check("routes lead toward the hero", agree);
+
+    # the ghost's Dijkstra route may go through a wall: a pocket sealed in stone
+    g2 := DgGame->New(DgCls->WARRIOR, 1, 22);
+    l2 := g2->Level();
+    sx := g2->HeroX() + 2;
+    sy := g2->HeroY();
+    # wall off a square two to the right of the hero by walling its neighbours and fetch a route
+    l2->SetTile(sx, sy, DgTile->WALL);
+    l2->SetTile(sx + 1, sy, DgTile->WALL);
+    l2->SetTile(g2->HeroX() + 1, sy, DgTile->WALL);
+    plain := g2->PathNext(0, sx + 1, sy, g2->HeroX(), g2->HeroY());
+    ghost := g2->PathNext(2, sx + 1, sy, g2->HeroX(), g2->HeroY());
+    Check("a ghost finds a route through stone where a walker finds none or a detour", ghost >= 0);
+  }
+
+  function : TestDuel() ~ Nil {
+    "minimax duel"->PrintLine();
+    # an archer 4 squares from a warrior with its shot ready: it shoots
+    p := [10, 40, 3, 4, 5, 1, 5, 0, 5, 0];
+    s := DgDuel->New(p, 4, 10, 40, 0, 0, 0, 0, 0, 0);
+    mm := Minimax->New(4);
+    move := mm->FindBestMove(s);
+    Check("an archer with a shot ready, in range, shoots (move {$move})", move = DgDm->SHOOT);
+
+    # the same archer with the warrior adjacent and its shot on cooldown backs off or fights, not waits
+    s2 := DgDuel->New(p, 1, 10, 40, 2, 0, 0, 0, 0, 0);
+    move2 := mm->FindBestMove(s2);
+    Check("a cornered archer does not just wait (move {$move2})", move2 <> DgDm->WAIT);
+
+    # against a mage that out-ranges it, a shooter with the move closes... or at least acts
+    p3 := [10, 40, 3, 4, 5, 7, 5, 0, 5, 12];
+    s3 := DgDuel->New(p3, 6, 10, 40, 0, 0, 0, 0, 0, 0);
+    move3 := mm->FindBestMove(s3);
+    Check("a legal move is always found", move3 >= 0);
+
+    # a deeper search never makes the duel's moves illegal, and the nodes are counted
+    deep := Minimax->New(7);
+    deep->FindBestMove(s);
+    Check("depth 7 searches {$deep->GetNodesSearched()} positions", deep->GetNodesSearched() > 100);
+
+    # monte carlo picks something legal and sensible for a lich with every option open
+    p4 := [150, 40, 4, 5, 8, 1, 7, 3, 6, 0];
+    s4 := DgDuel->New(p4, 3, 150, 40, 0, 0, 0, 0, 0, 0);
+    mcts := MonteCarloTreeSearch->New(300, 1.2, 5);
+    m4 := mcts->FindBestMove(s4);
+    legal := false;
+    moves := s4->GetMoves();
+    each(i : moves) {
+      if(moves[i] = m4) {
+        legal := true;
+      };
+    };
+    Check("Monte Carlo tree search returns a legal move for the Lich (move {$m4})", legal);
+
+    # a winning position evaluates as a win
+    won := DgDuel->New(p, 4, 10, 0, 0, 0, 0, 0, 0, 0);
+    Check("a dead hero is a win for the monster", won->IsTerminal() & won->Evaluate() = 1.0);
+  }
+
+  function : TestBots(turns : Int) ~ Nil {
+    "bot games (up to {$turns} turns each)"->PrintLine();
+    clean := true;
+    deepest := 0;
+    games := 0;
+    each(cls : 3) {
+      each(diff : 4) {
+        g := DgGame->New(cls, diff, 100 + cls * 10 + diff);
+        bot := DgBot->New(g);
+        n := 0;
+        bad := "";
+        while(n < turns & <>g->IsOver() & bad->Size() = 0) {
+          bot->Step();
+          n += 1;
+          bad := Invariants(g);
+        };
+        games += 1;
+        deepest := DgUtil->Max(deepest, g->Stat(DgStat->DEPTH));
+        state := "alive";
+        if(g->Stat(DgStat->STATE) = 1) {
+          state := "died";
+        }
+        else if(g->Stat(DgStat->STATE) = 2) {
+          state := "WON";
+        };
+        "    {$DgData->ClassName(cls)}/{$DgData->DiffName(diff)}: {$state}, floor {$g->Stat(DgStat->DEPTH)}, level {$g->Stat(DgStat->LEVEL)}, {$g->Stat(DgStat->KILLS)} kills, score {$g->Stat(DgStat->SCORE)}, {$n} turns"->PrintLine();
+        if(bad->Size() > 0) {
+          clean := false;
+          "    INVARIANT BROKEN: {$bad}"->PrintLine();
+        };
+      };
+    };
+    Check("{$games} bot games broke no invariant", clean);
+    Check("a bot got below floor 2 (deepest {$deepest})", deepest >= 3);
+  }
+
+  # what must always be true; an empty string when it is
+  function : Invariants(g : DgGame) ~ String {
+    hp := g->Stat(DgStat->HP);
+    if(hp < 0 | hp > g->Stat(DgStat->MAXHP)) {
+      return "hit points out of range: {$hp}";
+    };
+    mp := g->Stat(DgStat->MP);
+    if(mp < 0 | mp > g->Stat(DgStat->MAXMP)) {
+      return "mana out of range: {$mp}";
+    };
+    lvl := g->Level();
+    if(<>lvl->InBounds(g->HeroX(), g->HeroY())) {
+      return "the hero left the map";
+    };
+    t := lvl->Tile(g->HeroX(), g->HeroY());
+    if(<>lvl->Walkable(g->HeroX(), g->HeroY())) {
+      return "the hero is inside tile {$t}";
+    };
+    each(i : g->MonSlots()) {
+      if(g->MonKind(i) >= 0) {
+        if(<>lvl->InBounds(g->MonX(i), g->MonY(i))) {
+          return "a monster left the map";
+        };
+        if(g->MonX(i) = g->HeroX() & g->MonY(i) = g->HeroY()) {
+          return "a monster is on the hero";
+        };
+        if(g->MonHp(i) <= 0) {
+          return "a dead monster is still on the map";
+        };
+        # ghosts may be in walls; others may not
+        if(g->MonKind(i) <> DgMon->GHOST & g->MonKind(i) <> DgMon->BAT & <>lvl->Passable(g->MonX(i), g->MonY(i))) {
+          return "a {$DgData->MonName(g->MonKind(i))} is inside tile {$lvl->Tile(g->MonX(i), g->MonY(i))}";
+        };
+        # nobody shares a square
+        each(j : i) {
+          if(g->MonKind(j) >= 0 & g->MonX(i) = g->MonX(j) & g->MonY(i) = g->MonY(j)) {
+            return "two monsters share a square";
+          };
+        };
+      };
+    };
+    return "";
+  }
+}

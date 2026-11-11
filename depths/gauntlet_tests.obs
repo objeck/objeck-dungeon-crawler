@@ -1,0 +1,370 @@
+#~
+# compile: obc -src dungeon_data.obs,dungeon_level.obs,dungeon_game.obs,dungeon_ai.obs,gauntlet_game.obs,gauntlet_tests.obs -lib ai,collect -dest gauntlet_tests.obe
+# run:     obr gauntlet_tests.obe
+#
+# A headless test of the Gauntlet engine (GtGame): no window, no sound. It checks the floors
+# (a locked door always has a key to match, the exit can be reached), the rules (shots,
+# generators, doors and keys, food, the draining life force, potions, Death, the exit), and
+# it plays random games for every hero and difficulty, checking after every frame that no
+# hero or walking monster is inside a wall and the counts agree. Exit code 0 on success.
+#
+# Arguments (all optional): the number of seeds for the floor test (default 6) and the
+# number of frames for each random game (default 3000).
+~#
+
+use Collection;
+use System.AI;
+
+class GauntletTests {
+  @failed : static : Int;
+  @passed : static : Int;
+
+  function : Main(args : String[]) ~ Nil {
+    seeds := 6;
+    frames := 3000;
+    if(args->Size() > 0) {
+      seeds := args[0]->ToInt();
+    };
+    if(args->Size() > 1) {
+      frames := args[1]->ToInt();
+    };
+    DgData->Init();
+    TestLevels(seeds);
+    TestRules();
+    TestMonsters();
+    TestGames(frames);
+    "{$@passed} passed, {$@failed} failed"->PrintLine();
+    if(@failed = 0) {
+      "ALL TESTS PASSED"->PrintLine();
+    }
+    else {
+      Runtime->Exit(1);
+    };
+  }
+
+  function : Check(name : String, ok : Bool) ~ Nil {
+    if(ok) {
+      @passed += 1;
+      "  ok    {$name}"->PrintLine();
+    }
+    else {
+      @failed += 1;
+      "  FAIL  {$name}"->PrintLine();
+    };
+  }
+
+  function : CountItems(g : GtGame, kind : Int) ~ Int {
+    n := 0;
+    each(i : g->ItemSlots()) {
+      if(g->ItemKind(i) = kind) {
+        n += 1;
+      };
+    };
+    return n;
+  }
+
+  function : CountDoors(g : GtGame) ~ Int {
+    n := 0;
+    lvl := g->Level();
+    each(y : lvl->H()) {
+      each(x : lvl->W()) {
+        if(lvl->Tile(x, y) = DgTile->DOOR) {
+          n += 1;
+        };
+      };
+    };
+    return n;
+  }
+
+  function : TestLevels(seeds : Int) ~ Nil {
+    "levels"->PrintLine();
+    keys_ok := true;
+    exit_ok := true;
+    gens_ok := true;
+    floors := 0;
+    each(seed : seeds) {
+      for(n := 1; n <= 8; n += 1;) {
+        g := GtGame->New(1, GtCls->WARRIOR, 0, 1, seed + 1);
+        g->StartLevel(n);
+        floors += 1;
+        lvl := g->Level();
+        doors := CountDoors(g);
+        keys := CountItems(g, GtIt->KEY);
+        if(keys < doors) {
+          keys_ok := false;
+          "    seed {$(seed + 1)} level {$n}: {$doors} doors but {$keys} keys"->PrintLine();
+        };
+        if(lvl->Dist(lvl->ExitX(), lvl->ExitY()) < 0) {
+          exit_ok := false;
+        };
+        if(g->GenCount() < 2) {
+          gens_ok := false;
+        };
+      };
+    };
+    Check("{$floors} levels: every locked door has a key to match", keys_ok);
+    Check("the exit is reachable on every level", exit_ok);
+    Check("every level has monster generators", gens_ok);
+  }
+
+  function : TestRules() ~ Nil {
+    "rules"->PrintLine();
+    g := GtGame->New(2, GtCls->ELF, GtCls->WIZARD, 1, 5);
+    Check("two heroes start alive", g->Alive(0) & g->Alive(1));
+    Check("the elf is faster than the wizard's health is high", g->Health(0) = 700 & g->Health(1) = 700);
+
+    # the life force drains
+    h0 := g->Health(0);
+    each(i : 300) {
+      g->Step();
+    };
+    Check("health drains over time ({$h0} to {$g->Health(0)})", g->Health(0) < h0 | <>g->Alive(0));
+
+    # a shot flies and kills a grunt
+    g2 := GtGame->New(1, GtCls->WARRIOR, 0, 1, 6);
+    g2->KillAll();
+    g2->ClearSpace();
+    x := g2->X(0);
+    y := g2->Y(0);
+    m := g2->SpawnMonster(GtMon->GRUNT, x + 40.0, y);
+    g2->Level()->SetTile((x / 16.0)->As(Int) + 1, (y / 16.0)->As(Int), DgTile->FLOOR);
+    g2->Level()->SetTile((x / 16.0)->As(Int) + 2, (y / 16.0)->As(Int), DgTile->FLOOR);
+    g2->Level()->SetTile((x / 16.0)->As(Int) + 3, (y / 16.0)->As(Int), DgTile->FLOOR);
+    each(i : 200) {
+      g2->SetInput(0, 1, 0, true, false);
+      g2->Step();
+    };
+    Check("warrior's axes kill a grunt", g2->MonKind(m) < 0);
+    Check("and score for it", g2->Score(0) >= 30);
+
+    # a locked door opens with a key and not without
+    g3 := GtGame->New(1, GtCls->VALKYRIE, 0, 1, 7);
+    g3->KillAll();
+    g3->ClearSpace();
+    tx := (g3->X(0) / 16.0)->As(Int) + 2;
+    ty := (g3->Y(0) / 16.0)->As(Int);
+    g3->Level()->SetTile(tx - 1, ty, DgTile->FLOOR);
+    g3->Level()->SetTile(tx, ty, DgTile->DOOR);
+    g3->Level()->SetTile(tx + 1, ty, DgTile->FLOOR);
+    g3->GiveKeys(0, 0);
+    each(i : 80) {
+      g3->SetInput(0, 1, 0, false, false);
+      g3->Step();
+    };
+    Check("a locked door stops a hero with no key", g3->Level()->Tile(tx, ty) = DgTile->DOOR);
+    g3->GiveKeys(0, 1);
+    each(i : 40) {
+      g3->SetInput(0, 1, 0, false, false);
+      g3->Step();
+    };
+    Check("and opens for one with a key", g3->Level()->Tile(tx, ty) = DgTile->DOOR_OPEN & g3->Keys(0) = 0);
+
+    # a generator spawns monsters near a hero and can be destroyed by shots
+    g4 := GtGame->New(1, GtCls->ELF, 0, 1, 8);
+    g4->KillAll();
+    g4->ClearSpace();
+    g4->NewGenerator(GtMon->GRUNT, (g4->X(0) / 16.0)->As(Int) + 3, (g4->Y(0) / 16.0)->As(Int));
+    gens := g4->GenCount();
+    each(i : 400) {
+      g4->Step();
+    };
+    Check("a generator near a hero spawns monsters (alive: {$g4->MonCount()})", g4->MonCount() > 0);
+    each(i : 40) {
+      g4->HitGenerator(0, 50);
+    };
+    Check("generators can be destroyed", g4->GenCount() < gens + 1 & g4->GenCount() <= gens);
+
+    # a potion kills what is near, Death included; Death shrugs off shots
+    g5 := GtGame->New(1, GtCls->WIZARD, 0, 1, 9);
+    g5->KillAll();
+    g5->ClearSpace();
+    a := g5->SpawnMonster(GtMon->GHOST, g5->X(0) + 30.0, g5->Y(0));
+    d := g5->SpawnMonster(GtMon->DEATH, g5->X(0) - 20.0, g5->Y(0));
+    g5->HitMonster(d, 100);
+    Check("Death shrugs off a hit", g5->MonKind(d) = GtMon->DEATH);
+    g5->SetInput(0, 0, 0, false, true);
+    g5->Step();
+    Check("a potion kills a ghost", g5->MonKind(a) < 0);
+    Check("a potion kills Death", g5->MonKind(d) < 0);
+    Check("and is used up", g5->Potions(0) = 0);
+
+    # food
+    g6 := GtGame->New(1, GtCls->ELF, 0, 1, 10);
+    g6->KillAll();
+    g6->SetHealth(0, 300);
+    g6->DropItem(GtIt->FOOD, (g6->X(0) / 16.0)->As(Int), (g6->Y(0) / 16.0)->As(Int), 150);
+    g6->Step();
+    Check("food heals", g6->Health(0) >= 440);
+
+    # the exit
+    g7 := GtGame->New(1, GtCls->WARRIOR, 0, 1, 11);
+    g7->KillAll();
+    ex := g7->Level()->ExitX();
+    ey := g7->Level()->ExitY();
+    g7->Teleport(0, (ex * 16 + 8)->As(Float), (ey * 16 + 8)->As(Float));
+    g7->Step();
+    Check("touching the exit clears the level", g7->State() = 2);
+    each(i : 120) {
+      g7->Step();
+    };
+    Check("and the next level begins", g7->LevelNo() = 2 & g7->State() = 0);
+
+    # death of everybody
+    g8 := GtGame->New(1, GtCls->WIZARD, 0, 0, 12);
+    g8->SetHealth(0, 1);
+    each(i : 100) {
+      g8->Step();
+    };
+    Check("a hero out of life force dies and the game ends", g8->State() = 1);
+  }
+
+  function : TestMonsters() ~ Nil {
+    "monsters"->PrintLine();
+    # a grunt finds its way around a wall with A*: build a corridor with a bend
+    g := GtGame->New(1, GtCls->WARRIOR, 0, 1, 31);
+    g->KillAll();
+    g->ClearSpace();
+    lvl := g->Level();
+    hx := (g->X(0) / 16.0)->As(Int);
+    hy := (g->Y(0) / 16.0)->As(Int);
+    # a wall between the hero and a grunt, open above it
+    each(dy : 7) {
+      lvl->SetTile(hx + 2, hy - 3 + dy, DgTile->WALL);
+    };
+    lvl->SetTile(hx + 2, hy - 4, DgTile->FLOOR);
+    lvl->SetTile(hx + 2, hy + 4, DgTile->FLOOR);
+    lvl->SetTile(hx + 3, hy, DgTile->FLOOR);
+    m := g->SpawnMonster(GtMon->GRUNT, ((hx + 3) * 16 + 8)->As(Float), (hy * 16 + 8)->As(Float));
+    best := 100000.0;
+    start := Float->Abs(g->MonX(m) - g->X(0));
+    each(i : 600) {
+      g->SetInput(0, 0, 0, false, false);
+      g->Step();
+      if(g->MonKind(m) >= 0) {
+        d := Float->Abs(g->MonX(m) - g->X(0)) + Float->Abs(g->MonY(m) - g->Y(0));
+        if(d < best) {
+          best := d;
+        };
+      };
+    };
+    Check("a grunt goes around a wall to reach the hero (closest {$best->ToInt()} px)", best < 20.0 | g->Health(0) < 600);
+
+    # a ghost flies through the wall
+    g2 := GtGame->New(1, GtCls->WARRIOR, 0, 1, 32);
+    g2->KillAll();
+    g2->ClearSpace();
+    l2 := g2->Level();
+    hx2 := (g2->X(0) / 16.0)->As(Int);
+    hy2 := (g2->Y(0) / 16.0)->As(Int);
+    l2->SetTile(hx2 + 2, hy2, DgTile->WALL);
+    gh := g2->SpawnMonster(GtMon->GHOST, ((hx2 + 4) * 16 + 8)->As(Float), (hy2 * 16 + 8)->As(Float));
+    crossed := false;
+    each(i : 300) {
+      g2->SetInput(0, 0, 0, false, false);
+      g2->Step();
+      if(g2->MonKind(gh) >= 0 & g2->MonX(gh) < (hx2 + 2) * 16.0) {
+        crossed := true;
+      };
+    };
+    Check("a ghost drifts through a wall", crossed | g2->Health(0) < 500);
+
+    # a demon with the hero in view fires fireballs (the Minimax duel picks SHOOT)
+    g3 := GtGame->New(1, GtCls->WARRIOR, 0, 1, 33);
+    g3->KillAll();
+    g3->ClearSpace();
+    l3 := g3->Level();
+    hx3 := (g3->X(0) / 16.0)->As(Int);
+    hy3 := (g3->Y(0) / 16.0)->As(Int);
+    each(dx : 8) {
+      l3->SetTile(hx3 + dx, hy3, DgTile->FLOOR);
+    };
+    dm := g3->SpawnMonster(GtMon->DEMON, ((hx3 + 5) * 16 + 8)->As(Float), (hy3 * 16 + 8)->As(Float));
+    fired := false;
+    each(i : 400) {
+      g3->SetInput(0, 0, 0, false, false);
+      g3->Step();
+      each(k : g3->EventCount()) {
+        if(g3->Event(k, 0) = GtEv->BALL) {
+          fired := true;
+        };
+      };
+      g3->ClearEvents();
+    };
+    Check("a demon in sight throws fireballs", fired);
+  }
+
+  function : TestGames(frames : Int) ~ Nil {
+    "random games (up to {$frames} frames each)"->PrintLine();
+    clean := true;
+    deepest := 0;
+    games := 0;
+    each(cls : 4) {
+      each(diff : 4) {
+        np := 1;
+        if(cls % 2 = 1) {
+          np := 2;
+        };
+        g := GtGame->New(np, cls, (cls + 2) % 4, diff, 200 + cls * 10 + diff);
+        r := DgRand->New(cls * 7 + diff);
+        bad := "";
+        f := 0;
+        dx := 0;
+        dy := 0;
+        while(f < frames & g->State() <> 1 & g->State() <> 3 & bad->Size() = 0) {
+          if(f % 25 = 0) {
+            dx := r->Range(-1, 1);
+            dy := r->Range(-1, 1);
+          };
+          each(p : np) {
+            g->SetInput(p, dx, dy, f % 3 = 0, f % 500 = 250);
+          };
+          g->Step();
+          g->ClearEvents();
+          f += 1;
+          if(f % 10 = 0) {
+            bad := Invariants(g);
+          };
+        };
+        games += 1;
+        deepest := DgUtil->Max(deepest, g->LevelNo());
+        "    {$GtGame->ClassName(cls)}/{$DgData->DiffName(diff)} x{$np}: state {$g->State()}, level {$g->LevelNo()}, score {$g->TotalScore()}, monsters {$g->MonCount()}, {$f} frames"->PrintLine();
+        if(bad->Size() > 0) {
+          clean := false;
+          "    INVARIANT BROKEN: {$bad}"->PrintLine();
+        };
+      };
+    };
+    Check("{$games} random games broke no invariant", clean);
+  }
+
+  function : Invariants(g : GtGame) ~ String {
+    lvl := g->Level();
+    each(p : g->Players()) {
+      if(g->Health(p) < 0 | g->Health(p) > 999) {
+        return "health out of range";
+      };
+      if(g->Alive(p)) {
+        t := lvl->Tile((g->X(p) / 16.0)->As(Int), (g->Y(p) / 16.0)->As(Int));
+        if(GtGame->SolidTile(t)) {
+          return "a hero is inside tile {$t}";
+        };
+      };
+    };
+    counted := 0;
+    each(m : g->MonSlots()) {
+      if(g->MonKind(m) >= 0) {
+        counted += 1;
+        if(g->MonKind(m) <> GtMon->GHOST) {
+          t := lvl->Tile((g->MonX(m) / 16.0)->As(Int), (g->MonY(m) / 16.0)->As(Int));
+          if(GtGame->SolidTile(t)) {
+            return "a {$GtGame->MonName(g->MonKind(m))} is inside tile {$t}";
+          };
+        };
+      };
+    };
+    if(counted <> g->MonCount()) {
+      return "monster count {$g->MonCount()} but {$counted} alive";
+    };
+    return "";
+  }
+}

@@ -1,0 +1,1337 @@
+#~
+# Tiny Dungeon: Depths -- the rules. One DgGame is a whole run: the hero, the floor
+# he is on, the monsters and items on it, the inventory, the message log, and the
+# list of "things that just happened" (DgEv) that the window turns into pictures
+# and sounds. No window, no sound, so the tests and the demo bot use exactly the
+# rules the player does.
+#
+# The game is turn based: the hero does one thing (Move, Special, UseItem, Wait),
+# and then every monster gets its turn through DgBrain (dungeon_ai.obs).
+#
+# Path finding for the monsters goes through the System.AI library: PathNext builds
+# a Graph of the squares around the hero (a window of 23 x 23) once per turn, and
+# the brain asks it for a route with AStar, BreadthFirst or Dijkstra.
+~#
+
+use Collection;
+use System.AI;
+
+class DgGame {
+  # settings
+  @cls : Int;
+  @diff : Int;
+  @seed : Int;
+  @rng : DgRand;
+  @lvl : DgLevel;
+  @st : Int[];
+
+  # the monsters: parallel arrays, a slot is free when its kind is -1
+  @mkind : Int[];
+  @mx : Int[];
+  @my : Int[];
+  @mhp : Int[];
+  @mmax : Int[];
+  @matk : Int[];
+  @mawake : Int[];
+  @mcd : Int[];
+  @mcd2 : Int[];
+  @mflash : Int[];
+  @mface : Int[];
+  @mact : Int[];
+  @mrage : Int[];
+
+  # items on the floor
+  @ik : Int[];
+  @it : Int[];
+  @ix : Int[];
+  @iy : Int[];
+
+  # the pack
+  @invk : Int[];
+  @invt : Int[];
+  @invn : Int;
+
+  # what happened this turn
+  @ev : Int[];
+  @evn : Int;
+  @log : Vector<String>;
+
+  # the route-finding cache (rebuilt when the hero has moved)
+  @pg_stamp : Int;
+  @pg : Graph;
+  @gg : Graph;
+  @ph : Float[];
+  @ox : Int;
+  @oy : Int;
+  @bosses_dead : Int;
+  @lich_dead : Bool;
+
+  New(cls : Int, diff : Int, seed : Int) {
+    DgData->Init();
+    @cls := cls;
+    @diff := diff;
+    @seed := seed;
+    @rng := DgRand->New(seed);
+    @st := Int->New[DgStat->COUNT];
+    @mkind := Int->New[64];
+    @mx := Int->New[64];
+    @my := Int->New[64];
+    @mhp := Int->New[64];
+    @mmax := Int->New[64];
+    @matk := Int->New[64];
+    @mawake := Int->New[64];
+    @mcd := Int->New[64];
+    @mcd2 := Int->New[64];
+    @mflash := Int->New[64];
+    @mface := Int->New[64];
+    @mact := Int->New[64];
+    @mrage := Int->New[64];
+    @ik := Int->New[64];
+    @it := Int->New[64];
+    @ix := Int->New[64];
+    @iy := Int->New[64];
+    @invk := Int->New[10];
+    @invt := Int->New[10];
+    @ev := Int->New[1000];
+    @log := Vector->New()<String>;
+    @pg_stamp := -1;
+
+    # the three heroes
+    hp := [40, 30, 24];
+    mp := [10, 12, 24];
+    @st[DgStat->CLASS] := cls;
+    @st[DgStat->DIFF] := diff;
+    @st[DgStat->MAXHP] := hp[cls];
+    @st[DgStat->HP] := hp[cls];
+    @st[DgStat->MAXMP] := mp[cls];
+    @st[DgStat->MP] := mp[cls];
+    @st[DgStat->LEVEL] := 1;
+    @st[DgStat->NEXT] := 25;
+    @st[DgStat->DEPTH] := 1;
+    if(cls = DgCls->WARRIOR) {
+      @st[DgStat->WEAPON] := 1;
+      @st[DgStat->ARMOR] := 1;
+    }
+    else if(cls = DgCls->ROGUE) {
+      @st[DgStat->WEAPON] := 0;
+      @st[DgStat->ARMOR] := 1;
+    };
+
+    potions := [3, 2, 1, 1];
+    each(i : potions[diff]) {
+      AddToPack(DgIt->POTION_HEAL, 0);
+    };
+    if(cls = DgCls->MAGE) {
+      AddToPack(DgIt->POTION_MANA, 0);
+    };
+
+    Recompute();
+    StartLevel(1);
+    Log("Welcome, " + DgData->ClassName(cls) + ". Find the Lich King's crown! (H for help)");
+  }
+
+  # ---- what the window may ask ----
+
+  method : public : Stat(id : Int) ~ Int {
+    return @st[id];
+  }
+
+  method : public : Level() ~ DgLevel {
+    return @lvl;
+  }
+
+  method : public : Rng() ~ DgRand {
+    return @rng;
+  }
+
+  method : public : IsOver() ~ Bool {
+    return @st[DgStat->STATE] <> 0;
+  }
+
+  method : public : Cls() ~ Int {
+    return @cls;
+  }
+
+  method : public : Diff() ~ Int {
+    return @diff;
+  }
+
+  method : public : HeroX() ~ Int {
+    return @st[DgStat->X];
+  }
+
+  method : public : HeroY() ~ Int {
+    return @st[DgStat->Y];
+  }
+
+  method : public : MonSlots() ~ Int {
+    return 64;
+  }
+
+  method : public : MonKind(i : Int) ~ Int {
+    return @mkind[i];
+  }
+
+  method : public : MonX(i : Int) ~ Int {
+    return @mx[i];
+  }
+
+  method : public : MonY(i : Int) ~ Int {
+    return @my[i];
+  }
+
+  method : public : MonHp(i : Int) ~ Int {
+    return @mhp[i];
+  }
+
+  method : public : MonMax(i : Int) ~ Int {
+    return @mmax[i];
+  }
+
+  method : public : MonAtk(i : Int) ~ Int {
+    return @matk[i];
+  }
+
+  method : public : MonAwake(i : Int) ~ Bool {
+    return @mawake[i] > 0;
+  }
+
+  method : public : MonWake(i : Int) ~ Nil {
+    @mawake[i] := 1;
+  }
+
+  method : public : MonCd(i : Int) ~ Int {
+    return @mcd[i];
+  }
+
+  method : public : MonSetCd(i : Int, v : Int) ~ Nil {
+    @mcd[i] := v;
+  }
+
+  method : public : MonCd2(i : Int) ~ Int {
+    return @mcd2[i];
+  }
+
+  method : public : MonSetCd2(i : Int, v : Int) ~ Nil {
+    @mcd2[i] := v;
+  }
+
+  method : public : MonFlash(i : Int) ~ Int {
+    return @mflash[i];
+  }
+
+  method : public : MonFlashTick() ~ Nil {
+    each(i : 64) {
+      if(@mflash[i] > 0) {
+        @mflash[i] -= 1;
+      };
+    };
+  }
+
+  method : public : MonFace(i : Int) ~ Int {
+    return @mface[i];
+  }
+
+  method : public : MonRage(i : Int) ~ Int {
+    return @mrage[i];
+  }
+
+  method : public : MonSetRage(i : Int, v : Int) ~ Nil {
+    @mrage[i] := v;
+  }
+
+  # the monster standing on a square, or -1
+  method : public : MonAt(x : Int, y : Int) ~ Int {
+    each(i : 64) {
+      if(@mkind[i] >= 0 & @mx[i] = x & @my[i] = y) {
+        return i;
+      };
+    };
+    return -1;
+  }
+
+  method : public : MonCount() ~ Int {
+    n := 0;
+    each(i : 64) {
+      if(@mkind[i] >= 0) {
+        n += 1;
+      };
+    };
+    return n;
+  }
+
+  method : public : ItemSlots() ~ Int {
+    return 64;
+  }
+
+  method : public : FloorItemKind(i : Int) ~ Int {
+    return @ik[i];
+  }
+
+  method : public : FloorItemTier(i : Int) ~ Int {
+    return @it[i];
+  }
+
+  method : public : FloorItemX(i : Int) ~ Int {
+    return @ix[i];
+  }
+
+  method : public : FloorItemY(i : Int) ~ Int {
+    return @iy[i];
+  }
+
+  method : public : FloorItemAt(x : Int, y : Int) ~ Int {
+    each(i : 64) {
+      if(@ik[i] >= 0 & @ix[i] = x & @iy[i] = y) {
+        return i;
+      };
+    };
+    return -1;
+  }
+
+  method : public : PackSize() ~ Int {
+    return @invn;
+  }
+
+  method : public : PackKind(i : Int) ~ Int {
+    return @invk[i];
+  }
+
+  method : public : PackTier(i : Int) ~ Int {
+    return @invt[i];
+  }
+
+  method : public : EventCount() ~ Int {
+    return @evn;
+  }
+
+  # field 0 kind, 1 x, 2 y, 3 a, 4 b of event i
+  method : public : Event(i : Int, field : Int) ~ Int {
+    return @ev[i * 5 + field];
+  }
+
+  method : public : ClearEvents() ~ Nil {
+    @evn := 0;
+  }
+
+  method : public : LogCount() ~ Int {
+    return @log->Size();
+  }
+
+  method : public : LogLine(i : Int) ~ String {
+    return @log->Get(i);
+  }
+
+  # ---- small helpers ----
+
+  method : public : Log(text : String) ~ Nil {
+    @log->AddBack(text);
+    if(@log->Size() > 60) {
+      @log->Remove(0);
+    };
+  }
+
+  method : public : Ev(kind : Int, x : Int, y : Int, a : Int, b : Int) ~ Nil {
+    if(@evn < 200) {
+      at := @evn * 5;
+      @ev[at] := kind;
+      @ev[at + 1] := x;
+      @ev[at + 2] := y;
+      @ev[at + 3] := a;
+      @ev[at + 4] := b;
+      @evn += 1;
+    };
+  }
+
+  # put something in the pack (a gift from the tests and the console)
+  method : public : Give(kind : Int, tier : Int) ~ Bool {
+    return AddToPack(kind, tier);
+  }
+
+  # end the game by hand (the screenshots use it): 1 dead, 2 won
+  method : public : ForceEnd(state : Int) ~ Nil {
+    @st[DgStat->STATE] := state;
+  }
+
+  # jump to a floor (the screenshots and the tests use it)
+  method : public : Warp(depth : Int) ~ Nil {
+    StartLevel(DgUtil->Clamp(depth, 1, 8));
+  }
+
+  # stand the hero on a square (the tests use it)
+  method : public : PlaceHero(x : Int, y : Int) ~ Nil {
+    @st[DgStat->X] := x;
+    @st[DgStat->Y] := y;
+    @pg_stamp := -1;
+    @lvl->Fov(x, y, 7);
+  }
+
+  method : AddToPack(kind : Int, tier : Int) ~ Bool {
+    if(@invn >= 8) {
+      return false;
+    };
+    @invk[@invn] := kind;
+    @invt[@invn] := tier;
+    @invn += 1;
+    return true;
+  }
+
+  method : RemoveFromPack(i : Int) ~ Nil {
+    for(j := i; j < @invn - 1; j += 1;) {
+      @invk[j] := @invk[j + 1];
+      @invt[j] := @invt[j + 1];
+    };
+    @invn -= 1;
+  }
+
+  # attack and defence from class, gear, strength and level
+  method : Recompute() ~ Nil {
+    base_atk := [4, 3, 2];
+    base_def := [2, 1, 0];
+    @st[DgStat->ATK] := base_atk[@cls] + @st[DgStat->WEAPON] * 2 + 1 + @st[DgStat->STR] + @st[DgStat->LEVEL] / 2;
+    @st[DgStat->DEF] := base_def[@cls] + @st[DgStat->ARMOR] * 2 + @st[DgStat->LEVEL] / 3;
+  }
+
+  method : AddScore(n : Int) ~ Nil {
+    @st[DgStat->SCORE] += n;
+  }
+
+  # ---- floors ----
+
+  method : StartLevel(depth : Int) ~ Nil {
+    @st[DgStat->DEPTH] := depth;
+    @lvl := DgLevel->New(depth, @seed);
+    each(i : 64) {
+      @mkind[i] := -1;
+      @ik[i] := -1;
+    };
+    @pg_stamp := -1;
+    @st[DgStat->X] := @lvl->StartX();
+    @st[DgStat->Y] := @lvl->StartY();
+    Populate();
+    @lvl->Fov(@st[DgStat->X], @st[DgStat->Y], 7);
+    Log("Floor " + depth->ToString() + ": " + DgData->ThemeName(depth - 1));
+    Log(DgData->ThemeFlavor(depth - 1));
+    Ev(DgEv->STAIRS, @st[DgStat->X], @st[DgStat->Y], depth, 0);
+  }
+
+  # scale a monster's hit points for the difficulty and the floor
+  method : ScaledHp(base : Int) ~ Int {
+    pct := [80, 100, 120, 150];
+    f := pct[@diff] + (@st[DgStat->DEPTH] - 1) * 3;
+    return DgUtil->Max(1, base * f / 100);
+  }
+
+  method : ScaledAtk(base : Int) ~ Int {
+    pct := [75, 100, 125, 150];
+    f := pct[@diff] + (@st[DgStat->DEPTH] - 1) * 2;
+    return DgUtil->Max(1, (base * f + 50) / 100);
+  }
+
+  # put a monster of a kind on a square; the slot, or -1 when the floor is full
+  method : public : Spawn(kind : Int, x : Int, y : Int, awake : Bool) ~ Int {
+    each(i : 64) {
+      if(@mkind[i] < 0) {
+        @mkind[i] := kind;
+        @mx[i] := x;
+        @my[i] := y;
+        @mhp[i] := ScaledHp(DgData->MonStat(kind, 0));
+        @mmax[i] := @mhp[i];
+        @matk[i] := ScaledAtk(DgData->MonStat(kind, 1));
+        if(awake) {
+          @mawake[i] := 1;
+        }
+        else {
+          @mawake[i] := 0;
+        };
+        @mcd[i] := 0;
+        @mcd2[i] := 2;
+        @mflash[i] := 0;
+        @mface[i] := 1;
+        @mact[i] := 0;
+        @mrage[i] := 0;
+        return i;
+      };
+    };
+    return -1;
+  }
+
+  method : Populate() ~ Nil {
+    depth := @st[DgStat->DEPTH];
+    pool := DgData->Pool(depth - 1);
+    extra := [-2, 0, 2, 4];
+    count := 6 + depth + extra[@diff];
+    if(@lvl->ArenaX() >= 0) {
+      count := 4 + extra[@diff] / 2;
+    };
+    sleepy := [60, 45, 30, 10];
+    each(i : count) {
+      cell := @lvl->RandomFloor(@rng, 7);
+      if(cell >= 0) {
+        x := cell % @lvl->W();
+        y := cell / @lvl->W();
+        if(MonAt(x, y) < 0) {
+          kind := pool[@rng->Next(pool->Size())];
+          # the deeper floors are tougher: sometimes swap up one row of the pool
+          Spawn(kind, x, y, <>@rng->Chance(sleepy[@diff]));
+        };
+      };
+    };
+
+    # the bosses
+    if(@lvl->ArenaX() >= 0) {
+      boss := DgMon->WARLORD;
+      if(depth = 8) {
+        boss := DgMon->LICH;
+      };
+      Spawn(boss, @lvl->ArenaX(), @lvl->ArenaY(), false);
+    };
+
+    # treasure
+    items := 5 + @rng->Next(4);
+    each(i : items) {
+      cell := @lvl->RandomFloor(@rng, 3);
+      if(cell >= 0) {
+        x := cell % @lvl->W();
+        y := cell / @lvl->W();
+        if(FloorItemAt(x, y) < 0) {
+          DropRandom(x, y);
+        };
+      };
+    };
+  }
+
+  method : PlaceItem(kind : Int, tier : Int, x : Int, y : Int) ~ Bool {
+    each(i : 64) {
+      if(@ik[i] < 0) {
+        @ik[i] := kind;
+        @it[i] := tier;
+        @ix[i] := x;
+        @iy[i] := y;
+        return true;
+      };
+    };
+    return false;
+  }
+
+  # a random thing for this floor
+  method : DropRandom(x : Int, y : Int) ~ Nil {
+    depth := @st[DgStat->DEPTH];
+    roll := @rng->Next(100);
+    kind := DgIt->GOLD;
+    tier := 0;
+    if(roll < 24) {
+      kind := DgIt->GOLD;
+      tier := 5 + @rng->Next(depth * 8 + 10);
+    }
+    else if(roll < 44) {
+      kind := DgIt->POTION_HEAL;
+    }
+    else if(roll < 52) {
+      kind := DgIt->POTION_MANA;
+    }
+    else if(roll < 55) {
+      kind := DgIt->POTION_STR;
+    }
+    else if(roll < 61) {
+      kind := DgIt->SCROLL_TELEPORT;
+    }
+    else if(roll < 66) {
+      kind := DgIt->SCROLL_MAP;
+    }
+    else if(roll < 73) {
+      kind := DgIt->SCROLL_FIRE;
+    }
+    else if(roll < 83) {
+      kind := DgIt->WEAPON;
+      tier := DgUtil->Clamp(1 + @rng->Next(depth / 2 + 2) + @rng->Next(2), 1, 5);
+    }
+    else if(roll < 93) {
+      kind := DgIt->ARMOR;
+      tier := DgUtil->Clamp(1 + @rng->Next(depth / 2 + 2) + @rng->Next(2), 1, 5);
+    }
+    else {
+      kind := DgIt->GEM;
+      tier := 25 + @rng->Next(30);
+    };
+    PlaceItem(kind, tier, x, y);
+  }
+
+  # ---- the hero acts ----
+
+  # the hero's attack roll against a defence
+  method : HeroDamage(mdef : Int) ~ Int {
+    atk := @st[DgStat->ATK];
+    d := atk + @rng->Next(atk / 2 + 1) - mdef;
+    return DgUtil->Max(1, d);
+  }
+
+  method : public : HeroCritChance() ~ Int {
+    if(@cls = DgCls->ROGUE) {
+      return 25;
+    };
+    return 8;
+  }
+
+  # a hit on a monster; returns true when it died
+  method : public : HurtMonster(i : Int, dmg : Int, crit : Bool) ~ Bool {
+    @mhp[i] -= dmg;
+    @mflash[i] := 6;
+    if(DgData->IsBoss(@mkind[i])) {
+      Ev(DgEv->BOSS_HIT, @mx[i], @my[i], dmg, 0);
+    }
+    else {
+      c := 0;
+      if(crit) {
+        c := 1;
+      };
+      Ev(DgEv->HIT_MON, @mx[i], @my[i], dmg, c);
+    };
+    # hitting makes noise: a hurt monster is awake, and so are its neighbours
+    @mawake[i] := 1;
+    if(@mhp[i] <= 0) {
+      KillMonster(i);
+      return true;
+    };
+    # a slime that survives a hit divides
+    if(@mkind[i] = DgMon->SLIME & @mhp[i] >= 4) {
+      half := @mhp[i] / 2;
+      spot := FreeNeighbor(@mx[i], @my[i]);
+      if(spot >= 0) {
+        n := Spawn(DgMon->SLIME, spot % @lvl->W(), spot / @lvl->W(), true);
+        if(n >= 0) {
+          @mhp[n] := half;
+          @mmax[n] := DgUtil->Max(half, 4);
+          @mhp[i] := @mhp[i] - half;
+          Ev(DgEv->SPLIT, @mx[n], @my[n], 0, 0);
+        };
+      };
+    };
+    return false;
+  }
+
+  method : KillMonster(i : Int) ~ Nil {
+    kind := @mkind[i];
+    x := @mx[i];
+    y := @my[i];
+    Ev(DgEv->KILL, x, y, kind, 0);
+    xp := DgData->MonStat(kind, 3);
+    Log("The " + DgData->MonName(kind) + " dies. (+" + xp->ToString() + " xp)");
+    @mkind[i] := -1;
+    @st[DgStat->KILLS] += 1;
+    AddScore(xp * 4);
+    AddXp(xp);
+
+    # what it drops
+    if(kind = DgMon->LICH) {
+      PlaceItem(DgIt->CROWN, 0, x, y);
+      @lich_dead := true;
+      Log("The Lich King crumbles. His crown glitters on the stones!");
+    }
+    else if(kind = DgMon->WARLORD) {
+      PlaceItem(DgIt->WEAPON, 3, x, y);
+      s := FreeNeighbor(x, y);
+      if(s >= 0) {
+        PlaceItem(DgIt->POTION_HEAL, 0, s % @lvl->W(), s / @lvl->W());
+      };
+      Log("The Warlord falls! The stairs down are open.");
+    }
+    else if(FloorItemAt(x, y) < 0) {
+      if(@rng->Chance(35)) {
+        PlaceItem(DgIt->GOLD, 3 + @rng->Next(@st[DgStat->DEPTH] * 6 + 8), x, y);
+      }
+      else if(@rng->Chance(10)) {
+        DropRandom(x, y);
+      };
+    };
+  }
+
+  method : AddXp(n : Int) ~ Nil {
+    @st[DgStat->XP] += n;
+    while(@st[DgStat->XP] >= @st[DgStat->NEXT]) {
+      @st[DgStat->XP] -= @st[DgStat->NEXT];
+      @st[DgStat->LEVEL] += 1;
+      @st[DgStat->NEXT] := @st[DgStat->LEVEL] * 25;
+      hp := [8, 6, 4];
+      mp := [2, 3, 5];
+      @st[DgStat->MAXHP] += hp[@cls];
+      @st[DgStat->MAXMP] += mp[@cls];
+      @st[DgStat->HP] := DgUtil->Min(@st[DgStat->MAXHP], @st[DgStat->HP] + @st[DgStat->MAXHP] / 2);
+      @st[DgStat->MP] := DgUtil->Min(@st[DgStat->MAXMP], @st[DgStat->MP] + @st[DgStat->MAXMP] / 2);
+      Recompute();
+      Ev(DgEv->LEVELUP, HeroX(), HeroY(), @st[DgStat->LEVEL], 0);
+      Log("You reach level " + @st[DgStat->LEVEL]->ToString() + "!");
+      AddScore(@st[DgStat->LEVEL] * 20);
+    };
+  }
+
+  # an empty walkable square next to a square, or -1
+  method : public : FreeNeighbor(x : Int, y : Int) ~ Int {
+    start := @rng->Next(8);
+    each(k : 8) {
+      d := (k + start) % 8;
+      dx := 0;
+      dy := 0;
+      select(d) {
+        label 0: { dx := -1; }
+        label 1: { dx := 1; }
+        label 2: { dy := -1; }
+        label 3: { dy := 1; }
+        label 4: { dx := -1; dy := -1; }
+        label 5: { dx := 1; dy := -1; }
+        label 6: { dx := -1; dy := 1; }
+        other: { dx := 1; dy := 1; }
+      };
+      nx := x + dx;
+      ny := y + dy;
+      if(@lvl->Walkable(nx, ny) & MonAt(nx, ny) < 0 & <>(nx = HeroX() & ny = HeroY())) {
+        return ny * @lvl->W() + nx;
+      };
+    };
+    return -1;
+  }
+
+  # try a step (dx, dy); true when the hero used a turn
+  method : public : Move(dx : Int, dy : Int) ~ Bool {
+    if(IsOver()) {
+      return false;
+    };
+    nx := HeroX() + dx;
+    ny := HeroY() + dy;
+    m := MonAt(nx, ny);
+    if(m >= 0) {
+      Attack(m);
+      EndTurn();
+      return true;
+    };
+
+    t := @lvl->Tile(nx, ny);
+    if(t = DgTile->DOOR) {
+      @lvl->SetTile(nx, ny, DgTile->DOOR_OPEN);
+      Ev(DgEv->DOOR, nx, ny, 0, 0);
+      EndTurn();
+      return true;
+    };
+    if(t = DgTile->CHEST) {
+      OpenChest(nx, ny);
+      EndTurn();
+      return true;
+    };
+    if(t = DgTile->SHRINE) {
+      UseShrine(nx, ny);
+      EndTurn();
+      return true;
+    };
+    if(t = DgTile->WATER) {
+      Log("The water is too deep.");
+      return false;
+    };
+    if(t = DgTile->LAVA) {
+      Log("Lava! Not that way.");
+      return false;
+    };
+    if(<>@lvl->Walkable(nx, ny)) {
+      return false;
+    };
+
+    @st[DgStat->X] := nx;
+    @st[DgStat->Y] := ny;
+    @st[DgStat->FACE] := dx;
+    Ev(DgEv->STEP, nx, ny, dx, dy);
+    if(t = DgTile->SPIKES) {
+      dmg := 2 + @st[DgStat->DEPTH];
+      Hurt(dmg, "spikes");
+      Ev(DgEv->TRAP, nx, ny, dmg, 0);
+      Log("Spikes! You lose " + dmg->ToString() + " hit points.");
+    };
+    PickUp();
+    EndTurn();
+    return true;
+  }
+
+  method : public : Wait() ~ Bool {
+    if(IsOver()) {
+      return false;
+    };
+    EndTurn();
+    return true;
+  }
+
+  method : Attack(m : Int) ~ Nil {
+    kind := @mkind[m];
+    mdef := DgData->MonStat(kind, 2);
+    @mawake[m] := 1;
+    dmg := HeroDamage(mdef);
+    crit := @rng->Chance(HeroCritChance());
+    if(crit) {
+      dmg := dmg * 2;
+    };
+    name := DgData->MonName(kind);
+    if(crit) {
+      Log("Critical! You hit the " + name + " for " + dmg->ToString() + ".");
+    }
+    else {
+      Log("You hit the " + name + " for " + dmg->ToString() + ".");
+    };
+    HurtMonster(m, dmg, crit);
+  }
+
+  # damage to the hero; the game ends at zero
+  method : public : Hurt(dmg : Int, by : String) ~ Nil {
+    @st[DgStat->HP] -= dmg;
+    if(@st[DgStat->HP] <= 0 & @st[DgStat->STATE] = 0) {
+      @st[DgStat->HP] := 0;
+      @st[DgStat->STATE] := 1;
+      Log("You are slain by " + by + ". Final score: " + @st[DgStat->SCORE]->ToString() + ".");
+      Ev(DgEv->DEAD, HeroX(), HeroY(), 0, 0);
+    };
+  }
+
+  # called by the brain when a monster hits the hero: false when dodged
+  method : public : MonsterHits(i : Int, mult_pct : Int) ~ Bool {
+    dodge := 8;
+    if(@cls = DgCls->ROGUE) {
+      dodge := 22;
+    };
+    if(@rng->Chance(dodge)) {
+      Ev(DgEv->MISS, HeroX(), HeroY(), 0, 0);
+      Log("The " + DgData->MonName(@mkind[i]) + " misses you.");
+      return false;
+    };
+    base := @matk[i] - @st[DgStat->DEF] / 2 + @rng->Next(3);
+    dmg := DgUtil->Max(1, base * mult_pct / 100);
+    Ev(DgEv->HIT_HERO, HeroX(), HeroY(), dmg, 0);
+    Log("The " + DgData->MonName(@mkind[i]) + " hits you for " + dmg->ToString() + ".");
+    Hurt(dmg, "a " + DgData->MonName(@mkind[i]));
+    if(@mkind[i] = DgMon->SPIDER & @rng->Chance(50) & @st[DgStat->STATE] = 0) {
+      @st[DgStat->POISON] += 4;
+      Ev(DgEv->POISON, HeroX(), HeroY(), 0, 0);
+      Log("You are poisoned!");
+    };
+    return true;
+  }
+
+  # ---- specials ----
+
+  method : public : SpecialCost() ~ Int {
+    cost := [5, 5, 6];
+    return cost[@cls];
+  }
+
+  method : public : Special() ~ Bool {
+    if(IsOver()) {
+      return false;
+    };
+    if(@st[DgStat->MP] < SpecialCost()) {
+      Log("Not enough " + ManaWord() + " for " + DgData->ClassSpecial(@cls) + ".");
+      return false;
+    };
+    ok := false;
+    if(@cls = DgCls->WARRIOR) {
+      ok := Whirlwind();
+    }
+    else if(@cls = DgCls->ROGUE) {
+      ok := ShadowStrike();
+    }
+    else {
+      ok := Fireball();
+    };
+    if(ok) {
+      @st[DgStat->MP] -= SpecialCost();
+      EndTurn();
+    };
+    return ok;
+  }
+
+  method : public : ManaWord() ~ String {
+    if(@cls = DgCls->WARRIOR) {
+      return "rage";
+    };
+    if(@cls = DgCls->ROGUE) {
+      return "focus";
+    };
+    return "mana";
+  }
+
+  method : Whirlwind() ~ Bool {
+    hit := 0;
+    each(dy : 3) {
+      each(dx : 3) {
+        if(dx <> 1 | dy <> 1) {
+          m := MonAt(HeroX() + dx - 1, HeroY() + dy - 1);
+          if(m >= 0) {
+            dmg := HeroDamage(DgData->MonStat(@mkind[m], 2)) * 3 / 2 + 1;
+            HurtMonster(m, dmg, false);
+            hit += 1;
+          };
+        };
+      };
+    };
+    if(hit = 0) {
+      Log("Nothing within reach of your blade.");
+      return false;
+    };
+    Ev(DgEv->SLASH, HeroX(), HeroY(), 1, 0);
+    Log("Whirlwind! You cut down all around you.");
+    return true;
+  }
+
+  # the nearest awake-or-not monster in line of sight within a range, or -1
+  method : public : NearestVisible(range : Int) ~ Int {
+    best := -1;
+    best_d := 1000;
+    each(i : 64) {
+      if(@mkind[i] >= 0) {
+        d := DgUtil->Cheb(HeroX(), HeroY(), @mx[i], @my[i]);
+        if(d <= range & d < best_d & @lvl->LineClear(HeroX(), HeroY(), @mx[i], @my[i])) {
+          best := i;
+          best_d := d;
+        };
+      };
+    };
+    return best;
+  }
+
+  method : ShadowStrike() ~ Bool {
+    m := NearestVisible(5);
+    if(m < 0) {
+      Log("No target in sight.");
+      return false;
+    };
+    spot := FreeNeighbor(@mx[m], @my[m]);
+    if(spot < 0) {
+      Log("No room to strike.");
+      return false;
+    };
+    ox := HeroX();
+    oy := HeroY();
+    @st[DgStat->X] := spot % @lvl->W();
+    @st[DgStat->Y] := spot / @lvl->W();
+    Ev(DgEv->BLINK, ox, oy, 0, 0);
+    Ev(DgEv->SLASH, @mx[m], @my[m], 0, 0);
+    dmg := HeroDamage(0) * 3 + 2;
+    Log("Shadow Strike! You appear behind the " + DgData->MonName(@mkind[m]) + " for " + dmg->ToString() + ".");
+    HurtMonster(m, dmg, true);
+    PickUp();
+    return true;
+  }
+
+  method : Fireball() ~ Bool {
+    m := NearestVisible(7);
+    if(m < 0) {
+      Log("No target in sight.");
+      return false;
+    };
+    cx := @mx[m];
+    cy := @my[m];
+    Ev(DgEv->SHOT, HeroX(), HeroY(), cx, cy);
+    Ev(DgEv->FIREBALL, cx, cy, 1, 0);
+    power := 7 + @st[DgStat->LEVEL] * 2 + @rng->Next(4);
+    Log("Fireball! The flames roar for " + power->ToString() + ".");
+    each(i : 64) {
+      if(@mkind[i] >= 0 & DgUtil->Cheb(cx, cy, @mx[i], @my[i]) <= 1) {
+        d := power;
+        if(@mx[i] <> cx | @my[i] <> cy) {
+          d := power * 2 / 3;
+        };
+        HurtMonster(i, DgUtil->Max(1, d - DgData->MonStat(@mkind[i], 2) / 2), false);
+      };
+    };
+    return true;
+  }
+
+  # ---- picking things up, chests, shrines ----
+
+  method : PickUp() ~ Nil {
+    i := FloorItemAt(HeroX(), HeroY());
+    if(i < 0) {
+      return;
+    };
+    kind := @ik[i];
+    tier := @it[i];
+    if(kind = DgIt->GOLD) {
+      @st[DgStat->GOLD] += tier;
+      AddScore(tier);
+      @ik[i] := -1;
+      Ev(DgEv->PICKUP, HeroX(), HeroY(), kind, tier);
+      Log("You pick up " + tier->ToString() + " gold.");
+    }
+    else if(kind = DgIt->GEM) {
+      @st[DgStat->GEMS] += 1;
+      AddScore(tier * 4);
+      @ik[i] := -1;
+      Ev(DgEv->PICKUP, HeroX(), HeroY(), kind, tier);
+      Log("A gem! Worth " + (tier * 4)->ToString() + " points.");
+    }
+    else if(kind = DgIt->CROWN) {
+      @ik[i] := -1;
+      AddScore(5000 + @st[DgStat->HP] * 20);
+      @st[DgStat->STATE] := 2;
+      Ev(DgEv->PICKUP, HeroX(), HeroY(), kind, 0);
+      Ev(DgEv->WON, HeroX(), HeroY(), 0, 0);
+      Log("You take the Lich King's crown. The dungeon is yours!");
+    }
+    else if(AddToPack(kind, tier)) {
+      @ik[i] := -1;
+      Ev(DgEv->PICKUP, HeroX(), HeroY(), kind, tier);
+      Log("You pick up the " + DgData->ItemName(kind, tier) + ".");
+    }
+    else {
+      Log("Your pack is full. (Use something first.)");
+    };
+  }
+
+  method : OpenChest(x : Int, y : Int) ~ Nil {
+    @lvl->SetTile(x, y, DgTile->CHEST_OPEN);
+    Ev(DgEv->CHEST, x, y, 0, 0);
+    Log("You pry open the chest...");
+    AddScore(25);
+    each(n : 2) {
+      DropRandom(x, y);
+      if(n = 0) {
+        # a second item goes beside the chest
+        s := FreeNeighbor(x, y);
+        if(s >= 0) {
+          DropRandomAt(s % @lvl->W(), s / @lvl->W());
+        };
+      };
+    };
+    # the chest holds what DropRandom put on its square; a chest also always has gold
+    if(FloorItemAt(x, y) >= 0 & @ik[FloorItemAt(x, y)] <> DgIt->GOLD) {
+      s := FreeNeighbor(x, y);
+      if(s >= 0) {
+        PlaceItem(DgIt->GOLD, 10 + @rng->Next(@st[DgStat->DEPTH] * 10 + 10), s % @lvl->W(), s / @lvl->W());
+      };
+    };
+  }
+
+  method : DropRandomAt(x : Int, y : Int) ~ Nil {
+    if(FloorItemAt(x, y) < 0) {
+      DropRandom(x, y);
+    };
+  }
+
+  method : UseShrine(x : Int, y : Int) ~ Nil {
+    @lvl->SetTile(x, y, DgTile->SHRINE_USED);
+    Ev(DgEv->SHRINE, x, y, 0, 0);
+    Ev(DgEv->HEAL, HeroX(), HeroY(), @st[DgStat->MAXHP] - @st[DgStat->HP], 0);
+    @st[DgStat->HP] := @st[DgStat->MAXHP];
+    @st[DgStat->MP] := @st[DgStat->MAXMP];
+    @st[DgStat->POISON] := 0;
+    AddScore(30);
+    Log("The shrine glows. You feel whole again.");
+  }
+
+  # ---- the pack ----
+
+  method : public : UseItem(i : Int) ~ Bool {
+    if(IsOver() | i < 0 | i >= @invn) {
+      return false;
+    };
+    kind := @invk[i];
+    tier := @invt[i];
+    if(kind = DgIt->POTION_HEAL) {
+      amount := DgUtil->Max(15, @st[DgStat->MAXHP] / 2);
+      got := DgUtil->Min(amount, @st[DgStat->MAXHP] - @st[DgStat->HP]);
+      @st[DgStat->HP] += got;
+      @st[DgStat->POISON] := 0;
+      Ev(DgEv->HEAL, HeroX(), HeroY(), got, 0);
+      Log("You drink a health potion (+" + got->ToString() + ").");
+    }
+    else if(kind = DgIt->POTION_MANA) {
+      amount := DgUtil->Max(10, @st[DgStat->MAXMP] / 2);
+      @st[DgStat->MP] := DgUtil->Min(@st[DgStat->MAXMP], @st[DgStat->MP] + amount);
+      Ev(DgEv->MAGIC, HeroX(), HeroY(), 0, 0);
+      Log("You drink a mana potion.");
+    }
+    else if(kind = DgIt->POTION_STR) {
+      @st[DgStat->STR] += 1;
+      Recompute();
+      Ev(DgEv->MAGIC, HeroX(), HeroY(), 1, 0);
+      Log("Your muscles swell. Attack is now " + @st[DgStat->ATK]->ToString() + ".");
+    }
+    else if(kind = DgIt->SCROLL_TELEPORT) {
+      Teleport();
+    }
+    else if(kind = DgIt->SCROLL_MAP) {
+      @lvl->RevealAll();
+      Ev(DgEv->MAGIC, HeroX(), HeroY(), 2, 0);
+      Log("The map unrolls in your mind.");
+    }
+    else if(kind = DgIt->SCROLL_FIRE) {
+      ScrollOfFire();
+    }
+    else if(kind = DgIt->WEAPON) {
+      old := @st[DgStat->WEAPON];
+      @st[DgStat->WEAPON] := tier;
+      Log("You wield the " + DgData->WeaponName(tier) + ".");
+      @invt[i] := old;
+      if(old = 0) {
+        RemoveFromPack(i);
+      };
+      Recompute();
+      EndTurn();
+      return true;
+    }
+    else if(kind = DgIt->ARMOR) {
+      old := @st[DgStat->ARMOR];
+      @st[DgStat->ARMOR] := tier;
+      Log("You put on the " + DgData->ArmorName(tier) + ".");
+      @invt[i] := old;
+      if(old = 0) {
+        RemoveFromPack(i);
+      };
+      Recompute();
+      EndTurn();
+      return true;
+    }
+    else {
+      return false;
+    };
+    RemoveFromPack(i);
+    EndTurn();
+    return true;
+  }
+
+  method : Teleport() ~ Nil {
+    cell := @lvl->RandomFloor(@rng, 4);
+    if(cell >= 0 & MonAt(cell % @lvl->W(), cell / @lvl->W()) < 0) {
+      Ev(DgEv->TELEPORT, HeroX(), HeroY(), 0, 0);
+      @st[DgStat->X] := cell % @lvl->W();
+      @st[DgStat->Y] := cell / @lvl->W();
+      Ev(DgEv->TELEPORT, HeroX(), HeroY(), 1, 0);
+      Log("The world lurches. You are elsewhere.");
+      PickUp();
+    }
+    else {
+      Log("The scroll fizzles.");
+    };
+  }
+
+  method : ScrollOfFire() ~ Nil {
+    power := 10 + @st[DgStat->DEPTH] * 2;
+    hit := 0;
+    each(i : 64) {
+      if(@mkind[i] >= 0 & @lvl->Seen(@mx[i], @my[i]) = 2) {
+        Ev(DgEv->FIREBALL, @mx[i], @my[i], 0, 0);
+        HurtMonster(i, power, false);
+        hit += 1;
+      };
+    };
+    Log("Flames wash over everything in sight (" + hit->ToString() + ").");
+  }
+
+  # go down when standing on the stairs
+  method : public : Descend() ~ Bool {
+    if(IsOver()) {
+      return false;
+    };
+    if(@lvl->Tile(HeroX(), HeroY()) <> DgTile->STAIRS_DOWN) {
+      Log("There are no stairs here.");
+      return false;
+    };
+    AddScore(150 * @st[DgStat->DEPTH]);
+    StartLevel(@st[DgStat->DEPTH] + 1);
+    return true;
+  }
+
+  # ---- time passes ----
+
+  method : EndTurn() ~ Nil {
+    @st[DgStat->TURNS] += 1;
+    @pg_stamp := -1;
+    if(@st[DgStat->STATE] <> 0) {
+      return;
+    };
+
+    # the hero: poison, then slow recovery
+    if(@st[DgStat->POISON] > 0) {
+      @st[DgStat->POISON] -= 1;
+      Hurt(1, "poison");
+      Ev(DgEv->POISON, HeroX(), HeroY(), 0, 0);
+    }
+    else if(@st[DgStat->TURNS] % 8 = 0 & @st[DgStat->HP] < @st[DgStat->MAXHP]) {
+      @st[DgStat->HP] += 1;
+    };
+    mp_every := [5, 4, 2];
+    if(@st[DgStat->TURNS] % mp_every[@cls] = 0 & @st[DgStat->MP] < @st[DgStat->MAXMP]) {
+      @st[DgStat->MP] += 1;
+    };
+
+    if(@st[DgStat->STATE] = 0) {
+      DgBrain->Turn(@self);
+    };
+    @lvl->Fov(HeroX(), HeroY(), 7);
+  }
+
+  # ---- monster services (used by DgBrain) ----
+
+  # a monster steps to a square if it is free; opens doors on the way
+  method : public : MonStep(i : Int, x : Int, y : Int, flying : Bool) ~ Bool {
+    if(x = HeroX() & y = HeroY()) {
+      return false;
+    };
+    if(MonAt(x, y) >= 0) {
+      return false;
+    };
+    ok := @lvl->Passable(x, y);
+    if(flying & @lvl->Flyable(x, y)) {
+      ok := true;
+    };
+    if(<>ok) {
+      return false;
+    };
+    if(@lvl->Tile(x, y) = DgTile->DOOR) {
+      @lvl->SetTile(x, y, DgTile->DOOR_OPEN);
+      Ev(DgEv->DOOR, x, y, 0, 0);
+    };
+    dx := x - @mx[i];
+    if(dx <> 0) {
+      @mface[i] := dx;
+    };
+    @mx[i] := x;
+    @my[i] := y;
+    return true;
+  }
+
+  # a ghost drifts through walls: any in-bounds square that nothing stands on
+  method : public : MonPhase(i : Int, x : Int, y : Int) ~ Bool {
+    if(x = HeroX() & y = HeroY() | MonAt(x, y) >= 0 | x < 1 | y < 1 | x >= @lvl->W() - 1 | y >= @lvl->H() - 1) {
+      return false;
+    };
+    dx := x - @mx[i];
+    if(dx <> 0) {
+      @mface[i] := dx;
+    };
+    @mx[i] := x;
+    @my[i] := y;
+    return true;
+  }
+
+  method : public : MonMove(i : Int, x : Int, y : Int) ~ Nil {
+    @mx[i] := x;
+    @my[i] := y;
+  }
+
+  method : public : MonHeal(i : Int, n : Int) ~ Nil {
+    @mhp[i] := DgUtil->Min(@mmax[i], @mhp[i] + n);
+    Ev(DgEv->HEAL, @mx[i], @my[i], n, 1);
+  }
+
+  # a boss calls for help: n monsters of a kind appear around it
+  method : public : Summon(i : Int, kind : Int, n : Int) ~ Int {
+    made := 0;
+    each(k : n) {
+      s := FreeNeighbor(@mx[i], @my[i]);
+      if(s >= 0) {
+        if(Spawn(kind, s % @lvl->W(), s / @lvl->W(), true) >= 0) {
+          made += 1;
+        };
+      };
+    };
+    if(made > 0) {
+      Ev(DgEv->ROAR, @mx[i], @my[i], made, 0);
+      Log("The " + DgData->MonName(@mkind[i]) + " summons " + made->ToString() + " " + DgData->MonName(kind) + "s!");
+    };
+    return made;
+  }
+
+  # ---- route finding with System.AI ----
+
+  # the window of the map around the hero, as graphs. Nodes are window squares; one edge
+  # per pair of orthogonal neighbours. The plain graph joins squares a walker can use;
+  # the ghost graph joins every square, charging 3 for a wall, so a Dijkstra route
+  # through the stone is found when it is the cheaper way.
+  method : BuildGraphs() ~ Nil {
+    if(@pg_stamp = @st[DgStat->TURNS] * 1000 + HeroX() * 40 + HeroY()) {
+      return;
+    };
+    @pg_stamp := @st[DgStat->TURNS] * 1000 + HeroX() * 40 + HeroY();
+    r := 11;
+    s := r * 2 + 1;
+    @ox := HeroX() - r;
+    @oy := HeroY() - r;
+    @pg := Graph->New(s * s);
+    @gg := Graph->New(s * s);
+    @ph := Float->New[s * s];
+    each(j : s) {
+      y := @oy + j;
+      each(i : s) {
+        x := @ox + i;
+        n := j * s + i;
+        @ph[n] := (DgUtil->Abs(x - HeroX()) + DgUtil->Abs(y - HeroY()))->As(Float);
+        if(@lvl->InBounds(x, y)) {
+          # to the right and down, both directions
+          if(i + 1 < s) {
+            LinkPair(n, n + 1, x, y, x + 1, y);
+          };
+          if(j + 1 < s) {
+            LinkPair(n, n + s, x, y, x, y + 1);
+          };
+        };
+      };
+    };
+  }
+
+  method : LinkPair(a : Int, b : Int, x0 : Int, y0 : Int, x1 : Int, y1 : Int) ~ Nil {
+    if(<>@lvl->InBounds(x1, y1)) {
+      return;
+    };
+    if(@lvl->Passable(x0, y0) & @lvl->Passable(x1, y1)) {
+      @pg->AddEdge(a, b, 1.0);
+      @pg->AddEdge(b, a, 1.0);
+    };
+    # the ghost graph
+    cost_to := 1.0;
+    if(<>@lvl->Passable(x1, y1)) {
+      cost_to := 3.0;
+    };
+    cost_back := 1.0;
+    if(<>@lvl->Passable(x0, y0)) {
+      cost_back := 3.0;
+    };
+    @gg->AddEdge(a, b, cost_to);
+    @gg->AddEdge(b, a, cost_back);
+  }
+
+  # the first square of a route from (sx, sy) to (gx, gy) as y * width + x, or -1.
+  # algo: 0 breadth first, 1 A*, 2 Dijkstra over the ghost graph. Only squares in the
+  # 23 x 23 window around the hero can be routed.
+  method : public : PathNext(algo : Int, sx : Int, sy : Int, gx : Int, gy : Int) ~ Int {
+    BuildGraphs();
+    s := 23;
+    si := (sy - @oy) * s + (sx - @ox);
+    gi := (gy - @oy) * s + (gx - @ox);
+    if(sx < @ox | sy < @oy | sx >= @ox + s | sy >= @oy + s | gx < @ox | gy < @oy | gx >= @ox + s | gy >= @oy + s) {
+      return -1;
+    };
+    result : SearchResult;
+    if(algo = 0) {
+      result := BreadthFirst->FindPath(@pg, si, gi);
+    }
+    else if(algo = 1) {
+      h := @ph;
+      if(gx <> HeroX() | gy <> HeroY()) {
+        h := Float->New[s * s];
+        each(j : s) {
+          each(i : s) {
+            h[j * s + i] := (DgUtil->Abs(@ox + i - gx) + DgUtil->Abs(@oy + j - gy))->As(Float);
+          };
+        };
+      };
+      result := AStar->FindPath(@pg, si, gi, h);
+    }
+    else {
+      result := Dijkstra->FindPath(@gg, si, gi);
+    };
+    if(result = Nil | <>result->Found()) {
+      return -1;
+    };
+    path := result->GetPath();
+    if(path->Size() < 2) {
+      return -1;
+    };
+    next := path[1];
+    return (@oy + next / s) * @lvl->W() + (@ox + next % s);
+  }
+}
