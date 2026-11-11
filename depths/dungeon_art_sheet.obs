@@ -1,0 +1,331 @@
+#~
+# compile: obc -src dungeon_data.obs,dungeon_art.obs,dungeon_art_sheet.obs -lib sdl2,sdl_game,collect,ai -dest dungeon_art_sheet.obe
+# run:     obr dungeon_art_sheet.obe [output_folder]
+#
+# Draws contact sheets of every picture the dungeon uses (tiles for the eight themes, sample
+# rooms, heroes, monsters, items, effects, icons, the font) at several sizes and saves them
+# as PNG files, so the art can be judged without playing. A window opens briefly.
+~#
+
+use Game.SDL2;
+use Game.Framework;
+
+class DgArtSheet {
+  @r : Renderer;
+  @art : DgArt;
+  @font : DgFont;
+
+  function : Main(args : String[]) ~ Nil {
+    dir := ".";
+    if(args->Size() > 0) {
+      dir := args[0];
+    };
+    DgArtSheet->New()->Run(dir);
+  }
+
+  New() {
+  }
+
+  method : Clear() ~ Nil {
+    @r->SetDrawColor(20, 16, 28, 255);
+    @r->Clear();
+  }
+
+  method : Tex(t : Texture, x : Int, y : Int, w : Int, h : Int) ~ Nil {
+    @r->Copy(t, Nil, Rect->New(x, y, w, h));
+  }
+
+  method : Save(dir : String, name : String) ~ Nil {
+    path := dir + "/" + name;
+    if(@r->SavePNG(path)) {
+      "wrote {$path}"->PrintLine();
+    }
+    else {
+      "could not write {$path}"->ErrorLine();
+    };
+  }
+
+  method : Run(dir : String) ~ Nil {
+    fw := GameFramework->New(1280, 900, "Dungeon art");
+    @r := fw->GetRenderer();
+    if(@r = Nil | @r->IsNull()) {
+      "no window"->ErrorLine();
+      return;
+    };
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    DgData->Init();
+    t0 := Timer->GetTicks();
+    @art := DgArt->New(@r);
+    @font := DgFont->New(@r);
+    ms := Timer->GetTicks() - t0;
+    "built all art in {$ms} ms"->PrintLine();
+
+    TileSheet(dir);
+    RoomSheet(dir, 0, "art_rooms_a.png");
+    RoomSheet(dir, 4, "art_rooms_b.png");
+    CharSheet(dir);
+    ZoomSheet(dir);
+    ItemSheet(dir);
+    FontSheet(dir);
+    fw->Quit();
+  }
+
+  method : TileSheet(dir : String) ~ Nil {
+    Clear();
+    each(theme : 8) {
+      y0 := 14 + theme * 108;
+      @font->Draw(DgData->ThemeName(theme), 4, y0 + 8, 16777215, 1);
+      @font->Draw("walls", 4, y0 + 20, 10066329, 1);
+      @font->Draw("floors", 4, y0 + 30, 10066329, 1);
+      each(i : 6) {
+        Tex(@art->Tile(DgTile->WALL, theme, i, 0), 100 + i * 50, y0, 48, 48);
+      };
+      each(i : 8) {
+        Tex(@art->Tile(DgTile->FLOOR, theme, i, 0), 100 + (6 + i) * 50 + 10, y0, 48, 48);
+      };
+      row := [DgTile->DOOR, DgTile->DOOR_OPEN, DgTile->STAIRS_DOWN, DgTile->STAIRS_UP, DgTile->PILLAR,
+        DgTile->SPIKES, DgTile->CHEST, DgTile->CHEST_OPEN, DgTile->SHRINE, DgTile->SHRINE_USED, DgTile->THRONE];
+      each(i : 11) {
+        Tex(@art->Tile(row[i], theme, 0, 0), 4 + i * 50, y0 + 52, 48, 48);
+      };
+      each(f : 4) {
+        Tex(@art->Tile(DgTile->WATER, theme, 0, f), 560 + f * 50, y0 + 52, 48, 48);
+      };
+      each(f : 4) {
+        Tex(@art->Tile(DgTile->LAVA, theme, 0, f), 760 + f * 50, y0 + 52, 48, 48);
+      };
+      each(f : 4) {
+        Tex(@art->Tile(DgTile->TORCH, theme, 0, f), 960 + f * 50, y0 + 52, 48, 48);
+      };
+    };
+    Save(dir, "art_tiles.png");
+  }
+
+  # a small room per theme, assembled the way the game will assemble it
+  method : RoomSheet(dir : String, first : Int, name : String) ~ Nil {
+    Clear();
+    each(k : 4) {
+      theme := first + k;
+      ox := 12 + (k % 2) * 630;
+      oy := 20 + (k / 2) * 440;
+      @font->Draw(DgData->ThemeName(theme), ox, oy - 14, 16777215, 1);
+      each(y : 8) {
+        each(x : 12) {
+          t := DgTile->FLOOR;
+          if(y = 0 | y = 7 | x = 0 | x = 11) {
+            t := DgTile->WALL;
+          };
+          if(y = 0 & x = 3) { t := DgTile->TORCH; };
+          if(y = 0 & x = 8) { t := DgTile->TORCH; };
+          if(y = 7 & x = 5) { t := DgTile->DOOR; };
+          if(x = 11 & y = 4) { t := DgTile->DOOR_OPEN; };
+          if(y = 2 & x = 9) { t := DgTile->STAIRS_DOWN; };
+          if(y = 6 & x = 1) { t := DgTile->STAIRS_UP; };
+          if(y = 3 & x = 4) { t := DgTile->PILLAR; };
+          if(y = 3 & x = 7) { t := DgTile->PILLAR; };
+          if(y = 5 & x = 8) { t := DgTile->SPIKES; };
+          if(y = 2 & x = 2) { t := DgTile->CHEST; };
+          if(y = 5 & x = 3) { t := DgTile->CHEST_OPEN; };
+          if(y = 1 & x = 6) { t := DgTile->SHRINE; };
+          if(y = 5 & x = 6 & theme = 1) { t := DgTile->WATER; };
+          if(y = 4 & x = 6 & theme = 1) { t := DgTile->WATER; };
+          if(y = 4 & x = 2 & theme = 5) { t := DgTile->LAVA; };
+          if(y = 5 & x = 2 & theme = 5) { t := DgTile->LAVA; };
+          if(y = 1 & x = 10 & theme = 7) { t := DgTile->THRONE; };
+          vary := DgArt->Hash(x, y, theme) % 256;
+          Tex(@art->Tile(t, theme, vary, 1), ox + x * 48, oy + y * 48, 48, 48);
+        };
+      };
+      # some company
+      Tex(@art->Hero(k % 3, 0), ox + 5 * 48, oy + 5 * 48, 48, 48);
+      Tex(@art->Mon((theme * 2) % 12, 0), ox + 8 * 48, oy + 3 * 48, 48, 48);
+      Tex(@art->Mon((theme * 2 + 3) % 12, 1), ox + 2 * 48, oy + 3 * 48, 48, 48);
+      Tex(@art->Item(DgIt->POTION_HEAL, 0), ox + 4 * 48, oy + 1 * 48, 48, 48);
+      Tex(@art->Item(DgIt->GOLD, 0), ox + 9 * 48, oy + 5 * 48, 48, 48);
+    };
+    Save(dir, name);
+  }
+
+  method : CharSheet(dir : String) ~ Nil {
+    Clear();
+    @font->Draw("heroes: warrior, rogue, mage (2 frames each)", 8, 6, 16777215, 1);
+    each(cls : 3) {
+      each(f : 2) {
+        x := 8 + (cls * 2 + f) * 70;
+        Under(x, 20, 64);
+        Tex(@art->Hero(cls, f), x, 20, 64, 64);
+      };
+    };
+    @font->Draw("monsters 0-6", 8, 94, 16777215, 1);
+    each(kind : 7) {
+      each(f : 2) {
+        x := 8 + (kind * 2 + f) * 70;
+        Under(x, 108, 64);
+        Tex(@art->Mon(kind, f), x, 108, 64, 64);
+      };
+      @font->Draw(DgData->MonName(kind), 8 + kind * 140, 174, 10066329, 1);
+    };
+    @font->Draw("monsters 7-13", 8, 188, 16777215, 1);
+    each(i : 7) {
+      kind := 7 + i;
+      each(f : 2) {
+        x := 8 + (i * 2 + f) * 70;
+        Under(x, 202, 64);
+        Tex(@art->Mon(kind, f), x, 202, 64, 64);
+      };
+      @font->Draw(DgData->MonName(kind), 8 + i * 140, 268, 10066329, 1);
+    };
+
+    # real sizes: 1x and 3x on a floor, with the lighting of a dungeon
+    @font->Draw("as in game (x3 on screen = 48 px here)", 8, 290, 16777215, 1);
+    each(i : 17) {
+      x := 8 + i * 52;
+      Under(x, 304, 48);
+      if(i < 3) {
+        Tex(@art->Hero(i, 0), x, 304, 48, 48);
+      }
+      else {
+        Tex(@art->Mon(i - 3, 0), x, 304, 48, 48);
+      };
+    };
+    @font->Draw("native 16 px (1x)", 8, 366, 16777215, 1);
+    each(i : 17) {
+      x := 8 + i * 20;
+      Under(x, 380, 16);
+      if(i < 3) {
+        Tex(@art->Hero(i, 0), x, 380, 16, 16);
+      }
+      else {
+        Tex(@art->Mon(i - 3, 0), x, 380, 16, 16);
+      };
+    };
+
+    # a dim torchlit row on wall colour: do they read on other floors?
+    @font->Draw("on other themes' floors", 8, 410, 16777215, 1);
+    each(theme : 8) {
+      each(k : 4) {
+        x := 8 + theme * 150 + k * 36;
+        y := 426;
+        Tex(@art->Tile(DgTile->FLOOR, theme, k, 0), x, y, 36, 36);
+        kind := (theme * 4 + k) % 14;
+        Tex(@art->Mon(kind, 0), x, y, 36, 36);
+      };
+    };
+    Save(dir, "art_chars.png");
+  }
+
+  method : ZoomSheet(dir : String) ~ Nil {
+    Clear();
+    each(i : 17) {
+      x := 8 + (i % 6) * 210;
+      y := 8 + (i / 6) * 300;
+      Under(x, y, 200);
+      Under(x + 100, y, 100);
+      if(i < 3) {
+        Tex(@art->Hero(i, 0), x, y, 200, 200);
+      }
+      else {
+        Tex(@art->Mon(i - 3, 0), x, y, 200, 200);
+      };
+      if(i < 3) {
+        @font->Draw(DgData->ClassName(i), x, y + 206, 16777215, 1);
+      }
+      else {
+        @font->Draw(DgData->MonName(i - 3), x, y + 206, 16777215, 1);
+      };
+    };
+    Save(dir, "art_zoom.png");
+  }
+
+  method : Under(x : Int, y : Int, size : Int) ~ Nil {
+    Tex(@art->Tile(DgTile->FLOOR, 0, 0, 0), x, y, size, size);
+  }
+
+  method : ItemSheet(dir : String) ~ Nil {
+    Clear();
+    @font->Draw("items (x5)", 8, 6, 16777215, 1);
+    kinds := [0, 1, 2, 3, 4, 5, 6, 10];
+    each(i : 8) {
+      Tex(@art->Item(kinds[i], 0), 8 + i * 86, 20, 80, 80);
+    };
+    @font->Draw("weapons tier 0-5", 8, 108, 16777215, 1);
+    each(t : 6) {
+      Tex(@art->Item(DgIt->WEAPON, t), 8 + t * 86, 122, 80, 80);
+    };
+    @font->Draw("armor tier 0-5", 8, 210, 16777215, 1);
+    each(t : 6) {
+      Tex(@art->Item(DgIt->ARMOR, t), 8 + t * 86, 224, 80, 80);
+    };
+    @font->Draw("gems", 540, 108, 16777215, 1);
+    each(t : 4) {
+      Tex(@art->Item(DgIt->GEM, t), 540 + t * 86, 122, 80, 80);
+    };
+    @font->Draw("at real size on floor (x3)", 540, 210, 16777215, 1);
+    each(i : 8) {
+      Under(540 + i * 50, 224, 48);
+      Tex(@art->Item(kinds[i], 0), 540 + i * 50, 224, 48, 48);
+    };
+    each(i : 6) {
+      Under(540 + i * 50, 276, 48);
+      Tex(@art->Item(DgIt->WEAPON, i), 540 + i * 50, 276, 48, 48);
+    };
+
+    @font->Draw("portraits (x3)", 8, 316, 16777215, 1);
+    each(cls : 3) {
+      Tex(@art->Portrait(cls), 8 + cls * 110, 330, 96, 96);
+    };
+    @font->Draw("icons (x6)", 380, 316, 16777215, 1);
+    each(i : 9) {
+      Tex(@art->Icon(i), 380 + i * 56, 330, 48, 48);
+    };
+
+    @font->Draw("effects: slash, fire, heal, ring, bolt, hit star, poison (frames across, x4)", 8, 446, 16777215, 1);
+    each(kind : 7) {
+      each(f : 4) {
+        x := 8 + f * 70 + (kind % 4) * 300;
+        y := 462 + (kind / 4) * 76;
+        Under(x, y, 64);
+        if(kind = 4) {
+          if(f < 2) {
+            Tex(@art->Fx(kind, f), x + 16, y + 16, 32, 32);
+          };
+        }
+        else {
+          Tex(@art->Fx(kind, f), x, y, 64, 64);
+        };
+      };
+    };
+    Save(dir, "art_items.png");
+  }
+
+  method : FontSheet(dir : String) ~ Nil {
+    Clear();
+    all := "";
+    each(i : 95) {
+      all += (32 + i)->As(Char)->ToString();
+    };
+    line1 := all->SubString(0, 32);
+    line2 := all->SubString(32, 32);
+    line3 := all->SubString(64, 31);
+    @font->Draw("font at 1x, 2x, 3x", 8, 6, 16777215, 1);
+    y := 24;
+    each(s : 3) {
+      scale := s + 1;
+      if(s = 2) {
+        scale := 3;
+      };
+      @font->Draw(line1, 8, y, 16777215, scale);
+      y += 9 * scale;
+      @font->Draw(line2, 8, y, 16777215, scale);
+      y += 9 * scale;
+      @font->Draw(line3, 8, y, 16777215, scale);
+      y += 12 * scale;
+    };
+    @font->DrawShadow("The quick brown fox jumps over the lazy dog. 0123456789", 8, y, 16769024, 4194304, 1);
+    y += 14;
+    @font->DrawShadow("HP 40/40  MP 10/10  Floor 3: The Caves  Gold: 1234", 8, y, 10027008, 2105376, 2);
+    y += 26;
+    @font->DrawShadow("You hit the Goblin for 7! (critical)", 8, y, 16777215, 2105376, 2);
+    Save(dir, "art_font.png");
+  }
+}

@@ -1,0 +1,1378 @@
+#~
+# compile: obc -src dungeon_data.obs,dungeon_level.obs,dungeon_game.obs,dungeon_ai.obs,dungeon_art.obs,dungeon_sound.obs,dungeon_view.obs,gauntlet_game.obs,gauntlet.obs -lib sdl2,sdl_game,ai,json,collect -dest gauntlet.obe
+# run:     obr gauntlet.obe
+#
+# Objeck Gauntlet -- a real-time, Gauntlet-style arcade crawler for one or two players,
+# in the same 320 x 200 VGA look as Tiny Dungeon (it shares the pixel art, the font, the
+# sound and the level maker). Pick a Warrior, Valkyrie, Wizard or Elf, shoot in eight
+# directions, smash the monster generators, grab keys, food, treasure and magic potions,
+# and run for the exit before your life force drains away. Eight levels; Death hunts you
+# from level 3 and only a potion kills him; the Lich King's throne is the end.
+#
+# Player 1: W A S D walk, SPACE shoots, E drinks a magic potion.
+# Player 2: arrow keys walk, ENTER shoots, RIGHT SHIFT drinks a potion.
+# P pauses, ESC goes back, F2 scanlines, F3 sound. In the menus: LEFT/RIGHT picks,
+# UP/DOWN the level of difficulty, 1 or 2 the number of players, ENTER starts.
+#
+# For pictures instead of play:  --screenshot out.png [--scene title|select|play|dead|won]
+# [--level 1-8] [--class 0-3] [--players 1-2] [--diff 0-3] [--seed N] [--frames N]
+# [--frame N]    saves one frame and exits (the bot plays --frames frames first);
+# --demo [out_dir]   lets the computer play for a while;  --silent   no sound;
+# --scale 2-6   window size.
+~#
+
+use System.IO.Filesystem;
+use Game.SDL2;
+use Game.Framework;
+use System.AI;
+
+# The few pictures Gauntlet needs beyond the shared art: generators, keys and food.
+class GtArt {
+  @gen : Texture[];
+  @key : Texture;
+  @food : Texture;
+
+  New(r : Renderer) {
+    @gen := Texture->New[10];
+    colors := [0x5fcde4, 0x99e550, 0xd95763, 0xd77bba, 0x6abe30];
+    each(k : 5) {
+      each(f : 2) {
+        p := DgPix->New(16, 16);
+        # a stone ring with a glowing mouth, and a few bones around it
+        p->Disc(8, 9, 7, 0x4a4a52);
+        p->Disc(8, 9, 6, 0x696a6a);
+        p->Disc(8, 9, 5, 0x222034);
+        p->Ring(8, 9, 5, colors[k]);
+        if(f = 0) {
+          p->Disc(8, 9, 2, colors[k]);
+        }
+        else {
+          p->Disc(8, 9, 3, colors[k]);
+          p->Put(8, 9, 0xffffff);
+        };
+        p->Put(3, 4, 0xcbdbfc);
+        p->Put(4, 3, 0xcbdbfc);
+        p->Put(12, 3, 0xcbdbfc);
+        p->Put(13, 4, 0xcbdbfc);
+        p->Put(2, 11, 0xcbdbfc);
+        p->Put(14, 12, 0xcbdbfc);
+        p->Outline(0x222034);
+        @gen[k * 2 + f] := p->ToTexture(r);
+      };
+    };
+
+    kp := DgPix->New(16, 16);
+    kp->Stamp(["................", "................", "................", "....8888........", "...88..88.......",
+      "...8....8.......", "...88..88.......", "....8888........", ".....88.........", ".....88.........",
+      ".....8888.......", ".....88.........", ".....8888.......", ".....88.........", "................",
+      "................"], 2, 0, false, Nil);
+    kp->Outline(0x222034);
+    @key := kp->ToTexture(r);
+
+    fp := DgPix->New(16, 16);
+    fp->Stamp(["................", "................", "......44444.....", ".....4555554....", "....455555554...",
+      "....45l555554...", "....455555554...", ".....4555554....", "......4444.l....", "........lll.....",
+      ".......lll......", "......lll.l.....", ".....ll...l.....", "................", "................",
+      "................"], 0, 0, false, Nil);
+    fp->Outline(0x222034);
+    @food := fp->ToTexture(r);
+  }
+
+  method : public : Gen(kind : Int, frame : Int) ~ Texture {
+    return @gen[kind * 2 + frame % 2];
+  }
+
+  method : public : Key() ~ Texture {
+    return @key;
+  }
+
+  method : public : Food() ~ Texture {
+    return @food;
+  }
+}
+
+# A bot that plays Gauntlet, for the demo and the screenshots: it heads for the nearest
+# generator (or the exit), shoots whatever is near in the direction of it, eats when hungry,
+# opens doors with the keys it picks up and drinks a potion when it is swarmed.
+class GtBot {
+  @g : GtGame;
+  @graph : Graph;
+  @graph_level : Int;
+  @graph_keys : Int;
+  @wx : Float;
+  @wy : Float;
+  @replan : Int;
+  @stuck : Int;
+  @last_x : Float;
+
+  New(g : GtGame) {
+    @g := g;
+    @graph_level := -1;
+  }
+
+  method : BuildGraph(p : Int) ~ Nil {
+    lvl := @g->Level();
+    w := lvl->W();
+    h := lvl->H();
+    @graph := Graph->New(w * h);
+    can_open := @g->Keys(p) > 0;
+    each(y : h) {
+      each(x : w) {
+        if(Free(x, y, can_open)) {
+          if(x + 1 < w & Free(x + 1, y, can_open)) {
+            @graph->AddEdge(y * w + x, y * w + x + 1, 1.0);
+            @graph->AddEdge(y * w + x + 1, y * w + x, 1.0);
+          };
+          if(y + 1 < h & Free(x, y + 1, can_open)) {
+            @graph->AddEdge(y * w + x, (y + 1) * w + x, 1.0);
+            @graph->AddEdge((y + 1) * w + x, y * w + x, 1.0);
+          };
+        };
+      };
+    };
+    @graph_level := @g->LevelNo();
+    @graph_keys := @g->Keys(p);
+  }
+
+  method : Free(x : Int, y : Int, can_open : Bool) ~ Bool {
+    t := @g->Level()->Tile(x, y);
+    if(t = DgTile->DOOR) {
+      return can_open;
+    };
+    if(GtGame->SolidTile(t)) {
+      return false;
+    };
+    each(i : @g->GenCount()) {
+      if(@g->GenX(i) = x & @g->GenY(i) = y) {
+        return false;
+      };
+    };
+    return true;
+  }
+
+  # set the inputs of hero p for this frame
+  method : public : Act(p : Int) ~ Nil {
+    g := @g;
+    if(<>g->Alive(p)) {
+      g->SetInput(p, 0, 0, false, false);
+      return;
+    };
+    hx := g->X(p);
+    hy := g->Y(p);
+
+    # the nearest monster in range: shoot at it
+    best := -1;
+    best_d := 22000.0;
+    near_count := 0;
+    each(m : g->MonSlots()) {
+      if(g->MonKind(m) >= 0) {
+        ddx := g->MonX(m) - hx;
+        ddy := g->MonY(m) - hy;
+        d := ddx * ddx + ddy * ddy;
+        if(d < 10000.0) {
+          near_count += 1;
+        };
+        if(d < best_d) {
+          best_d := d;
+          best := m;
+        };
+      };
+    };
+    fire := false;
+    aim_x := 0;
+    aim_y := 0;
+    if(best >= 0) {
+      aim_x := Quantize(g->MonX(best) - hx, g->MonY(best) - hy);
+      aim_y := Quantize(g->MonY(best) - hy, g->MonX(best) - hx);
+      fire := true;
+    }
+    else {
+      # a generator in range, to shoot at
+      each(i : g->GenCount()) {
+        ddx := (g->GenX(i) * 16 + 8)->As(Float) - hx;
+        ddy := (g->GenY(i) * 16 + 8)->As(Float) - hy;
+        if(ddx * ddx + ddy * ddy < 14000.0) {
+          aim_x := Quantize(ddx, ddy);
+          aim_y := Quantize(ddy, ddx);
+          fire := true;
+        };
+      };
+    };
+
+    # where to walk: food when hungry, keys, generators, the exit
+    lvl := g->Level();
+    tx := lvl->ExitX();
+    ty := lvl->ExitY();
+    found := false;
+    if(g->Health(p) < 350) {
+      found := Nearest(GtIt->FOOD, hx, hy, 99999.0);
+    };
+    tgx := -1;
+    tgy := -1;
+    if(<>found) {
+      each(i : g->ItemSlots()) {
+        k := g->ItemKind(i);
+        if(k = GtIt->FOOD & g->Health(p) < 350) {
+          tgx := g->ItemX(i);
+          tgy := g->ItemY(i);
+        };
+      };
+      if(tgx < 0) {
+        each(i : g->ItemSlots()) {
+          k := g->ItemKind(i);
+          if(k = GtIt->KEY | k = GtIt->POTION | k = GtIt->GOLD | k = GtIt->GEM | k = GtIt->CHEST) {
+            ddx := (g->ItemX(i) * 16 + 8)->As(Float) - hx;
+            ddy := (g->ItemY(i) * 16 + 8)->As(Float) - hy;
+            if(ddx * ddx + ddy * ddy < 36000.0) {
+              tgx := g->ItemX(i);
+              tgy := g->ItemY(i);
+            };
+          };
+        };
+      };
+    };
+    if(tgx >= 0) {
+      tx := tgx;
+      ty := tgy;
+    }
+    else if(g->GenCount() > 0 & g->Health(p) > 200) {
+      tx := g->GenX(0);
+      ty := g->GenY(0);
+      # stand off a little: walk until within shooting range and aligned
+      ddx := (tx * 16 + 8)->As(Float) - hx;
+      ddy := (ty * 16 + 8)->As(Float) - hy;
+      if(ddx * ddx + ddy * ddy < 6000.0) {
+        tx := (hx / 16.0)->As(Int);
+        ty := (hy / 16.0)->As(Int);
+        aim_x := Quantize(ddx, ddy);
+        aim_y := Quantize(ddy, ddx);
+        fire := true;
+      };
+    };
+
+    # follow a route
+    if(@graph_level <> g->LevelNo() | @graph_keys <> g->Keys(p)) {
+      BuildGraph(p);
+    };
+    @replan -= 1;
+    if(@replan <= 0 | Float->Abs(hx - @wx) + Float->Abs(hy - @wy) < 4.0) {
+      @replan := 20;
+      w := lvl->W();
+      htx := (hx / 16.0)->As(Int);
+      hty := (hy / 16.0)->As(Int);
+      if(htx <> tx | hty <> ty) {
+        heur := Float->New[w * lvl->H()];
+        cells := w * lvl->H();
+        each(c : cells) {
+          heur[c] := (DgUtil->Abs(c % w - tx) + DgUtil->Abs(c / w - ty))->As(Float);
+        };
+        result := AStar->FindPath(@graph, hty * w + htx, ty * w + tx, heur);
+        if(result->Found() & result->GetPath()->Size() > 1) {
+          next := result->GetPath()[1];
+          @wx := (next % w * 16 + 8)->As(Float);
+          @wy := (next / w * 16 + 8)->As(Float);
+        };
+      };
+    };
+    mx := 0;
+    my := 0;
+    if(@wx - hx > 2.0) { mx := 1; }
+    else if(@wx - hx < -2.0) { mx := -1; };
+    if(@wy - hy > 2.0) { my := 1; }
+    else if(@wy - hy < -2.0) { my := -1; };
+
+    # a hero walking away from the target cannot shoot it: face the way to shoot first
+    if(fire & (aim_x <> 0 | aim_y <> 0)) {
+      g->SetInput(p, aim_x + 0 * mx, aim_y + 0 * my, true, near_count >= 5);
+      # walk in the aimed direction only when that is also the way to go
+      if(mx <> 0 | my <> 0) {
+        g->SetInput(p, mx, my, true, near_count >= 5);
+      };
+    }
+    else {
+      g->SetInput(p, mx, my, false, false);
+    };
+  }
+
+  method : Nearest(kind : Int, x : Float, y : Float, within : Float) ~ Bool {
+    each(i : @g->ItemSlots()) {
+      if(@g->ItemKind(i) = kind) {
+        return true;
+      };
+    };
+    return false;
+  }
+
+  # -1, 0 or 1 for a component of an aim vector, with a dead zone so aiming snaps to 8 ways
+  method : Quantize(a : Float, b : Float) ~ Int {
+    aa := Float->Abs(a);
+    ab := Float->Abs(b);
+    if(aa < ab * 0.4) {
+      return 0;
+    };
+    if(a > 0.0) {
+      return 1;
+    };
+    return -1;
+  }
+}
+
+class GauntletApp {
+  @fw : GameFramework;
+  @r : Renderer;
+  @event : Event;
+  @art : DgArt;
+  @gart : GtArt;
+  @font : DgFont;
+  @dv : DgView;
+  @sound : DgSound;
+  @game : GtGame;
+  @bot : GtBot;
+  @screen : Texture;
+
+  @state : Int;          # 0 title, 1 setup, 2 playing, 3 paused, 4 the end
+  @players : Int;
+  @sel_cls : Int[];
+  @sel_diff : Int;
+  @sel_row : Int;
+  @held : Bool[];
+  @tick : Int;
+  @quit : Bool;
+  @crt : Bool;
+  @auto : Bool;
+  @scale : Int;
+  @camx : Float;
+  @camy : Float;
+  @shake : Int;
+  @flash : Int;
+  @flash_col : Int;
+  @end_t : Int;
+  @banner_t : Int;
+  @best : Int;
+  @seed : Int;
+
+  @shot_file : String;
+  @shot_frame : Int;
+  @scene : String;
+  @demo : Bool;
+  @demo_dir : String;
+  @silent : Bool;
+  @arg_level : Int;
+  @arg_class : Int;
+  @arg_players : Int;
+  @arg_diff : Int;
+  @arg_seed : Int;
+  @arg_frames : Int;
+  @keys : String[];     # --keys: a script (+d holds a key, -d lets go, enter presses) for tests
+  @key_at : Int;
+
+  function : Main(args : String[]) ~ Nil {
+    app := GauntletApp->New();
+    app->Run(args);
+  }
+
+  New() {
+    @players := 1;
+    @sel_cls := Int->New[2];
+    @sel_cls[1] := 3;
+    @sel_diff := 1;
+    @held := Bool->New[512];
+    @crt := true;
+    @scale := 3;
+    @shot_frame := 3;
+    @arg_level := 1;
+    @arg_class := -1;
+    @arg_players := 0;
+    @arg_diff := -1;
+    @arg_seed := -1;
+    @arg_frames := 240;
+  }
+
+  method : ParseArgs(args : String[]) ~ Nil {
+    i := 0;
+    while(i < args->Size()) {
+      a := args[i];
+      has_next := i + 1 < args->Size();
+      if(a->Equals("--screenshot") & has_next) {
+        @shot_file := args[i + 1];
+        i += 1;
+      }
+      else if(a->Equals("--scene") & has_next) {
+        @scene := args[i + 1];
+        i += 1;
+      }
+      else if(a->Equals("--level") & has_next) {
+        @arg_level := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--class") & has_next) {
+        @arg_class := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--players") & has_next) {
+        @arg_players := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--diff") & has_next) {
+        @arg_diff := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--seed") & has_next) {
+        @arg_seed := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--frames") & has_next) {
+        @arg_frames := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--keys") & has_next) {
+        @keys := args[i + 1]->Split(",");
+        i += 1;
+      }
+      else if(a->Equals("--frame") & has_next) {
+        @shot_frame := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--scale") & has_next) {
+        @scale := DgUtil->Clamp(args[i + 1]->ToInt(), 1, 6);
+        i += 1;
+      }
+      else if(a->Equals("--demo")) {
+        @demo := true;
+        if(has_next & <>args[i + 1]->StartsWith("--")) {
+          @demo_dir := args[i + 1];
+          i += 1;
+        };
+      }
+      else if(a->Equals("--silent")) {
+        @silent := true;
+      };
+      i += 1;
+    };
+  }
+
+  method : Run(args : String[]) ~ Nil {
+    ParseArgs(args);
+    DgData->Init();
+    @fw := GameFramework->New(320 * @scale, 200 * @scale, "Objeck Gauntlet");
+    @r := @fw->GetRenderer();
+    if(@r = Nil | @r->IsNull()) {
+      "Unable to start SDL2"->ErrorLine();
+      return;
+    };
+    @event := Event->New();
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @art := DgArt->New(@r);
+    @gart := GtArt->New(@r);
+    @font := DgFont->New(@r);
+    @screen := @r->CreateTexture(PixelValue->SDL_PIXELFORMAT_ARGB8888, TextureAccess->SDL_TEXTUREACCESS_TARGET, 320, 200);
+    @dv := DgView->New(@r, @art, @font);
+    if(@shot_file = Nil & <>@silent) {
+      @sound := DgSound->New();
+      @dv->SetSound(@sound);
+    };
+    @best := LoadBest();
+    if(@arg_players > 0) {
+      @players := DgUtil->Clamp(@arg_players, 1, 2);
+    };
+    if(@arg_class >= 0) {
+      @sel_cls[0] := DgUtil->Clamp(@arg_class, 0, 3);
+    };
+    if(@arg_diff >= 0) {
+      @sel_diff := DgUtil->Clamp(@arg_diff, 0, 3);
+    };
+
+    if(@shot_file <> Nil) {
+      SetupScene();
+    }
+    else if(@demo) {
+      @auto := true;
+      NewGame();
+    };
+
+    work := 0;
+    while(<>@quit) {
+      @fw->FrameStart();
+      t0 := Timer->GetTicks();
+      HandleEvents();
+      ScriptedKeys();
+      Update();
+      Draw();
+      work += Timer->GetTicks() - t0;
+      if(@shot_file <> Nil & @tick = @shot_frame) {
+        if(@r->SavePNG(@shot_file)) {
+          "wrote {$@shot_file}"->PrintLine();
+        }
+        else {
+          "could not write {$@shot_file}"->ErrorLine();
+        };
+        @quit := true;
+      };
+      if(@demo) {
+        if(@demo_dir <> Nil & @tick % 120 = 0) {
+          @r->SavePNG(@demo_dir + "/demo_{$(@tick / 120)}.png");
+        };
+        if(@tick = 600) {
+          "600 frames: update and drawing took {$work} ms in all, {$(work / 600)} ms a frame (the 60 fps budget is 16 ms)"->PrintLine();
+        };
+        if(@tick >= 1500 | @state = 4) {
+          "demo over: level {$@game->LevelNo()}, score {$@game->TotalScore()}"->PrintLine();
+          @quit := true;
+        };
+      };
+      @fw->Show();
+      @fw->FrameEnd();
+    };
+    if(@sound <> Nil) {
+      @sound->Close();
+    };
+    @fw->Quit();
+  }
+
+  # ---- the game ----
+
+  method : NewGame() ~ Nil {
+    seed := @arg_seed;
+    if(seed < 0) {
+      seed := Timer->GetTicks() % 100000 + 1;
+    };
+    @seed := seed;
+    @game := GtGame->New(@players, @sel_cls[0], @sel_cls[1], @sel_diff, seed);
+    if(@arg_level > 1) {
+      @game->StartLevel(@arg_level);
+    };
+    @bot := GtBot->New(@game);
+    @state := 2;
+    @end_t := 0;
+    @banner_t := 150;
+    @camx := @game->X(0) - 112.0;
+    @camy := @game->Y(0) - 88.0;
+    if(@sound <> Nil) {
+      @sound->SetTheme((@game->LevelNo() - 1) % 8);
+    };
+  }
+
+  method : SetupScene() ~ Nil {
+    scene := @scene;
+    if(scene = Nil) {
+      scene := "play";
+    };
+    if(scene->Equals("title")) {
+      @state := 0;
+      return;
+    };
+    if(scene->Equals("select")) {
+      @state := 1;
+      return;
+    };
+    NewGame();
+    @auto := true;
+    each(f : @arg_frames) {
+      Step();
+    };
+    @auto := false;
+    if(scene->Equals("dead")) {
+      @game->SetHealth(0, 0);
+      @game->SetHealth(1, 0);
+      @game->ForceEnd(1);
+      @state := 4;
+    }
+    else if(scene->Equals("won")) {
+      @game->ForceEnd(3);
+      @state := 4;
+    };
+    each(f : 40) {
+      @dv->UpdateFx();
+      UpdateCamera();
+    };
+    @banner_t := 0;
+  }
+
+  method : LoadBest() ~ Int {
+    path := Runtime->GetUserDir() + Directory->GetSlash() + ".objeck_gauntlet";
+    if(File->Exists(path)) {
+      text := FileReader->ReadFile(path);
+      if(text <> Nil & text->Size() > 0) {
+        return text->Trim()->ToInt();
+      };
+    };
+    return 0;
+  }
+
+  method : SaveBest() ~ Nil {
+    path := Runtime->GetUserDir() + Directory->GetSlash() + ".objeck_gauntlet";
+    out := FileWriter->New(path);
+    out->WriteString(@best->ToString());
+    out->Close();
+  }
+
+  # ---- input ----
+
+  method : HandleEvents() ~ Nil {
+    while(@event->Poll() <> 0) {
+      type := @event->GetType();
+      if(type = EventType->SDL_QUIT) {
+        @quit := true;
+      }
+      else if(type = EventType->SDL_KEYDOWN) {
+        code := @event->GetKey()->GetKeysym()->GetScancode();
+        if(code >= 0 & code < 512) {
+          @held[code] := true;
+        };
+        if(@event->GetKey()->GetRepeat() = 0) {
+          Key(code);
+        };
+      }
+      else if(type = EventType->SDL_KEYUP) {
+        code := @event->GetKey()->GetKeysym()->GetScancode();
+        if(code >= 0 & code < 512) {
+          @held[code] := false;
+        };
+      };
+    };
+  }
+
+  method : ScanOf(name : String) ~ Int {
+    if(name->Equals("enter")) { return Scancode->SDL_SCANCODE_RETURN; };
+    if(name->Equals("space")) { return Scancode->SDL_SCANCODE_SPACE; };
+    if(name->Equals("esc")) { return Scancode->SDL_SCANCODE_ESCAPE; };
+    if(name->Equals("up")) { return Scancode->SDL_SCANCODE_UP; };
+    if(name->Equals("down")) { return Scancode->SDL_SCANCODE_DOWN; };
+    if(name->Equals("left")) { return Scancode->SDL_SCANCODE_LEFT; };
+    if(name->Equals("right")) { return Scancode->SDL_SCANCODE_RIGHT; };
+    if(name->Equals("w")) { return Scancode->SDL_SCANCODE_W; };
+    if(name->Equals("a")) { return Scancode->SDL_SCANCODE_A; };
+    if(name->Equals("s")) { return Scancode->SDL_SCANCODE_S; };
+    if(name->Equals("d")) { return Scancode->SDL_SCANCODE_D; };
+    if(name->Equals("e")) { return Scancode->SDL_SCANCODE_E; };
+    if(name->Equals("p")) { return Scancode->SDL_SCANCODE_P; };
+    if(name->Equals("1")) { return Scancode->SDL_SCANCODE_1; };
+    if(name->Equals("2")) { return Scancode->SDL_SCANCODE_2; };
+    if(name->Equals("tab")) { return Scancode->SDL_SCANCODE_TAB; };
+    return -1;
+  }
+
+  # --keys +d,+space,wait4,-d ...: one token every 4 frames; +k holds, -k releases, k presses
+  method : ScriptedKeys() ~ Nil {
+    if(@keys = Nil | @key_at >= @keys->Size() | @tick % 4 <> 0 | @tick < 8) {
+      return;
+    };
+    name := @keys[@key_at];
+    @key_at += 1;
+    if(name->StartsWith("+")) {
+      code := ScanOf(name->SubString(1));
+      if(code >= 0) {
+        @held[code] := true;
+      };
+    }
+    else if(name->StartsWith("-")) {
+      code := ScanOf(name->SubString(1));
+      if(code >= 0) {
+        @held[code] := false;
+      };
+    }
+    else {
+      code := ScanOf(name);
+      if(code >= 0) {
+        Key(code);
+      };
+    };
+  }
+
+  method : Beep(id : Int) ~ Nil {
+    if(@sound <> Nil) {
+      @sound->Play(id);
+    };
+  }
+
+  method : Key(code : Int) ~ Nil {
+    if(code = Scancode->SDL_SCANCODE_F2) {
+      @crt := <>@crt;
+      return;
+    };
+    if(code = Scancode->SDL_SCANCODE_F3) {
+      if(@sound <> Nil) {
+        @sound->SetOn(<>@sound->IsOn());
+      };
+      return;
+    };
+    start := code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_KP_ENTER;
+    if(@state = 0) {
+      if(start) {
+        @state := 1;
+        Beep(6);
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE | code = Scancode->SDL_SCANCODE_Q) {
+        @quit := true;
+      };
+    }
+    else if(@state = 1) {
+      slot := @sel_row;
+      if(slot > 1) {
+        slot := 1;
+      };
+      if(code = Scancode->SDL_SCANCODE_1) {
+        @players := 1;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_2) {
+        @players := 2;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_LEFT | code = Scancode->SDL_SCANCODE_A) {
+        @sel_cls[slot] := (@sel_cls[slot] + 3) % 4;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_RIGHT | code = Scancode->SDL_SCANCODE_D) {
+        @sel_cls[slot] := (@sel_cls[slot] + 1) % 4;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) {
+        @sel_diff := (@sel_diff + 3) % 4;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) {
+        @sel_diff := (@sel_diff + 1) % 4;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_TAB & @players = 2) {
+        @sel_row := 1 - @sel_row;
+        Beep(15);
+      }
+      else if(start) {
+        NewGame();
+        Beep(7);
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+        @state := 0;
+      };
+    }
+    else if(@state = 2) {
+      if(code = Scancode->SDL_SCANCODE_P) {
+        @state := 3;
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+        @state := 3;
+      }
+      else if(code = Scancode->SDL_SCANCODE_F4) {
+        @auto := <>@auto;
+      };
+    }
+    else if(@state = 3) {
+      if(code = Scancode->SDL_SCANCODE_P | start) {
+        @state := 2;
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+        @state := 0;
+        @auto := false;
+      };
+    }
+    else {
+      if(start) {
+        NewGame();
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+        @state := 0;
+      };
+    };
+  }
+
+  # the inputs of the humans (held keys), or the bot's
+  method : Controls() ~ Nil {
+    if(@auto) {
+      each(p : @players) {
+        @bot->Act(p);
+      };
+      return;
+    };
+    dx0 := 0;
+    dy0 := 0;
+    if(@held[Scancode->SDL_SCANCODE_A]) { dx0 -= 1; };
+    if(@held[Scancode->SDL_SCANCODE_D]) { dx0 += 1; };
+    if(@held[Scancode->SDL_SCANCODE_W]) { dy0 -= 1; };
+    if(@held[Scancode->SDL_SCANCODE_S]) { dy0 += 1; };
+    @game->SetInput(0, dx0, dy0, @held[Scancode->SDL_SCANCODE_SPACE], @held[Scancode->SDL_SCANCODE_E]);
+    if(@players = 2) {
+      dx1 := 0;
+      dy1 := 0;
+      if(@held[Scancode->SDL_SCANCODE_LEFT]) { dx1 -= 1; };
+      if(@held[Scancode->SDL_SCANCODE_RIGHT]) { dx1 += 1; };
+      if(@held[Scancode->SDL_SCANCODE_UP]) { dy1 -= 1; };
+      if(@held[Scancode->SDL_SCANCODE_DOWN]) { dy1 += 1; };
+      @game->SetInput(1, dx1, dy1, @held[Scancode->SDL_SCANCODE_RETURN], @held[229]);
+    };
+  }
+
+  # ---- one frame ----
+
+  method : Step() ~ Nil {
+    Controls();
+    @game->Step();
+    Consume();
+  }
+
+  method : Update() ~ Nil {
+    @tick += 1;
+    if(@state = 2) {
+      Step();
+      if(@banner_t > 0) {
+        @banner_t -= 1;
+      };
+      if(@game->State() = 1 | @game->State() = 3) {
+        @end_t += 1;
+        if(@end_t > 110) {
+          if(@game->TotalScore() > @best) {
+            @best := @game->TotalScore();
+            if(@shot_file = Nil & <>@demo) {
+              SaveBest();
+            };
+          };
+          @state := 4;
+        };
+      };
+    };
+    if(@state >= 2) {
+      @dv->UpdateFx();
+      UpdateCamera();
+    };
+    if(@shake > 0) {
+      @shake -= 1;
+    };
+    if(@flash > 0) {
+      @flash -= 1;
+    };
+    if(@sound <> Nil) {
+      @sound->Pump();
+    };
+  }
+
+  method : UpdateCamera() ~ Nil {
+    sx := 0.0;
+    sy := 0.0;
+    n := 0;
+    each(p : @game->Players()) {
+      if(@game->Alive(p)) {
+        sx += @game->X(p);
+        sy += @game->Y(p);
+        n += 1;
+      };
+    };
+    if(n = 0) {
+      return;
+    };
+    tx := sx / n->As(Float) - 120.0;
+    ty := sy / n->As(Float) - 88.0;
+    maxx := (@game->Level()->W() * 16 - 240)->As(Float);
+    maxy := (@game->Level()->H() * 16 - 176)->As(Float);
+    if(tx < 0.0) { tx := 0.0; };
+    if(ty < 0.0) { ty := 0.0; };
+    if(tx > maxx) { tx := maxx; };
+    if(ty > maxy) { ty := maxy; };
+    @camx += (tx - @camx) * 0.2;
+    @camy += (ty - @camy) * 0.2;
+  }
+
+  # what happened this frame becomes particles, numbers and sounds
+  method : Consume() ~ Nil {
+    n := @game->EventCount();
+    each(i : n) {
+      k := @game->Event(i, 0);
+      x := @game->Event(i, 1);
+      y := @game->Event(i, 2);
+      a := @game->Event(i, 3);
+      b := @game->Event(i, 4);
+      fx := x->As(Float);
+      fy := y->As(Float);
+      if(k = GtEv->HIT) {
+        if(a > 0) {
+          @dv->Burst(fx, fy, 6, DgCol->RED, 1.4, 0.3);
+        }
+        else {
+          @dv->Burst(fx, fy, 4, DgCol->GREY, 1.2, 0.2);
+        };
+        Beep(1);
+      }
+      else if(k = GtEv->HURT) {
+        @dv->Burst(fx, fy, 8, DgCol->DKRED, 1.6, 0.4);
+        @dv->Floater("-" + a->ToString(), fx - 6.0, fy - 10.0, DgCol->RED, 0);
+        @shake := DgUtil->Max(@shake, 4);
+        @flash := 6;
+        @flash_col := DgCol->RED;
+        Beep(2);
+      }
+      else if(k = GtEv->KILL) {
+        @dv->Burst(fx, fy, 16, DgCol->GREY, 2.0, 0.6);
+        @dv->Burst(fx, fy, 8, DgCol->WHITE, 1.2, 0.6);
+        Beep(4);
+      }
+      else if(k = GtEv->GEN_DEAD) {
+        @dv->Burst(fx, fy, 40, DgCol->ORANGE, 2.8, 1.0);
+        @dv->Burst(fx, fy, 20, DgCol->GOLD, 2.0, 1.2);
+        @dv->Fx(1, x / 16, y / 16, 4);
+        @shake := DgUtil->Max(@shake, 6);
+        Beep(14);
+      }
+      else if(k = GtEv->PICK) {
+        @dv->Burst(fx, fy, 8, DgCol->GOLD, 1.3, 1.0);
+        if(a = GtIt->GOLD | a = GtIt->GEM | a = GtIt->CHEST) {
+          @dv->Floater("+" + b->ToString(), fx - 8.0, fy - 12.0, DgCol->GOLD, 0);
+          Beep(5);
+        }
+        else {
+          Beep(6);
+        };
+      }
+      else if(k = GtEv->FOOD) {
+        @dv->Burst(fx, fy, 10, DgCol->GREEN, 1.2, 1.2);
+        @dv->Floater("+" + a->ToString(), fx - 8.0, fy - 12.0, DgCol->GREEN, 0);
+        Beep(11);
+      }
+      else if(k = GtEv->FIRE) {
+        Beep(3);
+      }
+      else if(k = GtEv->BALL) {
+        Beep(9);
+      }
+      else if(k = GtEv->POTION) {
+        @dv->Fx(1, x / 16, y / 16, 4);
+        @dv->Burst(fx, fy, 60, DgCol->CYAN, 3.4, 0.5);
+        @shake := 10;
+        @flash := 14;
+        @flash_col := DgCol->WHITE;
+        Beep(8);
+      }
+      else if(k = GtEv->DOOR) {
+        @dv->Burst(fx, fy, 10, DgCol->GOLD, 1.4, 0.6);
+        Beep(13);
+      }
+      else if(k = GtEv->EXIT) {
+        Beep(16);
+      }
+      else if(k = GtEv->DEAD) {
+        @dv->Burst(fx, fy, 50, DgCol->DKRED, 3.0, 0.4);
+        @flash := 18;
+        @flash_col := DgCol->RED;
+        Beep(17);
+      }
+      else if(k = GtEv->WON) {
+        @dv->Burst(fx, fy, 80, DgCol->GOLD, 3.2, 1.5);
+        Beep(18);
+      }
+      else if(k = GtEv->SPAWN) {
+        @dv->Burst(fx, fy, 6, DgCol->PURPLE, 1.0, 0.5);
+      }
+      else if(k = GtEv->BLINK) {
+        @dv->Fx(3, x / 16, y / 16, 4);
+        Beep(12);
+      };
+    };
+    @game->ClearEvents();
+  }
+
+  # ---- drawing ----
+
+  method : Draw() ~ Nil {
+    @r->SetTarget(@screen);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @r->SetDrawColor(0, 0, 0, 255);
+    @r->Clear();
+    if(@state = 0) {
+      DrawTitle();
+    }
+    else if(@state = 1) {
+      DrawSetup();
+    }
+    else {
+      DrawWorld();
+      DrawHud();
+      if(@state = 3) {
+        @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+        @dv->Box(0, 0, 240, 176, 0, 130);
+        @dv->TextCenter("PAUSED", 120, 70, DgCol->GOLD, 3);
+        @dv->TextCenter("P or ENTER: go on     ESC: quit to title", 120, 104, DgCol->WHITE, 1);
+      }
+      else if(@state = 4) {
+        DrawEnding();
+      };
+      if(@auto) {
+        @dv->Text("DEMO: the computer plays (F4 stops)", 6, 4, DgCol->GOLD);
+      };
+    };
+    @r->SetTarget(Nil);
+    @r->SetDrawColor(0, 0, 0, 255);
+    @r->Clear();
+    @r->Copy(@screen, Nil, Nil);
+    if(@crt & @scale >= 2) {
+      @dv->DrawScanlines(320 * @scale, 200 * @scale, @scale);
+    };
+  }
+
+  method : HeroTexture(cls : Int, frame : Int) ~ Texture {
+    base := [0, 0, 2, 1];
+    return @art->Hero(base[cls], frame);
+  }
+
+  method : HeroTint(cls : Int, on : Bool) ~ Nil {
+    tex := HeroTexture(cls, 0);
+    tex1 := HeroTexture(cls, 1);
+    if(on & cls = GtCls->VALKYRIE) {
+      tex->SetColorMod(140, 160, 255);
+      tex1->SetColorMod(140, 160, 255);
+    }
+    else {
+      tex->SetColorMod(255, 255, 255);
+      tex1->SetColorMod(255, 255, 255);
+    };
+  }
+
+  method : ClassColor(cls : Int) ~ Int {
+    cols := [DgCol->RED, DgCol->BLUE, DgCol->GOLD, DgCol->GREEN];
+    return cols[cls];
+  }
+
+  method : DrawWorld() ~ Nil {
+    g := @game;
+    lvl := g->Level();
+    theme := lvl->Theme();
+    ox := @camx->As(Int);
+    oy := @camy->As(Int);
+    if(@shake > 0) {
+      ox += Int->Random(@shake) % (@shake + 1) - @shake / 2;
+      oy += Int->Random(@shake) % (@shake + 1) - @shake / 2;
+    };
+    x0 := ox / 16;
+    y0 := oy / 16;
+    frame := (@tick / 8) % 4;
+
+    each(ty : 13) {
+      y := y0 + ty;
+      sy := y * 16 - oy;
+      each(tx : 16) {
+        x := x0 + tx;
+        sx := x * 16 - ox;
+        t := lvl->Tile(x, y);
+        if(lvl->InBounds(x, y)) {
+          @dv->Blit(@art->Tile(t, theme, lvl->Vary(x, y), frame), sx, sy);
+        };
+      };
+    };
+
+    # generators
+    each(i : g->GenCount()) {
+      gx := g->GenX(i) * 16 - ox;
+      gy := g->GenY(i) * 16 - oy;
+      if(gx > -16 & gy > -16 & gx < 240 & gy < 176) {
+        @dv->Blit(@gart->Gen(g->GenKind(i), (@tick / 14 + i) % 2), gx, gy);
+        if(g->GenHp(i) < 5 + g->LevelNo()) {
+          @dv->Box(gx + 1, gy - 2, 14, 2, 0, 255);
+          @dv->Box(gx + 1, gy - 2, DgUtil->Min(14, 14 * g->GenHp(i) / (5 + g->LevelNo() + 1)), 2, DgCol->RED, 255);
+        };
+      };
+    };
+
+    # items
+    each(i : g->ItemSlots()) {
+      k := g->ItemKind(i);
+      if(k >= 0) {
+        ix := g->ItemX(i) * 16 - ox;
+        iy := g->ItemY(i) * 16 - oy;
+        if(ix > -16 & iy > -16 & ix < 240 & iy < 176) {
+          bob := 0;
+          if((@tick / 12 + i) % 2 = 0) {
+            bob := -1;
+          };
+          if(k = GtIt->FOOD) {
+            @dv->Blit(@gart->Food(), ix, iy + bob);
+          }
+          else if(k = GtIt->KEY) {
+            @dv->Blit(@gart->Key(), ix, iy + bob);
+          }
+          else if(k = GtIt->POTION) {
+            @dv->Blit(@art->Item(DgIt->POTION_MANA, 0), ix, iy + bob);
+          }
+          else if(k = GtIt->GOLD) {
+            @dv->Blit(@art->Item(DgIt->GOLD, 0), ix, iy + bob);
+          }
+          else if(k = GtIt->GEM) {
+            @dv->Blit(@art->Item(DgIt->GEM, i), ix, iy + bob);
+          }
+          else {
+            @dv->Blit(@art->Tile(DgTile->CHEST, theme, 0, 0), ix, iy);
+          };
+        };
+      };
+    };
+
+    # monsters
+    each(m : g->MonSlots()) {
+      k := g->MonKind(m);
+      if(k >= 0) {
+        mx := g->MonX(m)->As(Int) - 8 - ox;
+        my := g->MonY(m)->As(Int) - 10 - oy;
+        if(mx > -20 & my > -20 & mx < 250 & my < 190) {
+          DrawMonster(m, k, mx, my);
+        };
+      };
+    };
+
+    # heroes
+    each(p : g->Players()) {
+      if(g->Alive(p)) {
+        hx := g->X(p)->As(Int) - 8 - ox;
+        hy := g->Y(p)->As(Int) - 10 - oy;
+        @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+        @r->FilledEllipseColor(hx + 8, hy + 14, 5, 2, Color->New(0, 0, 0, 100));
+        cls := g->Cls(p);
+        HeroTint(cls, true);
+        frame2 := (g->Walk(p) / 6) % 2;
+        tex := HeroTexture(cls, frame2);
+        if(g->Flash(p) > 0) {
+          tex->SetColorMod(255, 110, 110);
+        };
+        @dv->BlitFlip(tex, hx, hy, 16, 16, g->FaceX(p) < 0);
+        HeroTint(cls, true);
+        # a coloured marker over the head tells the heroes apart
+        @dv->Box(hx + 5, hy - 3, 6, 2, ClassColor(cls), 255);
+      };
+    };
+
+    # shots
+    each(i : g->ShotSlots()) {
+      if(g->ShotLife(i) > 0) {
+        sx := g->ShotX(i)->As(Int) - ox;
+        sy := g->ShotY(i)->As(Int) - oy;
+        tex := @art->Fx(4, (@tick / 3) % 2);
+        if(g->ShotOwner(i) >= 0) {
+          cols := [255, 120, 100, 120, 170, 255, 255, 240, 120, 140, 255, 140];
+          ci := g->ShotCls(i) * 3;
+          tex->SetColorMod(cols[ci], cols[ci + 1], cols[ci + 2]);
+          @dv->BlitSize(tex, sx - 4, sy - 4, 8, 8);
+        }
+        else {
+          tex->SetColorMod(255, 150, 60);
+          @dv->BlitSize(tex, sx - 5, sy - 5, 10, 10);
+        };
+        tex->SetColorMod(255, 255, 255);
+      };
+    };
+
+    @dv->DrawEffects(ox, oy);
+    if(@flash > 0) {
+      @dv->Box(0, 0, 240, 176, @flash_col, DgUtil->Min(120, @flash * 12));
+    };
+
+    # the level card
+    if(@banner_t > 0) {
+      a := 255;
+      if(@banner_t < 40) {
+        a := @banner_t * 6;
+      };
+      @dv->Box(0, 62, 240, 40, 0, a * 160 / 255);
+      @dv->TextCenter("LEVEL " + g->LevelNo()->ToString(), 120, 66, DgCol->GOLD, 3);
+      @dv->TextCenter(DgData->ThemeName((g->LevelNo() - 1) % 8), 120, 90, DgCol->WHITE, 1);
+    };
+    if(g->State() = 2) {
+      @dv->Box(0, 70, 240, 30, 0, 150);
+      @dv->TextCenter("LEVEL CLEARED", 120, 76, DgCol->GOLD, 2);
+    };
+  }
+
+  method : DrawMonster(m : Int, k : Int, mx : Int, my : Int) ~ Nil {
+    sprite := GtGame->SpriteOf(k);
+    tex := @art->Mon(sprite, (@tick / 16 + m) % 2);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @r->FilledEllipseColor(mx + 8, my + 14, 5, 2, Color->New(0, 0, 0, 90));
+    if(@game->MonFlash(m) > 0) {
+      tex->SetColorMod(255, 120, 120);
+    };
+    if(k = GtMon->GHOST) {
+      tex->SetAlphaMod(150);
+    }
+    else if(k = GtMon->SORCERER) {
+      tex->SetColorMod(200, 160, 255);
+    }
+    else if(k = GtMon->GRUNT) {
+      tex->SetColorMod(255, 255, 255);
+    };
+    if(k = GtMon->DEATH) {
+      @dv->BlitFlip(tex, mx - 2, my - 4, 20, 20, @game->MonFace(m) < 0);
+    }
+    else {
+      @dv->BlitFlip(tex, mx, my, 16, 16, @game->MonFace(m) < 0);
+    };
+    tex->SetColorMod(255, 255, 255);
+    tex->SetAlphaMod(255);
+  }
+
+  method : DrawHud() ~ Nil {
+    g := @game;
+    @dv->Panel(240, 0, 80, 176);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @dv->Text("LEVEL " + g->LevelNo()->ToString(), 245, 5, DgCol->CYAN);
+    each(p : g->Players()) {
+      y := 18 + p * 70;
+      cls := g->Cls(p);
+      col := ClassColor(cls);
+      @dv->Box(243, y, 74, 11, 0x0e0d1f, 255);
+      @dv->Box(243, y, 3, 11, col, 255);
+      @dv->Text(GtGame->ClassName(cls), 249, y + 2, col);
+      if(g->Alive(p)) {
+        @dv->Text("HEALTH " + g->Health(p)->ToString(), 245, y + 14, DgCol->WHITE);
+        @dv->Bar(245, y + 24, 70, 6, g->Health(p), 999, DgCol->RED);
+        @dv->Text("SCORE", 245, y + 34, DgCol->GREY);
+        @dv->Text(g->Score(p)->ToString(), 245, y + 43, DgCol->GOLD);
+        @dv->Blit(@gart->Key(), 243, y + 50);
+        @dv->Text("x" + g->Keys(p)->ToString(), 259, y + 55, DgCol->WHITE);
+        @dv->Blit(@art->Item(DgIt->POTION_MANA, 0), 280, y + 50);
+        @dv->Text("x" + g->Potions(p)->ToString(), 296, y + 55, DgCol->WHITE);
+      }
+      else {
+        @dv->Text("DEAD", 245, y + 20, DgCol->DKRED);
+        @dv->Text("SCORE " + g->Score(p)->ToString(), 245, y + 34, DgCol->GOLD);
+      };
+    };
+    if(g->Players() = 1) {
+      @dv->Text("WASD move", 245, 100, DgCol->DKGREY);
+      @dv->Text("SPACE fire", 245, 109, DgCol->DKGREY);
+      @dv->Text("E potion", 245, 118, DgCol->DKGREY);
+      @dv->Text("P pause", 245, 127, DgCol->DKGREY);
+    };
+    @dv->Text(DgData->DiffName(g->Diff()), 245, 151, DgCol->DKGREY);
+    @dv->Text("Generators " + g->GenCount()->ToString(), 245, 162, DgCol->DKGREY);
+
+    @dv->Box(0, 176, 320, 24, 0x151428, 255);
+    @dv->Box(0, 176, 320, 1, DgCol->PANEL_HI, 255);
+    msg := g->Message();
+    if(msg->Size() > 0) {
+      @dv->TextCenter(msg, 160, 180, DgCol->WHITE, 1);
+    }
+    else {
+      @dv->TextCenter("Destroy the generators, find the exit.", 160, 180, DgCol->DKGREY, 1);
+    };
+    @dv->TextCenter("Monsters: " + g->MonCount()->ToString(), 160, 191, DgCol->DKGREY, 1);
+  }
+
+  method : DrawEnding() ~ Nil {
+    g := @game;
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @dv->Box(0, 0, 320, 200, 0, 160);
+    if(g->State() = 3) {
+      @dv->TextCenter("YOU ESCAPED!", 162, 16, DgCol->BLACK, 3);
+      @dv->TextCenter("YOU ESCAPED!", 160, 14, DgCol->GOLD, 3);
+    }
+    else {
+      @dv->TextCenter("GAME OVER", 161, 17, DgCol->BLACK, 3);
+      @dv->TextCenter("GAME OVER", 160, 15, DgCol->RED, 3);
+      @dv->TextCenter("Your life force has run out.", 160, 46, DgCol->GREY, 1);
+    };
+    @dv->Panel(60, 62, 200, 90);
+    @dv->Text("Reached level " + g->LevelNo()->ToString() + " of 8  (" + DgData->DiffName(g->Diff()) + ")", 74, 70, DgCol->WHITE);
+    each(p : g->Players()) {
+      @dv->Text(GtGame->ClassName(g->Cls(p)) + "  " + g->Score(p)->ToString(), 74, 86 + p * 12, ClassColor(g->Cls(p)));
+    };
+    @dv->Text("TOTAL " + g->TotalScore()->ToString(), 74, 118, DgCol->GOLD);
+    @dv->Text("BEST  " + @best->ToString(), 74, 130, DgCol->GOLD);
+    if((@tick / 25) % 2 = 0) {
+      @dv->TextCenter("ENTER: play again   ESC: title", 160, 168, DgCol->WHITE, 1);
+    };
+  }
+
+  method : DrawTitle() ~ Nil {
+    t := @tick;
+    @dv->DrawPlasma(t);
+    each(x : 20) {
+      tile := DgTile->WALL;
+      if(x % 5 = 3) {
+        tile := DgTile->TORCH;
+      };
+      @dv->Blit(@art->Tile(tile, 5, x * 37, (t / 8) % 4), x * 16, 168);
+      @dv->Blit(@art->Tile(DgTile->WALL, 5, x * 11 + 5, 0), x * 16, 184);
+      @dv->Blit(@art->Tile(DgTile->FLOOR, 5, x * 13, 0), x * 16, 152);
+      @dv->Blit(@art->Tile(DgTile->FLOOR, 5, x * 17 + 3, 0), x * 16, 136);
+    };
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @dv->Box(0, 136, 320, 32, 0, 60);
+    # heroes run right, shooting; monsters chase them
+    each(i : 4) {
+      px := ((t * 2 + i * 60) % 520) - 100;
+      HeroTint(i, true);
+      @dv->BlitFlip(HeroTexture(i, (t / 6) % 2), px, 148, 16, 16, false);
+      HeroTint(i, true);
+      if((t / 8 + i) % 3 = 0) {
+        @dv->BlitSize(@art->Fx(4, (t / 3) % 2), px + 22 + (t % 24), 154, 8, 8);
+      };
+    };
+    each(i : 5) {
+      mx := ((t * 2 + i * 60) % 520) - 100 - 80 - i * 14;
+      @dv->BlitFlip(@art->Mon(GtGame->SpriteOf(i), (t / 8 + i) % 2), mx, 148, 16, 16, false);
+    };
+    title := "GAUNTLET";
+    tw := @font->Width(title, 4);
+    each(c : title->Size()) {
+      ch := title->SubString(c, 1);
+      yo := (Float->Sin((t + c * 9)->As(Float) / 12.0) * 4.0)->As(Int);
+      cx := 160 - tw / 2 + c * 24;
+      @font->Draw(ch, cx + 2, 22 + yo + 2, 0x000000, 4);
+      @font->Draw(ch, cx, 22 + yo, 0xac3232, 4);
+      @font->Draw(ch, cx, 21 + yo, 0xfbf236, 4);
+    };
+    @dv->TextCenter("O F   O B J E C K", 160, 62, DgCol->WHITE, 2);
+    @dv->TextCenter("one or two heroes, endless monsters, AI that hunts", 160, 84, DgCol->CYAN, 1);
+    if((t / 25) % 2 = 0) {
+      @dv->TextCenter("PRESS ENTER", 160, 108, DgCol->GOLD, 2);
+    };
+    @dv->TextCenter("A* . Minimax . ghosts through walls . Death", 160, 126, DgCol->GREY, 1);
+  }
+
+  method : DrawSetup() ~ Nil {
+    t := @tick;
+    @dv->DrawPlasma(t / 2);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @dv->Box(0, 0, 320, 200, 0, 120);
+    @dv->TextCenter("CHOOSE YOUR HERO", 160, 6, DgCol->GOLD, 2);
+    each(i : 4) {
+      x := 6 + i * 78;
+      active0 := @sel_cls[0] = i;
+      active1 := @players = 2 & @sel_cls[1] = i;
+      @dv->Panel(x, 26, 74, 96);
+      if(active0) {
+        pulse := 90 + (Float->Sin(t->As(Float) / 8.0) * 60.0)->As(Int);
+        @dv->Box(x - 1, 25, 76, 2, DgCol->GOLD, pulse);
+        @dv->Box(x - 1, 121, 76, 2, DgCol->GOLD, pulse);
+        @dv->Box(x - 1, 25, 2, 98, DgCol->GOLD, pulse);
+        @dv->Box(x + 73, 25, 2, 98, DgCol->GOLD, pulse);
+        @dv->Text("P1", x + 4, 30, DgCol->GOLD);
+      };
+      if(active1) {
+        @dv->Text("P2", x + 56, 30, DgCol->GREEN);
+        @dv->Box(x + 2, 119, 70, 2, DgCol->GREEN, 200);
+      };
+      HeroTint(i, true);
+      @dv->BlitSize(HeroTexture(i, (t / 18) % 2), x + 21, 38, 32, 32);
+      HeroTint(i, true);
+      @dv->TextCenter(GtGame->ClassName(i), x + 37, 76, ClassColor(i), 1);
+      hp := ["900", "900", "700", "700"];
+      spd := ["slow", "avg", "avg", "FAST"];
+      @dv->TextCenter("HP " + hp[i], x + 37, 88, DgCol->GREY, 1);
+      @dv->TextCenter("speed " + spd[i], x + 37, 97, DgCol->GREY, 1);
+      @dv->TextCenter(GtGame->ClassBlurb(i), x + 37, 108, DgCol->CYAN, 1);
+    };
+    players_txt := "1 PLAYER";
+    if(@players = 2) {
+      players_txt := "2 PLAYERS (TAB: P1/P2 pick)";
+    };
+    @dv->TextCenter(players_txt + "   [1] [2]", 160, 130, DgCol->WHITE, 1);
+    each(d : 4) {
+      x := 12 + d * 76;
+      c := DgCol->DKGREY;
+      if(d = @sel_diff) {
+        c := DgCol->GOLD;
+        @dv->Box(x - 2, 144, 70, 12, 0x3f3f74, 255);
+      };
+      @dv->TextCenter(DgData->DiffName(d), x + 33, 146, c, 1);
+    };
+    desc := ["Slow monsters, slow spawns.", "A fair fight.", "Fast, many, smarter.", "Swarms. Good luck."];
+    @dv->TextCenter(desc[@sel_diff], 160, 162, DgCol->GREY, 1);
+    @dv->TextCenter("L/R hero   U/D level   ENTER play   ESC back", 160, 186, DgCol->DKGREY, 1);
+  }
+}

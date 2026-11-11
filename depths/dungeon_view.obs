@@ -1,0 +1,1295 @@
+#~
+# Tiny Dungeon: Depths -- the pictures. Everything is drawn into a 320 x 200 "VGA"
+# screen (a texture), which the window then stretches 3 times with sharp pixels and a
+# light CRT scanline layer. This file draws a frame: the map with torch light and a
+# memory of where you have been, the creatures, the effects (particles, floating
+# numbers, projectiles, flashes, screen shake), the side panel and the message line.
+# The title, hero selection, inventory, help and the two ending screens are here too.
+#
+# DgView never changes the game: it only asks DgGame what is where, and reads the list
+# of things that happened (DgEv) to decide what to show and which sound to play.
+~#
+
+use Collection;
+use Game.SDL2;
+
+consts DgCol {
+  WHITE := 16777215,
+  BLACK := 0,
+  GOLD := 16579126,
+  RED := 14243667,
+  DKRED := 11284018,
+  GREEN := 10020176,
+  DKGREEN := 3643503,
+  BLUE := 6516449,
+  CYAN := 6278628,
+  PURPLE := 7750282,
+  GREY := 10202519,
+  DKGREY := 5857862,
+  NAVY := 2236468,
+  ORANGE := 14643489,
+  PANEL := 1776458,
+  PANEL_HI := 4144959,
+  PANEL_LO := 0x0e0d1f
+}
+
+consts DgLay {
+  TS := 16,
+  VW := 15,
+  VH := 11,
+  PX := 240,
+  MY := 176
+}
+
+class DgView {
+  @r : Renderer;
+  @art : DgArt;
+  @font : DgFont;
+  @snd : DgSound;
+  @g : DgGame;
+  @tick : Int;
+  @rc : Rect;
+  @rd : Rect;
+
+  # camera and screen effects
+  @camx : Float;
+  @camy : Float;
+  @shake : Int;
+  @flash : Int;
+  @flash_col : Int;
+  @banner : String;
+  @banner2 : String;
+  @banner_t : Int;
+  @reduced : Bool;
+
+  # particles
+  @pn : Int;
+  @ppx : Float[];
+  @ppy : Float[];
+  @pvx : Float[];
+  @pvy : Float[];
+  @plife : Int[];
+  @pcol : Int[];
+  @pgrav : Float[];
+
+  # floating numbers
+  @ftext : String[];
+  @fx : Float[];
+  @fy : Float[];
+  @flife : Int[];
+  @fcol : Int[];
+  @fbig : Int[];
+
+  # projectiles and animated sprites
+  @sx0 : Float[];
+  @sy0 : Float[];
+  @sx1 : Float[];
+  @sy1 : Float[];
+  @sage : Int[];
+  @skind : Int[];
+  @ekind : Int[];
+  @ex : Int[];
+  @ey : Int[];
+  @eage : Int[];
+  @elen : Int[];
+
+  # where the creatures are drawn (pixels, in map space)
+  @mvx : Float[];
+  @mvy : Float[];
+  @mseen : Bool[];
+  @hvx : Float;
+  @hvy : Float;
+  @hface : Int;
+  @hstep : Int;
+
+  # lighting batches: rectangles per darkness level
+  @lr : Int[,];
+  @ln : Int[];
+  @memory : Int[];
+  @memory_n : Int;
+
+  New(r : Renderer, art : DgArt, font : DgFont) {
+    @r := r;
+    @art := art;
+    @font := font;
+    @rc := Rect->New(0, 0, 16, 16);
+    @rd := Rect->New(0, 0, 16, 16);
+    @ppx := Float->New[400];
+    @ppy := Float->New[400];
+    @pvx := Float->New[400];
+    @pvy := Float->New[400];
+    @pgrav := Float->New[400];
+    @plife := Int->New[400];
+    @pcol := Int->New[400];
+    @ftext := String->New[24];
+    @fx := Float->New[24];
+    @fy := Float->New[24];
+    @flife := Int->New[24];
+    @fcol := Int->New[24];
+    @fbig := Int->New[24];
+    @sx0 := Float->New[16];
+    @sy0 := Float->New[16];
+    @sx1 := Float->New[16];
+    @sy1 := Float->New[16];
+    @sage := Int->New[16];
+    @skind := Int->New[16];
+    @ekind := Int->New[32];
+    @ex := Int->New[32];
+    @ey := Int->New[32];
+    @eage := Int->New[32];
+    @elen := Int->New[32];
+    @mvx := Float->New[64];
+    @mvy := Float->New[64];
+    @mseen := Bool->New[64];
+    @lr := Int->New[6, 1000];
+    @ln := Int->New[6];
+    @memory := Int->New[400];
+    @banner := "";
+    @banner2 := "";
+    @pn := 0;
+  }
+
+  method : public : SetSound(snd : DgSound) ~ Nil {
+    @snd := snd;
+  }
+
+  method : public : SetReduced(on : Bool) ~ Nil {
+    @reduced := on;
+  }
+
+  method : public : Tick() ~ Int {
+    return @tick;
+  }
+
+  method : public : Attach(g : DgGame) ~ Nil {
+    @g := g;
+    each(i : 64) {
+      @mseen[i] := false;
+    };
+    @hvx := (g->HeroX() * 16)->As(Float);
+    @hvy := (g->HeroY() * 16)->As(Float);
+    @camx := @hvx - 112.0;
+    @camy := @hvy - 80.0;
+    @pn := 0;
+    each(i : 24) {
+      @flife[i] := 0;
+    };
+    each(i : 16) {
+      @sage[i] := -1;
+    };
+    each(i : 32) {
+      @elen[i] := 0;
+    };
+    @shake := 0;
+    @flash := 0;
+  }
+
+  method : public : NewFloor() ~ Nil {
+    each(i : 64) {
+      @mseen[i] := false;
+    };
+    @hvx := (@g->HeroX() * 16)->As(Float);
+    @hvy := (@g->HeroY() * 16)->As(Float);
+    @camx := @hvx - 112.0;
+    @camy := @hvy - 80.0;
+    @banner := "FLOOR " + @g->Stat(DgStat->DEPTH)->ToString();
+    @banner2 := DgData->ThemeName(@g->Stat(DgStat->DEPTH) - 1);
+    @banner_t := 170;
+    @flash := 20;
+    @flash_col := DgCol->BLACK;
+    @pn := 0;
+  }
+
+  method : public : ClearBanner() ~ Nil {
+    @banner_t := 0;
+  }
+
+  # ---- small drawing helpers ----
+
+  method : Col(c : Int, a : Int) ~ Nil {
+    @r->SetDrawColor((c >> 16) and 255, (c >> 8) and 255, c and 255, a);
+  }
+
+  method : public : Box(x : Int, y : Int, w : Int, h : Int, c : Int, a : Int) ~ Nil {
+    Col(c, a);
+    @rc->SetX(x);
+    @rc->SetY(y);
+    @rc->SetW(w);
+    @rc->SetH(h);
+    @r->FillRect(@rc);
+  }
+
+  # a 90s bevelled panel: dark body, light top-left edge, shadow bottom-right
+  method : public : Panel(x : Int, y : Int, w : Int, h : Int) ~ Nil {
+    Box(x, y, w, h, DgCol->PANEL, 255);
+    Box(x, y, w, 1, DgCol->PANEL_HI, 255);
+    Box(x, y, 1, h, DgCol->PANEL_HI, 255);
+    Box(x, y + h - 1, w, 1, DgCol->PANEL_LO, 255);
+    Box(x + w - 1, y, 1, h, DgCol->PANEL_LO, 255);
+    Box(x + 2, y + 2, w - 4, h - 4, 1315912, 255);
+  }
+
+  method : public : Blit(tex : Texture, x : Int, y : Int) ~ Nil {
+    @rd->SetX(x);
+    @rd->SetY(y);
+    @rd->SetW(16);
+    @rd->SetH(16);
+    @r->Copy(tex, Nil, @rd);
+  }
+
+  method : public : BlitSize(tex : Texture, x : Int, y : Int, w : Int, h : Int) ~ Nil {
+    @rd->SetX(x);
+    @rd->SetY(y);
+    @rd->SetW(w);
+    @rd->SetH(h);
+    @r->Copy(tex, Nil, @rd);
+  }
+
+  method : public : BlitFlip(tex : Texture, x : Int, y : Int, w : Int, h : Int, flip : Bool) ~ Nil {
+    @rd->SetX(x);
+    @rd->SetY(y);
+    @rd->SetW(w);
+    @rd->SetH(h);
+    if(flip) {
+      @r->CopyEx(tex, Nil, @rd, 0.0, Nil, RendererFlip->SDL_FLIP_HORIZONTAL);
+    }
+    else {
+      @r->Copy(tex, Nil, @rd);
+    };
+  }
+
+  method : public : Text(s : String, x : Int, y : Int, c : Int) ~ Nil {
+    @font->DrawShadow(s, x, y, c, 0x101018, 1);
+  }
+
+  method : public : TextBig(s : String, x : Int, y : Int, c : Int, scale : Int) ~ Nil {
+    @font->DrawShadow(s, x, y, c, 0x101018, scale);
+  }
+
+  method : public : TextCenter(s : String, cx : Int, y : Int, c : Int, scale : Int) ~ Nil {
+    w := @font->Width(s, scale);
+    @font->DrawShadow(s, cx - w / 2, y, c, 0x101018, scale);
+  }
+
+  # a horizontal bar: value of max, fill colour, with a dark frame and a highlight line
+  method : public : Bar(x : Int, y : Int, w : Int, h : Int, v : Int, mx : Int, c : Int) ~ Nil {
+    Box(x, y, w, h, 0x0e0d1f, 255);
+    fill := 0;
+    if(mx > 0) {
+      fill := (w - 2) * DgUtil->Clamp(v, 0, mx) / mx;
+    };
+    if(fill > 0) {
+      Box(x + 1, y + 1, fill, h - 2, c, 255);
+      Box(x + 1, y + 1, fill, 1, 0xffffff, 70);
+    };
+  }
+
+  # ---- effects ----
+
+  method : public : Burst(px : Float, py : Float, n : Int, c : Int, speed : Float, up : Float) ~ Nil {
+    if(@reduced) {
+      n := n / 3;
+    };
+    each(i : n) {
+      if(@pn < 400) {
+        a := (DgView->Rnd(628))->As(Float) / 100.0;
+        s := speed * ((DgView->Rnd(100) + 30)->As(Float) / 100.0);
+        @ppx[@pn] := px;
+        @ppy[@pn] := py;
+        @pvx[@pn] := Float->Cos(a) * s;
+        @pvy[@pn] := Float->Sin(a) * s - up;
+        @pgrav[@pn] := 0.06;
+        @plife[@pn] := 14 + DgView->Rnd(18);
+        @pcol[@pn] := c;
+        @pn += 1;
+      };
+    };
+  }
+
+  function : Rnd(n : Int) ~ Int {
+    return Int->Random(n) % n;
+  }
+
+  method : public : Floater(text : String, px : Float, py : Float, c : Int, big : Int) ~ Nil {
+    each(i : 24) {
+      if(@flife[i] <= 0) {
+        @ftext[i] := text;
+        @fx[i] := px;
+        @fy[i] := py;
+        @flife[i] := 40;
+        @fcol[i] := c;
+        @fbig[i] := big;
+        return;
+      };
+    };
+  }
+
+  method : public : Fx(kind : Int, tx : Int, ty : Int, frames : Int) ~ Nil {
+    each(i : 32) {
+      if(@elen[i] <= 0) {
+        @ekind[i] := kind;
+        @ex[i] := tx;
+        @ey[i] := ty;
+        @eage[i] := 0;
+        @elen[i] := frames * 3;
+        return;
+      };
+    };
+  }
+
+  method : Shot(x0 : Int, y0 : Int, x1 : Int, y1 : Int, kind : Int) ~ Nil {
+    each(i : 16) {
+      if(@sage[i] < 0) {
+        @sx0[i] := (x0 * 16 + 8)->As(Float);
+        @sy0[i] := (y0 * 16 + 8)->As(Float);
+        @sx1[i] := (x1 * 16 + 8)->As(Float);
+        @sy1[i] := (y1 * 16 + 8)->As(Float);
+        @sage[i] := 0;
+        @skind[i] := kind;
+        return;
+      };
+    };
+  }
+
+  method : Sfx(id : Int) ~ Nil {
+    if(@snd <> Nil) {
+      @snd->Play(id);
+    };
+  }
+
+  # turn what just happened in the game into pictures and sounds
+  method : public : Consume() ~ Nil {
+    n := @g->EventCount();
+    each(i : n) {
+      k := @g->Event(i, 0);
+      x := @g->Event(i, 1);
+      y := @g->Event(i, 2);
+      a := @g->Event(i, 3);
+      b := @g->Event(i, 4);
+      px := (x * 16 + 8)->As(Float);
+      py := (y * 16 + 8)->As(Float);
+      if(k = DgEv->HIT_MON | k = DgEv->BOSS_HIT) {
+        col := DgCol->WHITE;
+        big := 0;
+        if(b = 1) {
+          col := DgCol->GOLD;
+          big := 1;
+          @shake := DgUtil->Max(@shake, 4);
+        };
+        Floater(a->ToString(), px - 4.0, py - 10.0, col, big);
+        Burst(px, py, 8, DgCol->RED, 1.6, 0.4);
+        Fx(5, x, y, 3);
+        Sfx(1);
+        if(k = DgEv->BOSS_HIT) {
+          @shake := DgUtil->Max(@shake, 3);
+        };
+      }
+      else if(k = DgEv->HIT_HERO) {
+        Floater("-" + a->ToString(), px - 6.0, py - 10.0, DgCol->RED, 1);
+        Burst(px, py, 10, DgCol->DKRED, 1.8, 0.5);
+        @shake := DgUtil->Max(@shake, 5);
+        @flash := 8;
+        @flash_col := DgCol->RED;
+        Sfx(2);
+      }
+      else if(k = DgEv->MISS) {
+        Floater("miss", px - 8.0, py - 10.0, DgCol->GREY, 0);
+        Sfx(3);
+      }
+      else if(k = DgEv->KILL) {
+        Burst(px, py, 22, DgCol->GREY, 2.2, 0.8);
+        Burst(px, py, 10, DgCol->WHITE, 1.4, 0.8);
+        Sfx(4);
+      }
+      else if(k = DgEv->PICKUP) {
+        Burst(px, py, 10, DgCol->GOLD, 1.5, 1.2);
+        if(a = DgIt->GOLD) {
+          Floater("+" + b->ToString(), px - 8.0, py - 12.0, DgCol->GOLD, 0);
+          Sfx(5);
+        }
+        else {
+          Sfx(6);
+        };
+      }
+      else if(k = DgEv->LEVELUP) {
+        Fx(3, x, y, 4);
+        Burst(px, py, 40, DgCol->GOLD, 2.6, 1.4);
+        Floater("LEVEL UP!", px - 24.0, py - 18.0, DgCol->GOLD, 1);
+        Sfx(7);
+        @flash := 10;
+        @flash_col := DgCol->GOLD;
+      }
+      else if(k = DgEv->FIREBALL) {
+        Fx(1, x, y, 4);
+        Burst(px, py, 30, DgCol->ORANGE, 2.6, 0.5);
+        Burst(px, py, 14, DgCol->GOLD, 1.8, 0.8);
+        @shake := DgUtil->Max(@shake, 5);
+        Sfx(8);
+      }
+      else if(k = DgEv->SHOT) {
+        Shot(x, y, a, b, 0);
+        Sfx(9);
+      }
+      else if(k = DgEv->SLASH) {
+        Fx(0, x, y, 4);
+        Sfx(10);
+      }
+      else if(k = DgEv->HEAL) {
+        if(b = 0) {
+          Fx(2, @g->HeroX(), @g->HeroY(), 4);
+          Burst((@g->HeroX() * 16 + 8)->As(Float), (@g->HeroY() * 16 + 8)->As(Float), 18, DgCol->GREEN, 1.2, 1.3);
+          Floater("+" + a->ToString(), px - 6.0, py - 12.0, DgCol->GREEN, 1);
+        }
+        else {
+          Floater("+" + a->ToString(), px - 6.0, py - 12.0, DgCol->GREEN, 0);
+        };
+        Sfx(11);
+      }
+      else if(k = DgEv->TELEPORT | k = DgEv->BLINK) {
+        Fx(3, x, y, 4);
+        Burst(px, py, 16, DgCol->PURPLE, 1.8, 0.6);
+        Sfx(12);
+      }
+      else if(k = DgEv->MAGIC) {
+        Fx(3, @g->HeroX(), @g->HeroY(), 4);
+        Burst((@g->HeroX() * 16 + 8)->As(Float), (@g->HeroY() * 16 + 8)->As(Float), 14, DgCol->CYAN, 1.5, 1.0);
+        Sfx(11);
+      }
+      else if(k = DgEv->DOOR) {
+        Sfx(13);
+      }
+      else if(k = DgEv->CHEST) {
+        Burst(px, py, 20, DgCol->GOLD, 2.0, 1.2);
+        Sfx(5);
+      }
+      else if(k = DgEv->SHRINE) {
+        Burst(px, py, 30, DgCol->CYAN, 2.0, 1.4);
+        Fx(2, x, y, 4);
+        Sfx(7);
+      }
+      else if(k = DgEv->TRAP) {
+        Burst(px, py, 10, DgCol->GREY, 1.6, 1.0);
+        @shake := DgUtil->Max(@shake, 3);
+        Floater("-" + a->ToString(), px - 6.0, py - 10.0, DgCol->RED, 1);
+        Sfx(2);
+      }
+      else if(k = DgEv->POISON) {
+        Fx(6, @g->HeroX(), @g->HeroY(), 2);
+        Floater("poison", px - 14.0, py - 8.0, DgCol->GREEN, 0);
+      }
+      else if(k = DgEv->ROAR) {
+        @shake := DgUtil->Max(@shake, 7);
+        Burst(px, py, 20, DgCol->DKRED, 2.4, 0.2);
+        Sfx(14);
+      }
+      else if(k = DgEv->SPLIT) {
+        Burst(px, py, 10, DgCol->GREEN, 1.4, 0.5);
+      }
+      else if(k = DgEv->STEP) {
+        @hstep += 1;
+        if(@hstep % 2 = 0) {
+          Sfx(15);
+        };
+        if(a <> 0) {
+          @hface := a;
+        };
+      }
+      else if(k = DgEv->STAIRS) {
+        if(@tick > 5) {
+          Sfx(16);
+        };
+      }
+      else if(k = DgEv->DEAD) {
+        Burst(px, py, 60, DgCol->DKRED, 3.0, 0.4);
+        @flash := 25;
+        @flash_col := DgCol->RED;
+        Sfx(17);
+      }
+      else if(k = DgEv->WON) {
+        Burst(px, py, 80, DgCol->GOLD, 3.2, 1.5);
+        Sfx(18);
+      };
+    };
+    @g->ClearEvents();
+  }
+
+  # ---- per frame ----
+
+  method : public : Update() ~ Nil {
+    if(@g <> Nil) {
+      UpdateWorld();
+    };
+    UpdateFx();
+  }
+
+  # the camera and the creatures' sliding (needs a game)
+  method : UpdateWorld() ~ Nil {
+
+    # the camera follows the hero
+    tx := @hvx - 112.0;
+    ty := @hvy - 80.0;
+    maxx := (@g->Level()->W() * 16 - 240)->As(Float);
+    maxy := (@g->Level()->H() * 16 - 176)->As(Float);
+    if(tx < 0.0) { tx := 0.0; };
+    if(ty < 0.0) { ty := 0.0; };
+    if(tx > maxx) { tx := maxx; };
+    if(ty > maxy) { ty := maxy; };
+    @camx += (tx - @camx) * 0.25;
+    @camy += (ty - @camy) * 0.25;
+
+    # creatures glide to their squares
+    gx := (@g->HeroX() * 16)->As(Float);
+    gy := (@g->HeroY() * 16)->As(Float);
+    @hvx += (gx - @hvx) * 0.45;
+    @hvy += (gy - @hvy) * 0.45;
+    if(Float->Abs(gx - @hvx) < 0.6) { @hvx := gx; };
+    if(Float->Abs(gy - @hvy) < 0.6) { @hvy := gy; };
+    each(i : 64) {
+      if(@g->MonKind(i) >= 0) {
+        mx := (@g->MonX(i) * 16)->As(Float);
+        my := (@g->MonY(i) * 16)->As(Float);
+        if(<>@mseen[i]) {
+          @mvx[i] := mx;
+          @mvy[i] := my;
+          @mseen[i] := true;
+        }
+        else {
+          @mvx[i] += (mx - @mvx[i]) * 0.4;
+          @mvy[i] += (my - @mvy[i]) * 0.4;
+          if(Float->Abs(mx - @mvx[i]) < 0.6) { @mvx[i] := mx; };
+          if(Float->Abs(my - @mvy[i]) < 0.6) { @mvy[i] := my; };
+        };
+      }
+      else {
+        @mseen[i] := false;
+      };
+    };
+  }
+
+  # screen shake, flashes, particles, floating numbers, projectiles: needs no game
+  method : public : UpdateFx() ~ Nil {
+    @tick += 1;
+    if(@shake > 0) {
+      @shake -= 1;
+    };
+    if(@flash > 0) {
+      @flash -= 1;
+    };
+    if(@banner_t > 0) {
+      @banner_t -= 1;
+    };
+
+    # particles
+    i := 0;
+    while(i < @pn) {
+      @plife[i] -= 1;
+      if(@plife[i] <= 0) {
+        @pn -= 1;
+        @ppx[i] := @ppx[@pn];
+        @ppy[i] := @ppy[@pn];
+        @pvx[i] := @pvx[@pn];
+        @pvy[i] := @pvy[@pn];
+        @pgrav[i] := @pgrav[@pn];
+        @plife[i] := @plife[@pn];
+        @pcol[i] := @pcol[@pn];
+      }
+      else {
+        @ppx[i] += @pvx[i];
+        @ppy[i] += @pvy[i];
+        @pvy[i] += @pgrav[i];
+        @pvx[i] := @pvx[i] * 0.96;
+        i += 1;
+      };
+    };
+    each(f : 24) {
+      if(@flife[f] > 0) {
+        @flife[f] -= 1;
+        @fy[f] -= 0.35;
+      };
+    };
+    each(s : 16) {
+      if(@sage[s] >= 0) {
+        @sage[s] += 1;
+        if(@sage[s] > 8) {
+          @sage[s] := -1;
+        };
+      };
+    };
+    each(e : 32) {
+      if(@elen[e] > 0) {
+        @eage[e] += 1;
+        @elen[e] -= 1;
+      };
+    };
+  }
+
+  # ---- the map ----
+
+  method : TorchNear(x : Int, y : Int) ~ Int {
+    # how many darkness levels a torch within four squares removes
+    best := 0;
+    each(i : @memory_n) {
+      tx := @memory[i * 2];
+      ty := @memory[i * 2 + 1];
+      d2 := (tx - x) * (tx - x) + (ty - y) * (ty - y);
+      if(d2 <= 5) {
+        best := DgUtil->Max(best, 2);
+      }
+      else if(d2 <= 14) {
+        best := DgUtil->Max(best, 1);
+      };
+    };
+    return best;
+  }
+
+  method : public : DrawMap() ~ Nil {
+    lvl := @g->Level();
+    theme := lvl->Theme();
+    ox := @camx->As(Int);
+    oy := @camy->As(Int);
+    if(@shake > 0 & <>@reduced) {
+      ox += Int->Random(@shake) - @shake / 2;
+      oy += Int->Random(@shake) - @shake / 2;
+    };
+    x0 := ox / 16;
+    y0 := oy / 16;
+    ax := @g->HeroX();
+    ay := @g->HeroY();
+    frame := (@tick / 8) % 4;
+
+    # which torches are in view (they light their surroundings)
+    @memory_n := 0;
+    each(ty : 13) {
+      y := y0 + ty;
+      each(tx : 16) {
+        x := x0 + tx;
+        if(lvl->Tile(x, y) = DgTile->TORCH & lvl->Seen(x, y) = 2 & @memory_n < 190) {
+          @memory[@memory_n * 2] := x;
+          @memory[@memory_n * 2 + 1] := y;
+          @memory_n += 1;
+        };
+      };
+    };
+
+    each(i : 6) {
+      @ln[i] := 0;
+    };
+    flick := (@tick / 6) % 3;
+    each(ty : 13) {
+      y := y0 + ty;
+      sy := y * 16 - oy;
+      each(tx : 16) {
+        x := x0 + tx;
+        sx := x * 16 - ox;
+        seen := lvl->Seen(x, y);
+        if(seen > 0) {
+          tile := lvl->Tile(x, y);
+          Blit(@art->Tile(tile, theme, lvl->Vary(x, y), frame), sx, sy);
+          level := 5;
+          if(seen = 2) {
+            dx := x - ax;
+            dy := y - ay;
+            d2 := dx * dx + dy * dy;
+            level := d2 / 10;
+            level -= TorchNear(x, y);
+            if(flick = 1 & level > 0) {
+              level -= 1;
+            };
+            level := DgUtil->Clamp(level, 0, 4);
+          };
+          if(level > 0) {
+            at := @ln[level] * 4;
+            if(at < 996) {
+              @lr[level, at] := sx;
+              @lr[level, at + 1] := sy;
+              @lr[level, at + 2] := 16;
+              @lr[level, at + 3] := 16;
+              @ln[level] += 1;
+            };
+          };
+        };
+      };
+    };
+
+    # floor items bob a little
+    each(i : @g->ItemSlots()) {
+      k := @g->FloorItemKind(i);
+      if(k >= 0) {
+        ix := @g->FloorItemX(i);
+        iy := @g->FloorItemY(i);
+        if(lvl->Seen(ix, iy) = 2) {
+          bob := 0;
+          if((@tick / 12 + ix) % 2 = 0) {
+            bob := -1;
+          };
+          Blit(@art->Item(k, @g->FloorItemTier(i)), ix * 16 - ox, iy * 16 - oy + bob);
+        };
+      };
+    };
+
+    # creatures
+    each(i : @g->MonSlots()) {
+      k := @g->MonKind(i);
+      if(k >= 0 & lvl->Seen(@g->MonX(i), @g->MonY(i)) = 2) {
+        DrawMonster(i, k, ox, oy);
+      };
+    };
+    DrawHero(ox, oy);
+
+    # the light
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    alphas := [0, 52, 100, 150, 196, 215];
+    each(level : 6) {
+      n := @ln[level];
+      if(n > 0 & level > 0) {
+        arr := Int->New[n * 4];
+        cells_n := n * 4;
+        each(j : cells_n) {
+          arr[j] := @lr[level, j];
+        };
+        if(level = 5) {
+          Col(0x080818, alphas[level]);
+        }
+        else {
+          Col(0x050510, alphas[level]);
+        };
+        @r->FillRects(arr);
+      };
+    };
+
+    DrawEffects(ox, oy);
+
+    # a hurt flash over everything
+    if(@flash > 0 & <>@reduced) {
+      Box(0, 0, 240, 176, @flash_col, DgUtil->Min(150, @flash * 10));
+    };
+  }
+
+  method : DrawMonster(i : Int, k : Int, ox : Int, oy : Int) ~ Nil {
+    mx := @mvx[i]->As(Int) - ox;
+    my := @mvy[i]->As(Int) - oy;
+    frame := (@tick / 18 + i) % 2;
+    bob := 0;
+    if(k = DgMon->BAT | k = DgMon->GHOST) {
+      bob := ((@tick / 7 + i) % 4) - 2;
+      if(bob < 0) { bob := 0 - bob; };
+      bob := bob - 2;
+    };
+    # a shadow
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @r->FilledEllipseColor(mx + 8, my + 14, 5, 2, Color->New(0, 0, 0, 90));
+    tex := @art->Mon(k, frame);
+    if(@g->MonFlash(i) > 0) {
+      tex->SetColorMod(255, 120, 120);
+    };
+    if(k = DgMon->GHOST) {
+      tex->SetAlphaMod(170);
+    };
+    BlitFlip(tex, mx, my + bob, 16, 16, @g->MonFace(i) < 0);
+    if(@g->MonFlash(i) > 0) {
+      tex->SetColorMod(255, 255, 255);
+    };
+    if(k = DgMon->GHOST) {
+      tex->SetAlphaMod(255);
+    };
+    # a health bar once hurt, and always for a boss
+    if(@g->MonHp(i) < @g->MonMax(i) | DgData->IsBoss(k)) {
+      w := 14;
+      Box(mx + 1, my - 2, w, 2, 0x000000, 255);
+      Box(mx + 1, my - 2, w * @g->MonHp(i) / @g->MonMax(i), 2, DgCol->RED, 255);
+      if(<>@g->MonAwake(i)) {
+        Text("z", mx + 12, my - 8, DgCol->CYAN);
+      };
+    }
+    else if(<>@g->MonAwake(i)) {
+      Text("z", mx + 12, my - 8, DgCol->CYAN);
+    };
+  }
+
+  method : DrawHero(ox : Int, oy : Int) ~ Nil {
+    hx := @hvx->As(Int) - ox;
+    hy := @hvy->As(Int) - oy;
+    frame := (@tick / 20) % 2;
+    moving := Float->Abs((@g->HeroX() * 16)->As(Float) - @hvx) > 1.0 | Float->Abs((@g->HeroY() * 16)->As(Float) - @hvy) > 1.0;
+    bob := 0;
+    if(moving) {
+      bob := -1;
+      frame := (@tick / 4) % 2;
+    };
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @r->FilledEllipseColor(hx + 8, hy + 14, 5, 2, Color->New(0, 0, 0, 100));
+    if(@g->Stat(DgStat->STATE) = 1) {
+      tex := @art->Hero(@g->Cls(), 0);
+      tex->SetColorMod(160, 60, 60);
+      BlitFlip(tex, hx, hy + 3, 16, 16, @hface < 0);
+      tex->SetColorMod(255, 255, 255);
+    }
+    else {
+      BlitFlip(@art->Hero(@g->Cls(), frame), hx, hy + bob, 16, 16, @hface < 0);
+    };
+  }
+
+  method : public : DrawEffects(ox : Int, oy : Int) ~ Nil {
+    # animated sprites
+    each(e : 32) {
+      if(@elen[e] > 0) {
+        fr := @eage[e] / 3;
+        tex := @art->Fx(@ekind[e], fr);
+        Blit(tex, @ex[e] * 16 - ox, @ey[e] * 16 - oy);
+      };
+    };
+    # projectiles
+    each(s : 16) {
+      if(@sage[s] >= 0) {
+        t := @sage[s]->As(Float) / 8.0;
+        px := @sx0[s] + (@sx1[s] - @sx0[s]) * t - ox->As(Float);
+        py := @sy0[s] + (@sy1[s] - @sy0[s]) * t - oy->As(Float);
+        BlitSize(@art->Fx(4, @sage[s] % 2), px->As(Int) - 4, py->As(Int) - 4, 8, 8);
+        Burst(px + ox->As(Float), py + oy->As(Float), 1, DgCol->ORANGE, 0.4, 0.0);
+      };
+    };
+    # particles, as 1 to 2 pixel squares
+    each(i : @pn) {
+      px := @ppx[i]->As(Int) - ox;
+      py := @ppy[i]->As(Int) - oy;
+      if(px >= 0 & py >= 0 & px < 240 & py < 176) {
+        sz := 1;
+        if(@plife[i] > 12) {
+          sz := 2;
+        };
+        a := DgUtil->Min(255, @plife[i] * 40);
+        Box(px, py, sz, sz, @pcol[i], a);
+      };
+    };
+    # floating numbers
+    each(f : 24) {
+      if(@flife[f] > 0) {
+        px := @fx[f]->As(Int) - ox;
+        py := @fy[f]->As(Int) - oy;
+        sc := 1;
+        if(@fbig[f] > 0) {
+          sc := 1;
+        };
+        if(@flife[f] > 4) {
+          @font->DrawShadow(@ftext[f], px, py, @fcol[f], 0x000000, sc);
+          if(@fbig[f] > 0) {
+            @font->Draw(@ftext[f], px + 1, py, @fcol[f], sc);
+          };
+        };
+      };
+    };
+  }
+
+  # ---- the side panel and the message line ----
+
+  method : public : DrawHud() ~ Nil {
+    g := @g;
+    # the panel
+    Panel(240, 0, 80, 176);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    cls := g->Cls();
+    # portrait in a frame
+    Box(241, 3, 36, 36, DgCol->PANEL_LO, 255);
+    Box(242, 4, 34, 34, DgCol->PANEL_HI, 255);
+    Box(243, 5, 32, 32, 0, 255);
+    BlitSize(@art->Portrait(cls), 243, 5, 32, 32);
+    if(g->Stat(DgStat->HP) * 100 / g->Stat(DgStat->MAXHP) < 30 & (@tick / 10) % 2 = 0) {
+      Box(243, 5, 32, 32, DgCol->RED, 90);
+    };
+    Text(DgData->ClassName(cls), 279, 5, DgCol->GOLD);
+    Text("LV " + g->Stat(DgStat->LEVEL)->ToString(), 279, 15, DgCol->WHITE);
+    Text(DgData->DiffName(g->Diff()), 279, 25, DgCol->GREY);
+
+    # bars
+    hp := g->Stat(DgStat->HP);
+    mhp := g->Stat(DgStat->MAXHP);
+    BlitSize(@art->Icon(0), 243, 42, 8, 8);
+    Bar(253, 42, 64, 8, hp, mhp, DgCol->RED);
+    Text(hp->ToString() + "/" + mhp->ToString(), 256, 42, DgCol->WHITE);
+    BlitSize(@art->Icon(1), 243, 52, 8, 8);
+    Bar(253, 52, 64, 8, g->Stat(DgStat->MP), g->Stat(DgStat->MAXMP), DgCol->BLUE);
+    Text(g->Stat(DgStat->MP)->ToString() + "/" + g->Stat(DgStat->MAXMP)->ToString(), 256, 52, DgCol->WHITE);
+    Bar(253, 62, 64, 4, g->Stat(DgStat->XP), g->Stat(DgStat->NEXT), DgCol->PURPLE);
+    Text("xp", 243, 61, DgCol->GREY);
+
+    # numbers
+    BlitSize(@art->Icon(4), 243, 70, 8, 8);
+    Text(g->Stat(DgStat->ATK)->ToString(), 253, 70, DgCol->WHITE);
+    BlitSize(@art->Icon(5), 273, 70, 8, 8);
+    Text(g->Stat(DgStat->DEF)->ToString(), 283, 70, DgCol->WHITE);
+    BlitSize(@art->Icon(2), 243, 79, 8, 8);
+    Text(g->Stat(DgStat->GOLD)->ToString(), 253, 79, DgCol->GOLD);
+    BlitSize(@art->Icon(3), 273, 79, 8, 8);
+    Text(g->Stat(DgStat->KILLS)->ToString(), 283, 79, DgCol->WHITE);
+    BlitSize(@art->Icon(6), 243, 88, 8, 8);
+    Text("F" + g->Stat(DgStat->DEPTH)->ToString() + " " + DgData->ThemeShort(g->Stat(DgStat->DEPTH) - 1), 253, 88, DgCol->CYAN);
+    Text("SCORE " + g->Stat(DgStat->SCORE)->ToString(), 243, 97, DgCol->GOLD);
+
+    # the pack: eight slots
+    each(i : 8) {
+      sx := 243 + (i % 4) * 19;
+      sy := 108 + (i / 4) * 18;
+      Box(sx, sy, 18, 17, DgCol->PANEL_LO, 255);
+      Box(sx + 1, sy + 1, 16, 15, 0x151428, 255);
+      if(i < g->PackSize()) {
+        Blit(@art->Item(g->PackKind(i), g->PackTier(i)), sx + 1, sy + 1);
+        Text((i + 1)->ToString(), sx + 1, sy + 9, DgCol->WHITE);
+      };
+    };
+
+    DrawMinimap();
+
+    # the message line
+    Box(0, 176, 320, 24, 0x151428, 255);
+    Box(0, 176, 320, 1, DgCol->PANEL_HI, 255);
+    n := g->LogCount();
+    each(l : 3) {
+      idx := n - 3 + l;
+      if(idx >= 0) {
+        c := DgCol->DKGREY;
+        if(l = 1) { c := DgCol->GREY; };
+        if(l = 2) { c := DgCol->WHITE; };
+        s := g->LogLine(idx);
+        if(s->Size() > 51) {
+          s := s->SubString(51);
+        };
+        @font->DrawShadow(s, 4, 176 + l * 8, c, 0x000000, 1);
+      };
+    };
+  }
+
+  method : DrawMinimap() ~ Nil {
+    lvl := @g->Level();
+    mx := 256;
+    my := 145;
+    Box(mx - 1, my - 1, 50, 34, 0x000000, 255);
+    Box(mx - 2, my - 2, 52, 1, DgCol->PANEL_HI, 255);
+    wall := Int->New[400];
+    floor := Int->New[1600];
+    wn := 0;
+    fn := 0;
+    each(y : lvl->H()) {
+      each(x : lvl->W()) {
+        s := lvl->Seen(x, y);
+        if(s > 0) {
+          t := lvl->Tile(x, y);
+          if(t = DgTile->WALL | t = DgTile->TORCH | t = DgTile->PILLAR) {
+            if(wn < 99) {
+              wall[wn * 4] := mx + x;
+              wall[wn * 4 + 1] := my + y;
+              wall[wn * 4 + 2] := 1;
+              wall[wn * 4 + 3] := 1;
+              wn += 1;
+            };
+          }
+          else if(fn < 399) {
+            floor[fn * 4] := mx + x;
+            floor[fn * 4 + 1] := my + y;
+            floor[fn * 4 + 2] := 1;
+            floor[fn * 4 + 3] := 1;
+            fn += 1;
+          };
+        };
+      };
+    };
+    if(fn > 0) {
+      f := Int->New[fn * 4];
+      cells_fn := fn * 4;
+      each(i : cells_fn) {
+        f[i] := floor[i];
+      };
+      Col(0x3f3f74, 255);
+      @r->FillRects(f);
+    };
+    if(wn > 0) {
+      w := Int->New[wn * 4];
+      cells_wn := wn * 4;
+      each(i : cells_wn) {
+        w[i] := wall[i];
+      };
+      Col(0x696a6a, 255);
+      @r->FillRects(w);
+    };
+    # the exit once seen, monsters in view, the hero
+    ex := lvl->ExitX();
+    ey := lvl->ExitY();
+    if(lvl->Seen(ex, ey) > 0) {
+      Box(mx + ex, my + ey, 1, 1, DgCol->GOLD, 255);
+    };
+    each(i : @g->MonSlots()) {
+      if(@g->MonKind(i) >= 0 & lvl->Seen(@g->MonX(i), @g->MonY(i)) = 2) {
+        Box(mx + @g->MonX(i), my + @g->MonY(i), 1, 1, DgCol->RED, 255);
+      };
+    };
+    if((@tick / 15) % 2 = 0) {
+      Box(mx + @g->HeroX(), my + @g->HeroY(), 2, 2, DgCol->WHITE, 255);
+    };
+  }
+
+  # the "FLOOR 3 - THE CAVES" card
+  method : public : DrawBanner() ~ Nil {
+    if(@banner_t <= 0) {
+      return;
+    };
+    a := 255;
+    if(@banner_t < 40) {
+      a := @banner_t * 6;
+    };
+    if(@banner_t > 150) {
+      a := (170 - @banner_t) * 12;
+    };
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    Box(0, 56, 240, 52, 0x000000, a * 170 / 255);
+    Box(0, 56, 240, 1, DgCol->GOLD, a);
+    Box(0, 107, 240, 1, DgCol->GOLD, a);
+    w := @font->Width(@banner, 3);
+    @font->Draw(@banner, 120 - w / 2 + 2, 62, 0x000000, 3);
+    @font->Draw(@banner, 120 - w / 2, 60, DgCol->GOLD, 3);
+    w2 := @font->Width(@banner2, 2);
+    @font->Draw(@banner2, 120 - w2 / 2 + 1, 93, 0x000000, 2);
+    @font->Draw(@banner2, 120 - w2 / 2, 92, DgCol->WHITE, 2);
+  }
+
+  # ---- the other screens ----
+
+  # a moving plasma of coarse blocks in blue and purple, the VGA classic
+  method : public : DrawPlasma(t : Int) ~ Nil {
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_NONE);
+    bands := 10;
+    counts := Int->New[bands];
+    rects := Int->New[bands, 1000 * 4];
+    tf := t->As(Float) / 40.0;
+    each(by : 25) {
+      each(bx : 40) {
+        v := Float->Sin(bx->As(Float) / 5.0 + tf) + Float->Sin(by->As(Float) / 3.5 - tf * 0.7) +
+          Float->Sin((bx + by)->As(Float) / 6.0 + tf * 0.5) + Float->Sin(Float->Sqrt((bx * bx + by * by)->As(Float)) / 4.0 - tf);
+        idx := ((v + 4.0) / 8.0 * bands->As(Float))->As(Int);
+        idx := DgUtil->Clamp(idx, 0, bands - 1);
+        at := counts[idx] * 4;
+        rects[idx, at] := bx * 8;
+        rects[idx, at + 1] := by * 8;
+        rects[idx, at + 2] := 8;
+        rects[idx, at + 3] := 8;
+        counts[idx] += 1;
+      };
+    };
+    cols := [0x0d0b24, 0x15123a, 0x1e1a52, 0x29236b, 0x3a2c7d, 0x4d3190, 0x5f3a9e, 0x4d3190, 0x3a2c7d, 0x29236b];
+    each(b : bands) {
+      n := counts[b];
+      if(n > 0) {
+        arr := Int->New[n * 4];
+        cells_n := n * 4;
+        each(j : cells_n) {
+          arr[j] := rects[b, j];
+        };
+        Col(cols[b], 255);
+        @r->FillRects(arr);
+      };
+    };
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+  }
+
+  method : public : DrawTitle(t : Int) ~ Nil {
+    DrawPlasma(t);
+    # a dungeon wall with torches across the bottom, with a parade of the cast
+    each(x : 20) {
+      tile := DgTile->WALL;
+      if(x % 5 = 2) {
+        tile := DgTile->TORCH;
+      };
+      Blit(@art->Tile(tile, 0, x * 37, (t / 8) % 4), x * 16, 168);
+      Blit(@art->Tile(DgTile->WALL, 0, x * 11 + 5, 0), x * 16, 184);
+      Blit(@art->Tile(DgTile->FLOOR, 0, x * 13, 0), x * 16, 152);
+      Blit(@art->Tile(DgTile->FLOOR, 0, x * 17 + 3, 0), x * 16, 136);
+    };
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    Box(0, 136, 320, 32, 0x000000, 60);
+    # the cast marches by
+    each(i : 8) {
+      px := ((t / 2 + i * 70) % 560) - 120;
+      frame := (t / 8 + i) % 2;
+      if(i < 3) {
+        BlitFlip(@art->Hero(i, frame), px, 148 + ((t / 8) % 2), 16, 16, false);
+      }
+      else {
+        BlitFlip(@art->Mon(i * 2 - 4, frame), 320 - px - 16 + 80, 148, 16, 16, true);
+      };
+    };
+    # the logo: a wavy title with a drop shadow and a gold gradient
+    title := "TINY DUNGEON";
+    tw := @font->Width(title, 3);
+    each(c : title->Size()) {
+      ch := title->SubString(c, 1);
+      yo := (Float->Sin((t + c * 7)->As(Float) / 14.0) * 4.0)->As(Int);
+      cx := 160 - tw / 2 + c * 18;
+      @font->Draw(ch, cx + 2, 30 + yo + 2, 0x000000, 3);
+      @font->Draw(ch, cx, 30 + yo, 0xd77bba, 3);
+      @font->Draw(ch, cx, 29 + yo, 0xfbf236, 3);
+    };
+    TextCenter("D E P T H S", 160, 62, DgCol->WHITE, 2);
+    TextCenter("a dungeon crawler powered by Objeck AI", 160, 84, DgCol->CYAN, 1);
+    if((t / 25) % 2 = 0) {
+      TextCenter("PRESS ENTER", 160, 112, DgCol->GOLD, 2);
+    };
+    Text("A* . BFS . Dijkstra . Minimax . Monte Carlo", 22, 128, DgCol->GREY);
+  }
+
+  method : public : DrawSelect(t : Int, cls : Int, diff : Int) ~ Nil {
+    DrawPlasma(t / 2);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    Box(0, 0, 320, 200, 0x000000, 120);
+    TextCenter("CHOOSE YOUR HERO", 160, 6, DgCol->GOLD, 2);
+    blurbs := ["Tough fighter", "Fast and sneaky", "Glass cannon"];
+    each(i : 3) {
+      x := 10 + i * 102;
+      Panel(x, 26, 98, 108);
+      if(i = cls) {
+        pulse := 80 + (Float->Sin(t->As(Float) / 8.0) * 60.0)->As(Int);
+        Box(x - 1, 25, 100, 2, DgCol->GOLD, pulse);
+        Box(x - 1, 133, 100, 2, DgCol->GOLD, pulse);
+        Box(x - 1, 25, 2, 110, DgCol->GOLD, pulse);
+        Box(x + 97, 25, 2, 110, DgCol->GOLD, pulse);
+      };
+      BlitSize(@art->Portrait(i), x + 33, 32, 32, 32);
+      BlitSize(@art->Hero(i, (t / 18) % 2), x + 62, 40, 24, 24);
+      TextCenter(DgData->ClassName(i), x + 49, 68, DgCol->WHITE, 1);
+      hp := [40, 30, 24];
+      mp := [10, 12, 24];
+      atk := [8, 6, 4];
+      df := [4, 3, 0];
+      Text("HP " + hp[i]->ToString() + "  MP " + mp[i]->ToString(), x + 8, 80, DgCol->GREY);
+      Text("ATK " + atk[i]->ToString() + "  DEF " + df[i]->ToString(), x + 8, 89, DgCol->GREY);
+      Text(DgData->ClassSpecial(i), x + 8, 101, DgCol->GOLD);
+      Text(blurbs[i], x + 8, 113, DgCol->CYAN);
+    };
+    TextCenter("DIFFICULTY", 160, 142, DgCol->WHITE, 1);
+    each(d : 4) {
+      x := 20 + d * 70;
+      c := DgCol->DKGREY;
+      if(d = diff) {
+        c := DgCol->GOLD;
+        Box(x - 2, 153, 66, 12, 0x3f3f74, 255);
+      };
+      TextCenter(DgData->DiffName(d), x + 31, 155, c, 1);
+    };
+    desc := [
+      "Monsters look 2 moves ahead; they forget you.",
+      "Monsters plan routes and look 4 moves ahead.",
+      "Archers kite you: 6 moves ahead. Tougher.",
+      "7-move search, long memory, more monsters."
+    ];
+    TextCenter(desc[diff], 160, 172, DgCol->GREY, 1);
+    TextCenter("L/R hero   U/D level   ENTER play   ESC back", 160, 188, DgCol->DKGREY, 1);
+  }
+
+  method : public : DrawInventory(sel : Int) ~ Nil {
+    g := @g;
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    Box(0, 0, 320, 176, 0x000000, 140);
+    Panel(30, 10, 260, 156);
+    TextCenter("PACK", 160, 15, DgCol->GOLD, 2);
+    # equipped
+    Text("WIELDING", 42, 34, DgCol->GREY);
+    Blit(@art->Item(DgIt->WEAPON, g->Stat(DgStat->WEAPON)), 42, 44);
+    Text(DgData->WeaponName(g->Stat(DgStat->WEAPON)), 62, 48, DgCol->WHITE);
+    Text("WEARING", 170, 34, DgCol->GREY);
+    Blit(@art->Item(DgIt->ARMOR, g->Stat(DgStat->ARMOR)), 170, 44);
+    Text(DgData->ArmorName(g->Stat(DgStat->ARMOR)), 190, 48, DgCol->WHITE);
+    Text("ATK " + g->Stat(DgStat->ATK)->ToString() + "   DEF " + g->Stat(DgStat->DEF)->ToString() +
+      "   STR +" + g->Stat(DgStat->STR)->ToString(), 42, 64, DgCol->CYAN);
+    Box(42, 76, 236, 1, DgCol->PANEL_HI, 255);
+    if(g->PackSize() = 0) {
+      TextCenter("Your pack is empty.", 160, 110, DgCol->GREY, 1);
+    };
+    each(i : g->PackSize()) {
+      y := 82 + i * 10;
+      if(i = sel) {
+        Box(40, y - 1, 240, 10, 0x3f3f74, 255);
+      };
+      Blit(@art->Item(g->PackKind(i), g->PackTier(i)), 44, y - 5);
+      Text((i + 1)->ToString() + " " + DgData->ItemName(g->PackKind(i), g->PackTier(i)), 62, y, DgCol->WHITE);
+      Text(ItemHelp(g->PackKind(i), g->PackTier(i)), 170, y, DgCol->GREY);
+    };
+    TextCenter("1-8 or ENTER use    UP/DOWN pick    I or ESC close", 160, 154, DgCol->DKGREY, 1);
+  }
+
+  method : ItemHelp(kind : Int, tier : Int) ~ String {
+    if(kind = DgIt->POTION_HEAL) { return "heals"; };
+    if(kind = DgIt->POTION_MANA) { return "restores mana"; };
+    if(kind = DgIt->POTION_STR) { return "+1 attack"; };
+    if(kind = DgIt->SCROLL_TELEPORT) { return "teleports you"; };
+    if(kind = DgIt->SCROLL_MAP) { return "shows the map"; };
+    if(kind = DgIt->SCROLL_FIRE) { return "burns all in sight"; };
+    if(kind = DgIt->WEAPON) { return "attack +" + (tier * 2 + 1)->ToString(); };
+    if(kind = DgIt->ARMOR) { return "defence +" + (tier * 2)->ToString(); };
+    return "";
+  }
+
+  method : public : DrawHelp() ~ Nil {
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    Box(0, 0, 320, 176, 0x000000, 150);
+    Panel(24, 8, 272, 160);
+    TextCenter("HOW TO PLAY", 160, 13, DgCol->GOLD, 2);
+    lines := [
+      "Arrows / WASD / numpad   walk, bump to fight",
+      "Q E Z C                  walk diagonally",
+      "SPACE                    your special move",
+      "1-8                      use a pack item",
+      "I                        open the pack",
+      ". or X                   wait a turn",
+      "ENTER or >               take stairs down",
+      "F2 / F3                  scanlines / sound",
+      "ESC                      pause: back to title"
+    ];
+    each(i : lines->Size()) {
+      Text(lines[i], 36, 34 + i * 10, DgCol->WHITE);
+    };
+    Text("Doors open when you walk into them; chests too.", 36, 128, DgCol->CYAN);
+    Text("Shrines heal you. Spikes hurt. Find the stairs,", 36, 138, DgCol->CYAN);
+    Text("beat the bosses on floors 4 and 8, take the crown!", 36, 148, DgCol->CYAN);
+  }
+
+  method : public : DrawEnding(t : Int, won : Bool) ~ Nil {
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    Box(0, 0, 320, 200, 0x000000, 150);
+    g := @g;
+    if(won) {
+      each(i : 3) {
+        TextCenter("VICTORY!", 160 + i, 14 + i, DgCol->BLACK, 3);
+      };
+      TextCenter("VICTORY!", 160, 12, DgCol->GOLD, 3);
+      TextCenter("The Lich King is no more.", 160, 44, DgCol->WHITE, 1);
+    }
+    else {
+      TextCenter("YOU DIED", 161, 15, DgCol->BLACK, 3);
+      TextCenter("YOU DIED", 160, 13, DgCol->RED, 3);
+      TextCenter("The dungeon claims another hero.", 160, 44, DgCol->GREY, 1);
+    };
+    Panel(70, 58, 180, 100);
+    Text(DgData->ClassName(g->Cls()) + ", level " + g->Stat(DgStat->LEVEL)->ToString() + ", " + DgData->DiffName(g->Diff()), 84, 66, DgCol->GOLD);
+    Text("Reached floor   " + g->Stat(DgStat->DEPTH)->ToString() + " of 8", 84, 80, DgCol->WHITE);
+    Text("Monsters slain  " + g->Stat(DgStat->KILLS)->ToString(), 84, 90, DgCol->WHITE);
+    Text("Gold            " + g->Stat(DgStat->GOLD)->ToString(), 84, 100, DgCol->WHITE);
+    Text("Gems            " + g->Stat(DgStat->GEMS)->ToString(), 84, 110, DgCol->WHITE);
+    Text("Turns           " + g->Stat(DgStat->TURNS)->ToString(), 84, 120, DgCol->WHITE);
+    Text("SCORE " + g->Stat(DgStat->SCORE)->ToString(), 84, 138, DgCol->GOLD);
+    if((t / 25) % 2 = 0) {
+      TextCenter("ENTER: play again    ESC: title", 160, 176, DgCol->WHITE, 1);
+    };
+  }
+
+  # the CRT: faint dark lines between the pixel rows, drawn at window size
+  method : public : DrawScanlines(w : Int, h : Int, scale : Int) ~ Nil {
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    n := h / scale;
+    lines := Int->New[n * 4];
+    each(i : n) {
+      lines[i * 4] := 0;
+      lines[i * 4 + 1] := i * scale + scale - 1;
+      lines[i * 4 + 2] := w;
+      lines[i * 4 + 3] := 1;
+    };
+    @r->SetDrawColor(0, 0, 0, 70);
+    @r->FillRects(lines);
+  }
+}

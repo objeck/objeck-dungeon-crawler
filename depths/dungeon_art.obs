@@ -1,0 +1,1793 @@
+#~
+# Tiny Dungeon: Depths -- the pictures. Nothing here is a file: every tile, creature, item,
+# effect and letter is drawn from code, in the 32 colours of the DawnBringer palette,
+# at the size of an old VGA game (16 x 16 squares on a 320 x 200 screen).
+#
+#   DgPix    a small canvas of pixels (put a pixel, a line, a disc, an outline, a stamp
+#            of text-art rows) that turns into an SDL texture
+#   DgArt    builds every texture once: tiles for 8 themes, 14 monsters, 3 heroes, the
+#            items, effects, icons and portraits. Ask for them with Tile, Mon, Hero ...
+#   DgFont   a 5 x 7 pixel font (upper and lower case) drawn from an atlas
+#
+# Creatures are written as rows of letters (one letter is one palette colour, see
+# DgArt->Letter). Most are symmetrical, so only the left half is written and mirrored;
+# a few extras (a sword, a bow, wings) are stamped over the top. Then a one pixel
+# dark outline is added around the whole thing, which is what makes tiny sprites read.
+~#
+
+use Collection;
+use Game.SDL2;
+
+class DgPix {
+  @w : Int;
+  @h : Int;
+  @px : Int[];
+
+  New(w : Int, h : Int) {
+    @w := w;
+    @h := h;
+    @px := Int->New[w * h];
+  }
+
+  method : public : W() ~ Int {
+    return @w;
+  }
+
+  method : public : H() ~ Int {
+    return @h;
+  }
+
+  method : public : Put(x : Int, y : Int, rgb : Int) ~ Nil {
+    if(x >= 0 & y >= 0 & x < @w & y < @h) {
+      @px[y * @w + x] := rgb or 4278190080;
+    };
+  }
+
+  method : public : Clear(x : Int, y : Int) ~ Nil {
+    if(x >= 0 & y >= 0 & x < @w & y < @h) {
+      @px[y * @w + x] := 0;
+    };
+  }
+
+  # the colour (0xRRGGBB) at a pixel, or -1 when it is empty
+  method : public : Get(x : Int, y : Int) ~ Int {
+    if(x < 0 | y < 0 | x >= @w | y >= @h) {
+      return -1;
+    };
+    v := @px[y * @w + x];
+    if(v = 0) {
+      return -1;
+    };
+    return v and 16777215;
+  }
+
+  method : public : Rect(x : Int, y : Int, w : Int, h : Int, rgb : Int) ~ Nil {
+    for(j := y; j < y + h; j += 1;) {
+      for(i := x; i < x + w; i += 1;) {
+        Put(i, j, rgb);
+      };
+    };
+  }
+
+  method : public : Line(x0 : Int, y0 : Int, x1 : Int, y1 : Int, rgb : Int) ~ Nil {
+    dx := DgUtil->Abs(x1 - x0);
+    dy := DgUtil->Abs(y1 - y0);
+    sx := DgUtil->Sign(x1 - x0);
+    sy := DgUtil->Sign(y1 - y0);
+    err := dx - dy;
+    x := x0;
+    y := y0;
+    done := false;
+    while(<>done) {
+      Put(x, y, rgb);
+      if(x = x1 & y = y1) {
+        done := true;
+      }
+      else {
+        e2 := err * 2;
+        if(e2 > 0 - dy) {
+          err -= dy;
+          x += sx;
+        };
+        if(e2 < dx) {
+          err += dx;
+          y += sy;
+        };
+      };
+    };
+  }
+
+  # a filled disc; r2 is the radius squared times four, so half pixels make nicer circles
+  method : public : Disc(cx : Int, cy : Int, r : Int, rgb : Int) ~ Nil {
+    for(j := cy - r; j <= cy + r; j += 1;) {
+      for(i := cx - r; i <= cx + r; i += 1;) {
+        if((i - cx) * (i - cx) + (j - cy) * (j - cy) <= r * r + r / 2) {
+          Put(i, j, rgb);
+        };
+      };
+    };
+  }
+
+  method : public : Ring(cx : Int, cy : Int, r : Int, rgb : Int) ~ Nil {
+    for(j := cy - r - 1; j <= cy + r + 1; j += 1;) {
+      for(i := cx - r - 1; i <= cx + r + 1; i += 1;) {
+        d := (i - cx) * (i - cx) + (j - cy) * (j - cy);
+        if(d <= r * r + r & d >= (r - 1) * (r - 1) + (r - 1)) {
+          Put(i, j, rgb);
+        };
+      };
+    };
+  }
+
+  # a one pixel outline around everything opaque
+  method : public : Outline(rgb : Int) ~ Nil {
+    add := Bool->New[@w * @h];
+    each(y : @h) {
+      each(x : @w) {
+        if(@px[y * @w + x] = 0) {
+          if(Get(x - 1, y) >= 0 | Get(x + 1, y) >= 0 | Get(x, y - 1) >= 0 | Get(x, y + 1) >= 0) {
+            add[y * @w + x] := true;
+          };
+        };
+      };
+    };
+    cells := @w * @h;
+    each(i : cells) {
+      if(add[i]) {
+        @px[i] := rgb or 4278190080;
+      };
+    };
+  }
+
+  # move rows y0 .. y1 - 1 down one pixel (the figure's top half bobs); row y0 empties
+  method : public : ShiftDown(y0 : Int, y1 : Int) ~ Nil {
+    for(y := y1; y > y0; y -= 1;) {
+      each(x : @w) {
+        @px[y * @w + x] := @px[(y - 1) * @w + x];
+      };
+    };
+    each(x : @w) {
+      @px[y0 * @w + x] := 0;
+    };
+  }
+
+  # slide rows y0 .. y1 sideways by dx
+  method : public : ShiftRows(y0 : Int, y1 : Int, dx : Int) ~ Nil {
+    for(y := y0; y <= y1; y += 1;) {
+      row := Int->New[@w];
+      each(x : @w) {
+        sx := x - dx;
+        if(sx >= 0 & sx < @w) {
+          row[x] := @px[y * @w + sx];
+        };
+      };
+      each(x : @w) {
+        @px[y * @w + x] := row[x];
+      };
+    };
+  }
+
+  # draw another canvas on this one at (dx, dy), opaque pixels only
+  method : public : Blit(src : DgPix, dx : Int, dy : Int) ~ Nil {
+    each(y : src->H()) {
+      each(x : src->W()) {
+        c := src->Get(x, y);
+        if(c >= 0) {
+          Put(x + dx, y + dy, c);
+        };
+      };
+    };
+  }
+
+  method : public : Scale2() ~ DgPix {
+    out := DgPix->New(@w * 2, @h * 2);
+    each(y : @h) {
+      each(x : @w) {
+        c := Get(x, y);
+        if(c >= 0) {
+          out->Put(x * 2, y * 2, c);
+          out->Put(x * 2 + 1, y * 2, c);
+          out->Put(x * 2, y * 2 + 1, c);
+          out->Put(x * 2 + 1, y * 2 + 1, c);
+        };
+      };
+    };
+    return out;
+  }
+
+  # rows of letters stamped at (x0, y0); '.' is empty; X Y Z take the colours in ov;
+  # mirror also draws the reflection across the vertical centre
+  method : public : Stamp(rows : String[], x0 : Int, y0 : Int, mirror : Bool, ov : Int[]) ~ Nil {
+    each(j : rows) {
+      chars := rows[j]->ToCharArray();
+      each(i : chars) {
+        c := DgArt->Letter(chars[i], ov);
+        if(c >= 0) {
+          Put(x0 + i, y0 + j, c);
+          if(mirror) {
+            Put(@w - 1 - (x0 + i), y0 + j, c);
+          };
+        };
+      };
+    };
+  }
+
+  method : public : ToTexture(r : Renderer) ~ Texture {
+    bytes := Byte->New[@w * @h * 4];
+    cells := @w * @h;
+    each(i : cells) {
+      v := @px[i];
+      bytes[i * 4] := (v and 255)->As(Byte);
+      bytes[i * 4 + 1] := ((v >> 8) and 255)->As(Byte);
+      bytes[i * 4 + 2] := ((v >> 16) and 255)->As(Byte);
+      bytes[i * 4 + 3] := ((v >> 24) and 255)->As(Byte);
+    };
+    t := r->CreateTexture(PixelValue->SDL_PIXELFORMAT_ARGB8888, TextureAccess->SDL_TEXTUREACCESS_STATIC, @w, @h);
+    t->Update(Nil, bytes, @w * 4);
+    t->SetBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    return t;
+  }
+}
+
+# The creature recipes: rows of letters, left half (8 letters a row, 14 rows: the picture
+# gets a blank row above and below for its outline). Letters: see DgArt->Letter.
+class DgSprites {
+  # the left half of each monster
+  function : MonHalf(kind : Int) ~ String[] {
+    select(kind) {
+      label 0: {
+        return ["........", ".oo.....", "osssn...", "osnnnnnn", ".nnnnnnn", "..nnl1nn", "..nn11nn",
+          "m.nnnnns", "m.nnmmml", ".onnnmmm", "onnnnmmm", "onnnnmmm", ".ontnntt", "..tt.tt."];
+      }
+      label 1: {
+        return ["........", "........", ".....q..", ".....qq.", "....qqqq", "....qsqq", "....qqqq",
+          "....qqlq", ".....qqq", ".....2qq", ".....22q", "......2.", "........", "........"];
+      }
+      label 2: {
+        return ["........", "........", "........", "....cccc", "..ccaaaa", ".caa9999", ".ca9l999", "ca99ll99",
+          "ca99l199", "ca999999", "caa99999", ".caaaaaa", "..cccccc", "........"];
+      }
+      label 3: {
+        return ["...mmmmm", "..mkkkkk", "..kkkkkk", "..kk11kk", "..kk11kk", "..mkkk11", "...mkkkk",
+          "....klkl", ".mmmmkkk", ".m1k1k1k", ".m1kkkkk", ".m1k1k1k", "..mm.mmk", "..mmm..."];
+      }
+      label 4: {
+        return ["........", "....aaaa", "..aaaaaa", "aaaaaaaa", ".aaa81aa", "..aaaaaa", "..aa1l11",
+          "...aaaaa", "..44444a", ".44dddd4", ".4a4dddd", ".4a44444", "...3333.", "..33.33."];
+      }
+      label 5: {
+        return ["..cccc..", ".ccccccc", ".ccmkkkk", ".cckk11k", ".cckk11k", "..ckkkkk", "..ccklkl",
+          "..cccckk", ".cc3mkkk", ".c33m1k1", ".c33mkkk", "..3.m1k1", "...3mmmm", "..333..."];
+      }
+      label 6: {
+        return ["........", "...pppoo", "..ppoooo", "..poonno", "..aaaaaa", ".aaa81aa", ".aaaaaaa",
+          ".aallllk", "..aaaaaa", ".3p33333", "3p3pppoo", "3p3pppoo", ".3ppp3pp", "..ppp.pp"];
+      }
+      label 7: {
+        return ["........", "........", "...kkkkk", "..kkkkkk", ".kkkkkkk", ".kk11kkk", ".kk11kkk",
+          ".kkkkkkk", ".kkk11kk", ".kkkkkkk", ".mkkkkkk", "..mkk.kk", "...mkk.k", "....m..."];
+      }
+      label 8: {
+        return ["........", ".......q", "......qq", ".....qqf", "....qqff", "....qjjf", "....qqqf",
+          "...qqqff", "..qqqqqf", ".qqqfffq", ".qqqqfqq", ".qqqqqqq", ".qqfqqfq", "qqqqqqqq"];
+      }
+      label 9: {
+        return ["........", "........", "........", ".....222", "....2222", "....2ss2", "....2l22",
+          "....2222", "...22222", "..2q2222", "..2qq222", "..22q222", "...22222", "....222."];
+      }
+      label 10: {
+        return ["........", "...llll.", "..llkkkk", "..lkkkkk", ".llkk1kk", ".llkkkkk", "..mlkjjj",
+          ".mllklll", "mllllkkk", "mllllllk", "mlkllklk", ".mkkklkk", "..jjmjj.", "..jjj.jj"];
+      }
+      label 11: {
+        return ["......8.", "...r.r8.", "...rrrr.", "..rrrsrr", "..rr81rr", "..rrrrrr", "...r1r1r",
+          "..rrrrrr", "..5rrrrr", "..5rrrrr", "...5rrrr", "....5rr.", "....5.5.", "....8.8."];
+      }
+      label 12: {
+        return ["........", "..m...mm", "..mk.mkk", "..mkkkkk", "...kkkkk", "..mrrrr1", "..mrrrr1",
+          "..8rrrrr", ".mmrrrrr", "mmrrrrrr", "mmrr88rr", "mrrrrrrr", "mrr3rrrr", "mm3..3mm"];
+      }
+      other: {
+        return ["....8..8", "....8888", "...8rr8r", "...88888", "..qqkkkk", "..qk1111", "..qkkkkk",
+          "..qkk11k", ".qqqkllk", "qqqffqqq", "qqffqqqq", "qqffqqqq", "qqqqqqqq", "qq2qq2qq"];
+      }
+    };
+
+    return ["........"];
+  }
+
+  # extra left-half pieces that are mirrored (wings, legs, flames)
+  function : MonHalfOver(kind : Int, frame : Int) ~ String[] {
+    if(kind = 1) {
+      if(frame = 0) {
+        return ["........", "f.......", "ff......", "fqf.....", "fqqf....", "fqqqf...", "fqqqqf..",
+          ".fqqqqf.", "..fqqqqf", "...ffqqf", ".....fff", "........", "........", "........"];
+      };
+      return ["........", "........", "........", "........", "........", "ff......", "fqf.....",
+        "fqqff...", "fqqqqff.", ".fqqqqqf", "..fqqqqf", "...fffqf", ".....fff", "........"];
+    };
+    if(kind = 11) {
+      if(frame = 0) {
+        return ["......8.", ".....88.", "........", "........", "........", "........", "........",
+          "........", "........", "........", "........", "........", "........", "........"];
+      };
+      return ["........", ".....8..", "........", "........", "........", "........", "........",
+        "........", "........", "........", "........", "........", "........", "........"];
+    };
+    return Nil;
+  }
+
+  # extra full-width pieces (a weapon in the right hand, a bow)
+  function : MonOver(kind : Int, frame : Int) ~ String[] {
+    if(kind = 3) {
+      return ["................", "................", "................", "................", "................",
+        "...............m", "..............mk", ".............mk.", "............34..", "...........3....",
+        "................", "................", "................", "................"];
+    };
+    if(kind = 4) {
+      return ["................", "................", "................", "................", "................",
+        "................", "................", "...............m", "..............mk", ".............d4.",
+        "............d...", "................", "................", "................"];
+    };
+    if(kind = 5) {
+      return ["................", "................", "..............4.", ".............4l.", "............4.l.",
+        "............4.l.", "............4.l.", "............4.l.", "............4.l.", ".............4l.",
+        "..............4.", "................", "................", "................"];
+    };
+    if(kind = 8) {
+      if(frame = 0) {
+        return ["................", "..............j.", ".............jlj", "..............j.", "..............3.",
+          "..............3.", "..............3.", "..............3.", "..............3.", "..............3.",
+          "..............3.", "..............3.", "................", "................"];
+      };
+      return ["................", "................", "..............k.", ".............kjk", "..............k.",
+        "..............3.", "..............3.", "..............3.", "..............3.", "..............3.",
+        "..............3.", "..............3.", "................", "................"];
+    };
+    if(kind = 12) {
+      return ["...........mm...", "..........mkkm..", "..........mkm...", ".............3..",
+        "............3...", "...........3....", "..........3.....", ".........3......", "........3.......",
+        "........3.......", "................", "................", "................", "................"];
+    };
+    if(kind = 13) {
+      if(frame = 0) {
+        return ["...........j....", "..........jlj...", "...........j....", "...........3....",
+          "...........3....", "...........3....", "...........3....", "...........3....",
+          "...........3....", "...........3....", "...........3....", "...........3....", "................", "................"];
+      };
+      return ["................", "...........j....", "..........jlj...", "...........j....",
+        "...........3....", "...........3....", "...........3....", "...........3....",
+        "...........3....", "...........3....", "...........3....", "...........3....", "................", "................"];
+    };
+    return Nil;
+  }
+
+  # where a monster's picture bobs: rows above this move down one pixel in frame 1
+  function : MonBob(kind : Int) ~ Int {
+    select(kind) {
+      label 0: { return 9; }
+      label 1: { return 0; }
+      label 2: { return 0; }
+      label 3: { return 9; }
+      label 4: { return 10; }
+      label 5: { return 9; }
+      label 6: { return 10; }
+      label 7: { return 0; }
+      label 8: { return 10; }
+      label 9: { return 0; }
+      label 10: { return 10; }
+      label 11: { return 8; }
+      label 12: { return 10; }
+      other: { return 10; }
+    };
+
+    return 0;
+  }
+
+  function : HeroHalf(cls : Int) ~ String[] {
+    if(cls = 0) {
+      return ["......rr", "...mmkkk", "..mkkkkk", "..mk1111", "..mkkkkk", "..nmmmmm", "mmkkkkkk",
+        "mkkkkhhh", ".nkkkhhi", ".nkkkhhh", "..nkkhhh", "..3333hh", "..nnm...", "..nnn..."];
+    };
+    if(cls = 1) {
+      return ["....cccc", "..ccccaa", ".cccaaaa", ".cc11111", ".cc1l777", ".cc17777", ".ccc7777",
+        ".ccerrrr", "cccecccc", "cceccvee", "ccecccee", ".cecccee", "..eee.ee", "..eee.ee"];
+    };
+    return [".......f", "......ff", "......fh", ".....ffh", "....fffh", ".8888888", ".ffffffh",
+      "..777777", "..7l1771", "..lllkkk", ".hhlkkkh", ".hh8hhhh", "hhhhhhhh", "hh8888hh"];
+  }
+
+  function : HeroOver(cls : Int, frame : Int) ~ String[] {
+    if(cls = 0) {
+      return ["................", "..............k.", "..............k.", "..............k.", "..............k.",
+        "..............k.", "..............k.", "mhhm..........k.", "h88h.........888", "mhhm..........3.",
+        ".mm...........3.", "................", "................", "................"];
+    };
+    if(cls = 1) {
+      return ["................", "................", "................", "................", "................",
+        "................", "................", "..............m.", "..............m.", ".............vmv",
+        "..............3.", "................", "................", "................"];
+    };
+    if(frame = 0) {
+      return ["................", "..............j.", ".............jlj", "..............j.", "..............3.",
+        "..............3.", "..............3.", "..............3.", "..............3.", "..............3.",
+        "..............3.", "..............3.", "................", "................"];
+    };
+    return ["................", "................", "..............k.", ".............kjk", "..............k.",
+      "..............3.", "..............3.", "..............3.", "..............3.", "..............3.",
+      "..............3.", "..............3.", "................", "................"];
+  }
+
+  function : HeroBob(cls : Int) ~ Int {
+    if(cls = 0) {
+      return 11;
+    };
+    if(cls = 1) {
+      return 11;
+    };
+    return 11;
+  }
+
+  # items, left halves. X Y Z are replaced by colours
+  function : ItemHalf(kind : Int) ~ String[] {
+    select(kind) {
+      label 0: {
+        return ["........", "........", "........", "........", "........", "........", "......88",
+          "....8888", "..88l888", ".88888v8", ".8v888v8", "88888vvv", "v8vvvvvv", "..vvvvvv"];
+      }
+      label 1: {
+        return ["........", "......66", "......44", ".....mkk", ".....mkk", "....mkkk", "...mXXXX",
+          "..mXYYXX", "..mXYXXX", "..mXXXXX", "..mXXXXZ", "..mZXXXZ", "...mZZZZ", "........"];
+      }
+      label 4: {
+        return ["........", "..vvvvvv", "..v66666", "...XXXXX", "...XXXXX", "...XXXXX", "...XXXXX",
+          "...XXXXX", "...XXXXX", "...XXXXX", "...XXXXX", "..v66666", "..vvvvvv", "........"];
+      }
+      label 8: {
+        return ["........", ".XXX....", "XYXXX...", "XYXXXX..", "XYXXXXX.", "XXXXXXXX", ".XXXXXXX",
+          ".XXXXXXX", ".XXXXXXX", ".XXXXXXX", ".XXXXXXX", ".ZZZZZZZ", ".XXZZZZZ", "..ZZZZZZ"];
+      }
+      label 9: {
+        return ["........", "....XXXX", "..XXYYXX", ".XYYXXXX", "XXXXXXXX", ".ZXXXXXX", "..ZXXXXX",
+          "...ZXXXX", "....ZXXX", ".....ZXX", "......ZX", "........", "........", "........"];
+      }
+      other: {
+        return ["........", "........", ".8..8..8", ".88.88.8", ".8888888", ".8l88888", ".88h88r8",
+          ".v888888", ".vvvvvvv", "........", "........", "........", "........", "........"];
+      }
+    };
+
+    return ["........"];
+  }
+
+  function : Icon(id : Int) ~ String[] {
+    select(id) {
+      label 0: {
+        return ["........", ".rr.rr..", "rsrrrrr.", "rrrrrrr.", ".rrrrr..", "..rrr...", "...r....", "........"];
+      }
+      label 1: {
+        return ["...h....", "...h....", "..hhh...", ".hhjhh..", ".hjhhh..", ".hhhhh..", "..hhh...", "........"];
+      }
+      label 2: {
+        return ["..8888..", ".8l8888.", "88v88v88", "88v88v88", "88v88v88", ".88888v.", "..vvvv..", "........"];
+      }
+      label 3: {
+        return [".kkkkk..", "kkkkkkk.", "k11k11k.", "kkkkkkk.", ".kkkkk..", ".k1k1k..", "........", "........"];
+      }
+      label 4: {
+        return ["......mk", ".....mk.", "....mk..", "8..mk...", ".8mk....", "..8.....", ".3.8....", "3......."];
+      }
+      label 5: {
+        return [".mmmmmm.", "mhhhhhhm", "mhhiihhm", "mhhiihhm", ".mhhhhm.", ".mhhhhm.", "..mhhm..", "...mm..."];
+      }
+      label 6: {
+        return ["......mm", "......mo", "....mmmo", "....mmoo", "..mmmooo", "..mmmooo", "mmmmoooo", "mmmmoooo"];
+      }
+      label 7: {
+        return ["..jjjj..", ".jlkjjj.", "jkjjjjjj", ".jjjjjj.", "..jjjj..", "...jj...", "........", "........"];
+      }
+      other: {
+        return ["..kkkk..", ".kllllk.", "kll1llk.", "kll1lllk", "kll11llk", "kllllllk", ".kllllk.", "..kkkk.."];
+      }
+    };
+
+    return ["........"];
+  }
+}
+
+# The art, built once.
+class DgArt {
+  @pal : static : Int[];
+  @themes : static : Int[];
+  @r : Renderer;
+  @tiles : Texture[];
+  @mons : Texture[];
+  @heroes : Texture[];
+  @hero_pix : DgPix[];
+  @items : Texture[];
+  @portraits : Texture[];
+  @fx : Texture[];
+  @icons : Texture[];
+
+  function : Init() ~ Nil {
+    if(@pal <> Nil) {
+      return;
+    };
+    @pal := [
+      0x000000, 0x222034, 0x45283c, 0x663931, 0x8f563b, 0xdf7126, 0xd9a066, 0xeec39a,
+      0xfbf236, 0x99e550, 0x6abe30, 0x37946e, 0x4b692f, 0x524b24, 0x323c39, 0x3f3f74,
+      0x306082, 0x5b6ee1, 0x639bff, 0x5fcde4, 0xcbdbfc, 0xffffff, 0x9badb7, 0x847e87,
+      0x696a6a, 0x595652, 0x76428a, 0xac3232, 0xd95763, 0xd77bba, 0x8f974a, 0x8a6f30
+    ];
+    # per theme: wall highlight, wall mid, wall low, mortar, floor A, floor B, seam, speck, accent 1, accent 2
+    @themes := [
+      22, 23, 24, 14, 25, 24, 14, 23, 20, 21,
+      11, 12, 14, 1, 14, 13, 1, 10, 10, 9,
+      4, 3, 2, 1, 13, 3, 1, 4, 19, 20,
+      30, 31, 13, 1, 3, 2, 1, 5, 27, 8,
+      20, 18, 16, 15, 16, 15, 14, 20, 19, 21,
+      25, 2, 1, 0, 2, 1, 0, 27, 5, 8,
+      26, 15, 2, 1, 2, 15, 1, 26, 8, 19,
+      15, 14, 1, 0, 1, 14, 0, 11, 10, 9
+    ];
+  }
+
+  function : Pal(i : Int) ~ Int {
+    Init();
+    return @pal[i];
+  }
+
+  # a letter of a recipe as a colour, or -1 for empty
+  function : Letter(c : Char, ov : Int[]) ~ Int {
+    Init();
+    v := c->As(Int);
+    if(v >= 48 & v <= 57) {
+      return @pal[v - 48];
+    };
+    if(v >= 97 & v <= 118) {
+      return @pal[v - 97 + 10];
+    };
+    if(v >= 88 & v <= 90 & ov <> Nil) {
+      return @pal[ov[v - 88]];
+    };
+    return -1;
+  }
+
+  function : T(theme : Int, col : Int) ~ Int {
+    return @pal[@themes[theme * 10 + col]];
+  }
+
+  # a hash of three numbers, 0 .. 2^31 - 1
+  function : Hash(x : Int, y : Int, s : Int) ~ Int {
+    n := (x * 374761393 + y * 668265263 + s * 1274126177 + 1442695041) and 4294967295;
+    n := ((n xor (n >> 13)) * 1103515245) and 4294967295;
+    n := n xor (n >> 16);
+    return n and 2147483647;
+  }
+
+  # 4 x 4 ordered dither: true when the pixel is in the first `level` of 16 cells
+  function : Dither(x : Int, y : Int, level : Int) ~ Bool {
+    m := [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    return m[(y % 4) * 4 + (x % 4)] < level;
+  }
+
+  New(r : Renderer) {
+    Init();
+    Hints->Set("SDL_RENDER_SCALE_QUALITY", "0");
+    @r := r;
+    @tiles := Texture->New[8 * 64];
+    each(theme : 8) {
+      BuildTheme(theme);
+    };
+    BuildMonsters();
+    BuildHeroes();
+    BuildItems();
+    BuildFx();
+    BuildIcons();
+  }
+
+  # ---- accessors ----
+
+  method : public : Tile(tile : Int, theme : Int, vary : Int, frame : Int) ~ Texture {
+    base := theme * 64;
+    slot := 0;
+    select(tile) {
+      label 1: { slot := vary % 8; }
+      label 0: { slot := 8 + vary % 6; }
+      label 6: { slot := 14 + frame % 4; }
+      label 7: { slot := 18 + frame % 4; }
+      label 8: { slot := 22 + frame % 4; }
+      label 2: { slot := 26; }
+      label 3: { slot := 27; }
+      label 4: { slot := 28; }
+      label 5: { slot := 29; }
+      label 9: { slot := 30; }
+      label 10: { slot := 31; }
+      label 11: { slot := 32; }
+      label 12: { slot := 33; }
+      label 13: { slot := 34; }
+      label 14: { slot := 35; }
+      other: { slot := 36; }
+    };
+    return @tiles[base + slot];
+  }
+
+  method : public : Mon(kind : Int, frame : Int) ~ Texture {
+    return @mons[kind * 2 + frame % 2];
+  }
+
+  method : public : Hero(cls : Int, frame : Int) ~ Texture {
+    return @heroes[cls * 2 + frame % 2];
+  }
+
+  method : public : Item(kind : Int, tier : Int) ~ Texture {
+    if(kind = 7) {
+      return @items[11 + DgUtil->Clamp(tier, 0, 5)];
+    };
+    if(kind = 8) {
+      return @items[17 + DgUtil->Clamp(tier, 0, 5)];
+    };
+    if(kind = 9) {
+      return @items[23 + tier % 4];
+    };
+    return @items[kind];
+  }
+
+  method : public : Portrait(cls : Int) ~ Texture {
+    return @portraits[cls];
+  }
+
+  method : public : Fx(kind : Int, frame : Int) ~ Texture {
+    return @fx[kind * 4 + frame % 4];
+  }
+
+  method : public : Icon(id : Int) ~ Texture {
+    return @icons[id];
+  }
+
+  # ---- creatures ----
+
+  method : MakeSprite(half : String[], hover : String[], over : String[], bob : Int, ov : Int[]) ~ DgPix {
+    p := DgPix->New(16, 16);
+    if(half <> Nil) {
+      p->Stamp(half, 0, 1, true, ov);
+    };
+    if(hover <> Nil) {
+      p->Stamp(hover, 0, 1, true, ov);
+    };
+    if(over <> Nil) {
+      p->Stamp(over, 0, 1, false, ov);
+    };
+    if(bob > 0) {
+      p->ShiftDown(1, bob);
+    };
+    p->Outline(DgArt->Pal(1));
+    return p;
+  }
+
+  method : BuildMonsters() ~ Nil {
+    @mons := Texture->New[28];
+    each(kind : 14) {
+      each(f : 2) {
+        half := DgSprites->MonHalf(kind);
+        hover := DgSprites->MonHalfOver(kind, f);
+        over := DgSprites->MonOver(kind, f);
+        bob := 0;
+        if(f = 1) {
+          bob := DgSprites->MonBob(kind);
+        };
+        p := MakeSprite(half, hover, over, bob, Nil);
+        if(kind = 9) {
+          p := MakeSpider(half, f);
+        };
+        # special motions
+        if(f = 1) {
+          if(kind = 7) {
+            p->ShiftRows(9, 14, 1);
+          }
+          else if(kind = 2) {
+            p->ShiftRows(11, 14, 0);
+          };
+        };
+        @mons[kind * 2 + f] := p->ToTexture(@r);
+      };
+    };
+  }
+
+  # a spider: the body, then four legs a side drawn as bent lines, then the outline
+  method : MakeSpider(half : String[], f : Int) ~ DgPix {
+    p := DgPix->New(16, 16);
+    p->Stamp(half, 0, 1, true, Nil);
+    c := DgArt->Pal(23);
+    d := DgArt->Pal(22);
+    each(side : 2) {
+      each(leg : 4) {
+        x0 := 4;
+        y0 := 5 + leg * 2;
+        kx := 2;
+        ky := 2 + leg * 3 + f * (1 - leg % 2);
+        ex := 0;
+        ey := 1 + leg * 4 - f * (leg % 2) + (leg / 3);
+        if(side = 0) {
+          p->Line(x0, y0, kx, ky, c);
+          p->Line(kx, ky, ex, ey, d);
+        }
+        else {
+          p->Line(15 - x0, y0, 15 - kx, ky, c);
+          p->Line(15 - kx, ky, 15 - ex, ey, d);
+        };
+      };
+    };
+    p->Outline(DgArt->Pal(1));
+    return p;
+  }
+
+  method : BuildHeroes() ~ Nil {
+    @heroes := Texture->New[6];
+    @hero_pix := DgPix->New[6];
+    each(cls : 3) {
+      each(f : 2) {
+        bob := 0;
+        if(f = 1) {
+          bob := DgSprites->HeroBob(cls);
+        };
+        p := MakeSprite(DgSprites->HeroHalf(cls), Nil, DgSprites->HeroOver(cls, f), bob, Nil);
+        @hero_pix[cls * 2 + f] := p;
+        @heroes[cls * 2 + f] := p->ToTexture(@r);
+      };
+    };
+    @portraits := Texture->New[3];
+    each(cls : 3) {
+      bg := DgPix->New(32, 32);
+      lo := [16, 12, 26];
+      hi := [15, 14, 2];
+      each(y : 32) {
+        each(x : 32) {
+          d := (x - 16) * (x - 16) + (y - 14) * (y - 14);
+          level := 16 - d / 22;
+          if(DgArt->Dither(x, y, DgUtil->Max(0, level))) {
+            bg->Put(x, y, DgArt->Pal(lo[cls]));
+          }
+          else {
+            bg->Put(x, y, DgArt->Pal(hi[cls]));
+          };
+        };
+      };
+      big := @hero_pix[cls * 2]->Scale2();
+      bg->Blit(big, 0, 0);
+      @portraits[cls] := bg->ToTexture(@r);
+    };
+  }
+
+  # ---- items ----
+
+  method : MakeItem(half : String[], ov : Int[]) ~ DgPix {
+    p := DgPix->New(16, 16);
+    p->Stamp(half, 0, 1, true, ov);
+    p->Outline(DgArt->Pal(1));
+    return p;
+  }
+
+  method : BuildItems() ~ Nil {
+    @items := Texture->New[28];
+    # 0 gold
+    @items[0] := MakeItem(DgSprites->ItemHalf(0), Nil)->ToTexture(@r);
+    # 1 2 3 potions: red, blue, green
+    @items[1] := MakeItem(DgSprites->ItemHalf(1), [27, 28, 3])->ToTexture(@r);
+    @items[2] := MakeItem(DgSprites->ItemHalf(1), [17, 19, 15])->ToTexture(@r);
+    @items[3] := MakeItem(DgSprites->ItemHalf(1), [10, 9, 12])->ToTexture(@r);
+    # 4 5 6 scrolls with their marks
+    each(k : 3) {
+      p := MakeItem(DgSprites->ItemHalf(4), [7, 6, 4]);
+      if(k = 0) {
+        # a swirl
+        p->Ring(8, 8, 3, DgArt->Pal(26));
+        p->Put(8, 8, DgArt->Pal(26));
+        p->Put(11, 8, DgArt->Pal(21));
+      }
+      else if(k = 1) {
+        # a map: a dotted path and a red cross
+        each(i : 5) {
+          p->Put(5 + i * 2 - (i % 2), 6 + (i % 3), DgArt->Pal(4));
+        };
+        p->Line(9, 9, 11, 11, DgArt->Pal(27));
+        p->Line(11, 9, 9, 11, DgArt->Pal(27));
+      }
+      else {
+        # a flame
+        p->Disc(8, 9, 2, DgArt->Pal(5));
+        p->Rect(7, 5, 2, 4, DgArt->Pal(5));
+        p->Put(8, 8, DgArt->Pal(8));
+        p->Put(8, 9, DgArt->Pal(8));
+        p->Put(8, 6, DgArt->Pal(8));
+      };
+      @items[4 + k] := p->ToTexture(@r);
+    };
+    # 7 8 are the placeholders (weapon and armour have their own sets), 9 gem, 10 crown
+    @items[7] := MakeItem(DgSprites->ItemHalf(1), [27, 28, 3])->ToTexture(@r);
+    @items[8] := MakeItem(DgSprites->ItemHalf(8), [22, 21, 24])->ToTexture(@r);
+    @items[9] := MakeItem(DgSprites->ItemHalf(9), [19, 21, 16])->ToTexture(@r);
+    @items[10] := MakeItem(DgSprites->ItemHalf(10), Nil)->ToTexture(@r);
+    # 11 .. 16 weapons by tier
+    each(t : 6) {
+      @items[11 + t] := MakeWeapon(t)->ToTexture(@r);
+    };
+    # 17 .. 22 armour by tier
+    armor_main := [3, 4, 23, 31, 22, 19];
+    armor_hi := [4, 6, 22, 30, 21, 20];
+    armor_lo := [2, 3, 24, 13, 23, 16];
+    each(t : 6) {
+      @items[17 + t] := MakeItem(DgSprites->ItemHalf(8), [armor_main[t], armor_hi[t], armor_lo[t]])->ToTexture(@r);
+    };
+    # 23 .. 26 gems by colour: cyan, green, red, purple
+    gem_main := [19, 10, 27, 26];
+    gem_hi := [21, 9, 28, 29];
+    gem_lo := [16, 12, 3, 2];
+    each(t : 4) {
+      p := MakeItem(DgSprites->ItemHalf(9), [gem_main[t], gem_hi[t], gem_lo[t]]);
+      p->Put(11, 3, DgArt->Pal(21));
+      p->Put(10, 4, DgArt->Pal(21));
+      @items[23 + t] := p->ToTexture(@r);
+    };
+  }
+
+  # a sword leaning to the right; longer and brighter with the tier
+  method : MakeWeapon(tier : Int) ~ DgPix {
+    p := DgPix->New(16, 16);
+    blade := [24, 23, 22, 22, 18, 19];
+    edge := [25, 22, 21, 21, 20, 21];
+    length := [5, 6, 8, 5, 9, 10];
+    tip_x := 4 + length[tier];
+    tip_y := 11 - length[tier];
+    if(tier = 3) {
+      # a battle axe: a haft and a wide head
+      p->Line(4, 13, 11, 3, DgArt->Pal(3));
+      p->Line(5, 13, 12, 3, DgArt->Pal(4));
+      p->Rect(8, 2, 5, 5, DgArt->Pal(23));
+      p->Rect(9, 3, 4, 3, DgArt->Pal(22));
+      p->Rect(12, 2, 2, 5, DgArt->Pal(21));
+    }
+    else {
+      p->Line(4, 11, tip_x, tip_y, DgArt->Pal(blade[tier]));
+      p->Line(5, 11, tip_x + 1, tip_y, DgArt->Pal(edge[tier]));
+      p->Line(5, 12, tip_x + 1, tip_y + 1, DgArt->Pal(blade[tier]));
+      # a cross guard, a grip and a pommel
+      p->Line(2, 9, 6, 13, DgArt->Pal(8));
+      p->Line(3, 13, 1, 15, DgArt->Pal(3));
+      p->Put(1, 15, DgArt->Pal(8));
+      if(tier >= 4) {
+        p->Put(tip_x - 2, tip_y + 2, DgArt->Pal(21));
+        p->Put(tip_x - 4, tip_y + 4, DgArt->Pal(21));
+      };
+    };
+    p->Outline(DgArt->Pal(1));
+    if(tier >= 4) {
+      # a glow on the blade
+      glow := 19;
+      if(tier = 4) {
+        glow := 26;
+      };
+      p->Put(tip_x + 2, tip_y - 1, DgArt->Pal(glow));
+      p->Put(tip_x - 1, tip_y - 2, DgArt->Pal(glow));
+    };
+    return p;
+  }
+
+  # ---- effects and icons ----
+
+  method : BuildFx() ~ Nil {
+    @fx := Texture->New[28];
+    arc_x := [2, 2, 3, 4, 6, 8, 10, 12, 13, 14, 14, 13];
+    arc_y := [12, 9, 7, 5, 4, 3, 3, 4, 6, 8, 10, 12];
+    each(f : 4) {
+      # 0: slash
+      p := DgPix->New(16, 16);
+      n := (f + 1) * 3;
+      each(i : n) {
+        if(i < 12) {
+          c := 21;
+          if(i < n - 3) {
+            c := 20;
+          };
+          if(i < n - 6) {
+            c := 18;
+          };
+          p->Put(arc_x[i], arc_y[i], DgArt->Pal(c));
+          p->Put(arc_x[i], arc_y[i] + 1, DgArt->Pal(c));
+          p->Put(arc_x[i] - 1, arc_y[i], DgArt->Pal(c));
+        };
+      };
+      @fx[f] := p->ToTexture(@r);
+
+      # 1: fire burst
+      q := DgPix->New(16, 16);
+      radius2 := [10, 28, 48, 64];
+      each(y : 16) {
+        each(x : 16) {
+          d := (x - 8) * (x - 8) + (y - 8) * (y - 8);
+          noisy := d + DgArt->Hash(x, y, f) % 14 - 6;
+          if(noisy <= radius2[f]) {
+            c := 27;
+            if(noisy < radius2[f] * 3 / 4) {
+              c := 5;
+            };
+            if(noisy < radius2[f] / 2) {
+              c := 8;
+            };
+            if(noisy < radius2[f] / 5) {
+              c := 21;
+            };
+            q->Put(x, y, DgArt->Pal(c));
+          };
+        };
+      };
+      @fx[4 + f] := q->ToTexture(@r);
+
+      # 2: heal sparkles rise
+      h := DgPix->New(16, 16);
+      sx := [3, 8, 12, 5, 10];
+      sy := [12, 10, 13, 6, 5];
+      each(i : 5) {
+        y := sy[i] - f * 2;
+        c := 9;
+        if(i % 2 = 0) {
+          c := 21;
+        };
+        h->Put(sx[i], y, DgArt->Pal(c));
+        if(((f + i) % 3) <> 2) {
+          h->Put(sx[i] - 1, y, DgArt->Pal(10));
+          h->Put(sx[i] + 1, y, DgArt->Pal(10));
+          h->Put(sx[i], y - 1, DgArt->Pal(10));
+          h->Put(sx[i], y + 1, DgArt->Pal(10));
+        };
+      };
+      @fx[8 + f] := h->ToTexture(@r);
+
+      # 3: magic ring
+      m := DgPix->New(16, 16);
+      rr := [2, 4, 6, 7];
+      m->Ring(8, 8, rr[f], DgArt->Pal(19));
+      if(f > 0) {
+        m->Ring(8, 8, rr[f] - 1, DgArt->Pal(20));
+      };
+      each(i : 4) {
+        px := 8 + ((DgArt->Hash(i, f, 3) % (rr[f] * 2 + 1)) - rr[f]);
+        py := 8 + ((DgArt->Hash(i, f, 4) % (rr[f] * 2 + 1)) - rr[f]);
+        m->Put(px, py, DgArt->Pal(21));
+      };
+      @fx[12 + f] := m->ToTexture(@r);
+    };
+
+    # 4: projectile bolt, 8 x 8
+    each(f : 2) {
+      b := DgPix->New(8, 8);
+      b->Disc(4, 4, 3, DgArt->Pal(5));
+      b->Disc(4, 4, 2, DgArt->Pal(8));
+      if(f = 0) {
+        b->Put(4, 4, DgArt->Pal(21));
+        b->Put(3, 3, DgArt->Pal(21));
+      }
+      else {
+        b->Put(4, 4, DgArt->Pal(21));
+        b->Put(5, 5, DgArt->Pal(21));
+        b->Put(1, 1, DgArt->Pal(5));
+      };
+      @fx[16 + f] := b->ToTexture(@r);
+    };
+    @fx[18] := DgPix->New(8, 8)->ToTexture(@r);
+    @fx[19] := DgPix->New(8, 8)->ToTexture(@r);
+
+    # 5: hit star / blood
+    each(f : 3) {
+      s := DgPix->New(16, 16);
+      reach := [3, 5, 6];
+      c1 := [21, 27, 3];
+      c2 := [8, 28, 27];
+      each(i : 8) {
+        dx := 0;
+        dy := 0;
+        select(i) {
+          label 0: { dx := 1; }
+          label 1: { dx := -1; }
+          label 2: { dy := 1; }
+          label 3: { dy := -1; }
+          label 4: { dx := 1; dy := 1; }
+          label 5: { dx := -1; dy := 1; }
+          label 6: { dx := 1; dy := -1; }
+          other: { dx := -1; dy := -1; }
+        };
+        len := reach[f] - (i % 2);
+        each(k : len) {
+          if(f < 2 | k > 2) {
+            s->Put(8 + dx * (k + 1), 8 + dy * (k + 1), DgArt->Pal(c1[f]));
+          };
+        };
+        s->Put(8 + dx * (len + 1), 8 + dy * (len + 1), DgArt->Pal(c2[f]));
+      };
+      s->Put(8, 8, DgArt->Pal(21));
+      @fx[20 + f] := s->ToTexture(@r);
+    };
+    @fx[23] := DgPix->New(16, 16)->ToTexture(@r);
+
+    # 6: poison bubbles
+    each(f : 2) {
+      v := DgPix->New(16, 16);
+      v->Ring(5, 11 - f * 2, 2, DgArt->Pal(10));
+      v->Ring(11, 7 - f, 2, DgArt->Pal(9));
+      v->Ring(8, 3 + f, 1, DgArt->Pal(10));
+      v->Put(5, 10 - f * 2, DgArt->Pal(21));
+      @fx[24 + f] := v->ToTexture(@r);
+    };
+    @fx[26] := DgPix->New(16, 16)->ToTexture(@r);
+    @fx[27] := DgPix->New(16, 16)->ToTexture(@r);
+  }
+
+  method : BuildIcons() ~ Nil {
+    @icons := Texture->New[9];
+    each(id : 9) {
+      p := DgPix->New(8, 8);
+      p->Stamp(DgSprites->Icon(id), 0, 0, false, Nil);
+      @icons[id] := p->ToTexture(@r);
+    };
+  }
+
+  # ---- tiles ----
+
+  method : BuildTheme(theme : Int) ~ Nil {
+    base := theme * 64;
+    each(v : 8) {
+      @tiles[base + v] := Floor(theme, v)->ToTexture(@r);
+    };
+    each(v : 6) {
+      @tiles[base + 8 + v] := Wall(theme, v)->ToTexture(@r);
+    };
+    each(f : 4) {
+      @tiles[base + 14 + f] := Water(theme, f)->ToTexture(@r);
+      @tiles[base + 18 + f] := Lava(f)->ToTexture(@r);
+      @tiles[base + 22 + f] := Torch(theme, f)->ToTexture(@r);
+    };
+    @tiles[base + 26] := Door(theme, false)->ToTexture(@r);
+    @tiles[base + 27] := Door(theme, true)->ToTexture(@r);
+    @tiles[base + 28] := Stairs(theme, true)->ToTexture(@r);
+    @tiles[base + 29] := Stairs(theme, false)->ToTexture(@r);
+    @tiles[base + 30] := Pillar(theme)->ToTexture(@r);
+    @tiles[base + 31] := Spikes(theme)->ToTexture(@r);
+    @tiles[base + 32] := Chest(theme, false)->ToTexture(@r);
+    @tiles[base + 33] := Chest(theme, true)->ToTexture(@r);
+    @tiles[base + 34] := Shrine(theme, true)->ToTexture(@r);
+    @tiles[base + 35] := Shrine(theme, false)->ToTexture(@r);
+    @tiles[base + 36] := Throne(theme)->ToTexture(@r);
+  }
+
+  # flagstones, two rows of two, staggered, each stone dithered between two tones
+  method : Floor(theme : Int, v : Int) ~ DgPix {
+    p := DgPix->New(16, 16);
+    a := DgArt->T(theme, 4);
+    b := DgArt->T(theme, 5);
+    seam := DgArt->T(theme, 6);
+    speck := DgArt->T(theme, 7);
+    each(y : 16) {
+      each(x : 16) {
+        row := y / 8;
+        off := (row % 2) * 4;
+        if(v >= 4) {
+          off := ((row + 1) % 2) * 4;
+        };
+        sx := (x + off) % 16;
+        stone := (sx / 8) + row * 2;
+        level := 2 + DgArt->Hash(stone, v % 4, theme) % 8;
+        c := a;
+        if(DgArt->Dither(x, y, level)) {
+          c := b;
+        };
+        # a library has a chessboard of marble
+        if(theme = 6) {
+          if(((x / 8) + (y / 8)) % 2 = 0) {
+            c := a;
+          }
+          else {
+            c := b;
+          };
+          if(DgArt->Dither(x + 1, y, 3 + DgArt->Hash(x / 4, y / 4, v) % 3)) {
+            c := b;
+            if(((x / 8) + (y / 8)) % 2 = 1) {
+              c := a;
+            };
+          };
+        };
+        # caves: no flagstones, just rough ground
+        if(theme = 2) {
+          c := a;
+          if(DgArt->Hash(x / 2, y / 2, v) % 5 < 2) {
+            c := b;
+          };
+        };
+        if(y % 8 = 7 | (x + off) % 8 = 7) {
+          c := seam;
+          if(theme = 2) {
+            c := a;
+          };
+        };
+        p->Put(x, y, c);
+      };
+    };
+
+    # a lit upper left edge on each stone, for a little relief
+    if(theme <> 2 & theme <> 6) {
+      each(y : 16) {
+        each(x : 16) {
+          row := y / 8;
+          off := (row % 2) * 4;
+          if(v >= 4) {
+            off := ((row + 1) % 2) * 4;
+          };
+          if(y % 8 = 0 & (x + off) % 8 <> 7 & DgArt->Hash(x, y, v) % 3 = 0) {
+            p->Put(x, y, speck);
+          };
+        };
+      };
+    };
+
+    # what is lying about
+    select(v) {
+      label 1: {
+        p->Line(3, 2, 8, 7, seam);
+        p->Line(8, 7, 7, 12, seam);
+        p->Put(9, 8, seam);
+      }
+      label 2: {
+        p->Put(3, 4, speck);
+        p->Put(4, 4, speck);
+        p->Put(11, 10, speck);
+        p->Put(12, 11, speck);
+        p->Put(7, 13, speck);
+      }
+      label 3: {
+        FloorDetail(p, theme);
+      }
+      label 5: {
+        each(i : 6) {
+          p->Put(1 + DgArt->Hash(i, 1, theme) % 14, 1 + DgArt->Hash(i, 2, theme) % 14, speck);
+        };
+      }
+      label 6: {
+        p->Line(12, 3, 9, 6, seam);
+        p->Line(9, 6, 10, 10, seam);
+        p->Put(11, 11, speck);
+        p->Put(4, 11, speck);
+      }
+      other: {
+      }
+    };
+    return p;
+  }
+
+  # the theme's own mark on the floor
+  method : FloorDetail(p : DgPix, theme : Int) ~ Nil {
+    s := DgArt->T(theme, 8);
+    t := DgArt->T(theme, 9);
+    select(theme) {
+      label 0: {
+        # a bone
+        p->Line(4, 10, 11, 7, DgArt->Pal(20));
+        p->Put(3, 9, DgArt->Pal(21));
+        p->Put(3, 11, DgArt->Pal(21));
+        p->Put(12, 6, DgArt->Pal(21));
+        p->Put(12, 8, DgArt->Pal(21));
+      }
+      label 1: {
+        # a green puddle
+        p->Disc(8, 9, 3, DgArt->Pal(12));
+        p->Rect(6, 8, 4, 2, DgArt->Pal(10));
+        p->Put(7, 8, DgArt->Pal(9));
+      }
+      label 2: {
+        # a crystal
+        p->Rect(7, 6, 2, 5, s);
+        p->Put(7, 5, t);
+        p->Put(8, 6, t);
+        p->Put(6, 8, s);
+        p->Put(9, 9, s);
+      }
+      label 3: {
+        # straw
+        p->Line(3, 11, 7, 9, DgArt->Pal(8));
+        p->Line(5, 12, 10, 10, DgArt->Pal(30));
+        p->Line(6, 8, 11, 8, DgArt->Pal(31));
+      }
+      label 4: {
+        # ice shine
+        p->Line(4, 4, 8, 4, s);
+        p->Line(4, 5, 5, 5, s);
+        p->Line(10, 11, 12, 11, t);
+      }
+      label 5: {
+        # a crack with embers
+        p->Line(3, 4, 7, 8, DgArt->Pal(0));
+        p->Line(7, 8, 11, 7, DgArt->Pal(0));
+        p->Put(5, 6, s);
+        p->Put(9, 8, DgArt->Pal(8));
+      }
+      label 6: {
+        # a sheet of paper
+        p->Rect(5, 6, 5, 4, DgArt->Pal(7));
+        p->Line(6, 7, 8, 7, DgArt->Pal(4));
+        p->Line(6, 9, 9, 9, DgArt->Pal(4));
+      }
+      other: {
+        # a rune
+        p->Ring(8, 8, 3, s);
+        p->Put(8, 8, t);
+      }
+    };
+  }
+
+  # brick walls with a lit top, shaded base and a dark mortar; the caves are rough
+  # rock, the warren planks, the frozen halls blocks of ice
+  method : Wall(theme : Int, v : Int) ~ DgPix {
+    p := DgPix->New(16, 16);
+    hi := DgArt->T(theme, 0);
+    mid := DgArt->T(theme, 1);
+    lo := DgArt->T(theme, 2);
+    mortar := DgArt->T(theme, 3);
+    each(y : 16) {
+      each(x : 16) {
+        c := mid;
+        if(theme = 2) {
+          # rock: blobs
+          n := DgArt->Hash(x / 3, y / 3, v) % 6;
+          c := mid;
+          if(n = 0) { c := hi; };
+          if(n = 1 | n = 2) { c := lo; };
+          if(DgArt->Hash(x, y, v + 7) % 7 = 0) {
+            c := mortar;
+          };
+        }
+        else if(theme = 3) {
+          # planks standing side by side
+          plank := (x + (v % 2) * 2) / 4;
+          c := mid;
+          grain := DgArt->Hash(plank, y / 3, v) % 4;
+          if(grain = 0) { c := lo; };
+          if(grain = 3) { c := hi; };
+          if((x + (v % 2) * 2) % 4 = 3) {
+            c := mortar;
+          };
+        }
+        else if(theme = 4) {
+          # ice blocks, glossy
+          bx := (x + ((y / 8) % 2) * 4) % 8;
+          c := mid;
+          if(DgArt->Dither(x, y, 3 + DgArt->Hash(x / 8, y / 8, v) % 5)) {
+            c := hi;
+          };
+          if((x + y) % 7 = 0 & bx < 7) {
+            c := DgArt->Pal(21);
+          };
+          if(y % 8 = 7 | bx = 7) {
+            c := lo;
+          };
+        }
+        else {
+          row := y / 4;
+          off := (row % 2) * 4;
+          bx := (x + off) % 8;
+          brick := (x + off) / 8;
+          pick := DgArt->Hash(brick, row, v + theme) % 5;
+          c := mid;
+          if(pick = 0) { c := hi; };
+          if(pick = 1) { c := lo; };
+          if(pick = 2 & DgArt->Dither(x, y, 6)) { c := hi; };
+          if(y % 4 = 3 | bx = 7) {
+            c := mortar;
+          }
+          else if(y % 4 = 0 & bx < 7) {
+            if(c = lo) { c := mid; } else { c := hi; };
+          };
+        };
+        p->Put(x, y, c);
+      };
+    };
+
+    # the lit top edge and the dark base
+    each(x : 16) {
+      p->Put(x, 0, hi);
+      if(DgArt->Dither(x, 1, 8)) {
+        p->Put(x, 1, hi);
+      };
+      p->Put(x, 14, mortar);
+      p->Put(x, 15, mortar);
+      if(DgArt->Dither(x, 13, 8)) {
+        p->Put(x, 13, lo);
+      };
+    };
+
+    # the variants
+    select(v) {
+      label 2: {
+        p->Line(5, 3, 8, 7, mortar);
+        p->Line(8, 7, 7, 11, mortar);
+        p->Line(7, 11, 9, 13, mortar);
+      }
+      label 3: {
+        WallDetail(p, theme);
+      }
+      label 4: {
+        # a slit of darkness
+        p->Rect(7, 4, 2, 6, DgArt->Pal(0));
+        p->Put(6, 4, lo);
+        p->Put(9, 4, lo);
+      }
+      label 5: {
+        p->Put(4, 6, mortar);
+        p->Put(5, 6, mortar);
+        p->Put(11, 9, mortar);
+        p->Put(12, 9, mortar);
+        p->Put(12, 10, mortar);
+        p->Put(3, 11, lo);
+      }
+      other: {
+      }
+    };
+    return p;
+  }
+
+  method : WallDetail(p : DgPix, theme : Int) ~ Nil {
+    s := DgArt->T(theme, 8);
+    t := DgArt->T(theme, 9);
+    select(theme) {
+      label 0: {
+        # a skull plaque
+        p->Rect(5, 4, 6, 5, DgArt->Pal(20));
+        p->Rect(6, 5, 1, 2, DgArt->Pal(1));
+        p->Rect(9, 5, 1, 2, DgArt->Pal(1));
+        p->Put(8, 7, DgArt->Pal(1));
+        p->Line(6, 9, 9, 9, DgArt->Pal(22));
+      }
+      label 1: {
+        # slime dripping
+        p->Rect(3, 1, 3, 3, s);
+        p->Rect(4, 4, 1, 4, s);
+        p->Put(4, 8, t);
+        p->Rect(10, 1, 2, 2, s);
+        p->Put(10, 3, t);
+      }
+      label 2: {
+        # crystals in the rock
+        p->Rect(6, 6, 2, 4, s);
+        p->Put(6, 5, t);
+        p->Put(7, 5, s);
+        p->Rect(10, 8, 2, 3, s);
+        p->Put(10, 7, t);
+      }
+      label 3: {
+        # a red banner
+        p->Rect(5, 2, 6, 9, DgArt->Pal(27));
+        p->Rect(5, 2, 6, 1, DgArt->Pal(28));
+        p->Put(7, 5, DgArt->Pal(8));
+        p->Put(8, 6, DgArt->Pal(8));
+        p->Put(7, 7, DgArt->Pal(8));
+        p->Put(5, 11, DgArt->Pal(27));
+        p->Put(7, 11, DgArt->Pal(27));
+        p->Put(9, 11, DgArt->Pal(27));
+      }
+      label 4: {
+        # frost
+        p->Rect(2, 2, 5, 2, DgArt->Pal(21));
+        p->Rect(9, 3, 4, 1, DgArt->Pal(21));
+        p->Put(4, 4, DgArt->Pal(21));
+        p->Put(11, 4, DgArt->Pal(21));
+      }
+      label 5: {
+        # glowing cracks
+        p->Line(4, 3, 7, 7, s);
+        p->Line(7, 7, 6, 12, s);
+        p->Line(8, 7, 11, 9, t);
+      }
+      label 6: {
+        # bookshelf
+        p->Rect(2, 3, 12, 9, DgArt->Pal(3));
+        p->Rect(3, 4, 10, 3, DgArt->Pal(1));
+        p->Rect(3, 8, 10, 3, DgArt->Pal(1));
+        cols := [27, 17, 10, 8, 26, 27, 19, 5, 17, 10];
+        each(i : 10) {
+          p->Rect(3 + i, 4, 1, 3, DgArt->Pal(cols[i]));
+          p->Rect(3 + i, 8, 1, 3, DgArt->Pal(cols[(i + 4) % 10]));
+        };
+      }
+      other: {
+        # a glowing rune
+        p->Ring(8, 7, 3, s);
+        p->Put(8, 7, t);
+        p->Line(8, 4, 8, 10, s);
+      }
+    };
+  }
+
+  method : Torch(theme : Int, frame : Int) ~ DgPix {
+    p := Wall(theme, 0);
+    # bracket
+    p->Rect(7, 9, 2, 4, DgArt->Pal(3));
+    p->Rect(6, 8, 4, 1, DgArt->Pal(25));
+    p->Put(6, 12, DgArt->Pal(25));
+    p->Put(9, 12, DgArt->Pal(25));
+    # a glow
+    each(y : 16) {
+      each(x : 16) {
+        d := (x - 8) * (x - 8) + (y - 5) * (y - 5);
+        if(d < 40 & d > 12 & DgArt->Dither(x, y, 4 - d / 10)) {
+          if(p->Get(x, y) >= 0) {
+            p->Put(x, y, DgArt->Pal(6));
+          };
+        };
+      };
+    };
+    # the flame, flickering
+    sway := [0, 1, 0, -1];
+    h := [5, 6, 5, 6];
+    fx := 8 + sway[frame];
+    p->Rect(7, 4, 2, 4, DgArt->Pal(5));
+    p->Rect(fx - 1, 5 + frame % 2, 3, 3, DgArt->Pal(5));
+    p->Rect(fx, 3 + frame % 2, 1, h[frame] - 1, DgArt->Pal(8));
+    p->Rect(7, 6, 2, 2, DgArt->Pal(8));
+    p->Put(8, 7, DgArt->Pal(21));
+    if(frame % 2 = 1) {
+      p->Put(fx, 2, DgArt->Pal(5));
+    };
+    p->Put(fx + 1, 4 + frame % 2, DgArt->Pal(8));
+    return p;
+  }
+
+  method : Water(theme : Int, frame : Int) ~ DgPix {
+    p := DgPix->New(16, 16);
+    c0 := 16;
+    c1 := 17;
+    c2 := 19;
+    if(theme = 1) {
+      c0 := 12;
+      c1 := 11;
+      c2 := 10;
+    };
+    each(y : 16) {
+      each(x : 16) {
+        w := (x + frame * 2 + (y / 2) * 3 + (y % 2)) % 8;
+        c := c0;
+        if(w < 3) {
+          c := c1;
+        };
+        if(w = 0 & y % 4 = 1) {
+          c := c2;
+        };
+        p->Put(x, y, DgArt->Pal(c));
+      };
+    };
+    # a sparkle on the surface
+    p->Put((frame * 5 + 3) % 14 + 1, 3 + frame * 3 % 11, DgArt->Pal(21));
+    return p;
+  }
+
+  method : Lava(frame : Int) ~ DgPix {
+    p := DgPix->New(16, 16);
+    each(y : 16) {
+      each(x : 16) {
+        w := (x * 2 + frame * 2 + y * 3 + (DgArt->Hash(x / 4, y / 4, 1) % 5)) % 12;
+        c := 27;
+        if(w < 6) { c := 5; };
+        if(w < 3) { c := 8; };
+        if(w = 0 & DgArt->Hash(x, y, frame) % 2 = 0) { c := 21; };
+        # a drifting dark crust
+        n := DgArt->Hash((x + frame) / 4, y / 3, 9) % 7;
+        if(n = 0) {
+          c := 2;
+          if(DgArt->Dither(x, y, 8)) {
+            c := 3;
+          };
+        };
+        p->Put(x, y, DgArt->Pal(c));
+      };
+    };
+    return p;
+  }
+
+  method : Door(theme : Int, open : Bool) ~ DgPix {
+    p := Floor(theme, 0);
+    hi := DgArt->T(theme, 0);
+    # the frame
+    p->Rect(1, 0, 14, 16, DgArt->Pal(1));
+    if(open) {
+      # a dark doorway, the door swung to the left
+      p->Rect(2, 1, 12, 14, DgArt->Pal(0));
+      each(y : 14) {
+        if(y % 2 = 0) {
+          p->Rect(2, 1 + y, 12, 1, DgArt->Pal(1));
+        };
+      };
+      p->Rect(2, 1, 3, 14, DgArt->Pal(3));
+      p->Rect(2, 1, 1, 14, DgArt->Pal(4));
+      p->Rect(4, 1, 1, 14, DgArt->Pal(2));
+      p->Rect(2, 5, 3, 1, DgArt->Pal(25));
+      p->Rect(2, 11, 3, 1, DgArt->Pal(25));
+      p->Put(12, 1, hi);
+      p->Rect(13, 1, 1, 14, DgArt->Pal(25));
+    }
+    else {
+      p->Rect(2, 1, 12, 14, DgArt->Pal(3));
+      each(i : 5) {
+        p->Rect(2 + i * 3 - (i / 4), 1, 1, 14, DgArt->Pal(4));
+        p->Rect(4 + i * 3 - (i / 4), 1, 1, 14, DgArt->Pal(2));
+      };
+      # iron straps and a handle
+      p->Rect(2, 3, 12, 2, DgArt->Pal(25));
+      p->Rect(2, 11, 12, 2, DgArt->Pal(25));
+      p->Put(3, 3, DgArt->Pal(23));
+      p->Put(12, 3, DgArt->Pal(23));
+      p->Put(3, 11, DgArt->Pal(23));
+      p->Put(12, 11, DgArt->Pal(23));
+      p->Rect(10, 7, 2, 2, DgArt->Pal(8));
+      p->Put(10, 7, DgArt->Pal(21));
+      # an arch above
+      p->Rect(2, 1, 12, 1, DgArt->Pal(4));
+    };
+    return p;
+  }
+
+  method : Stairs(theme : Int, down : Bool) ~ DgPix {
+    p := Floor(theme, 0);
+    p->Rect(1, 1, 14, 14, DgArt->Pal(25));
+    p->Rect(2, 2, 12, 12, DgArt->Pal(0));
+    lit := [22, 22, 23, 23, 24, 24];
+    body := [24, 24, 25, 25, 14, 14];
+    if(<>down) {
+      lit := [24, 23, 23, 22, 22, 21];
+      body := [14, 25, 25, 24, 24, 23];
+    };
+    each(c : 6) {
+      top := 3 + c * 2;
+      if(<>down) {
+        top := 12 - c * 2;
+      };
+      p->Rect(2 + c * 2, top, 2, 14 - top, DgArt->Pal(body[c]));
+      p->Rect(2 + c * 2, top, 2, 1, DgArt->Pal(lit[c]));
+      p->Rect(2 + c * 2, top + 1, 2, 1, DgArt->Pal(lit[c] - 0));
+    };
+    if(<>down) {
+      # light at the top of the stair
+      p->Rect(11, 2, 3, 2, DgArt->Pal(8));
+      p->Put(13, 2, DgArt->Pal(21));
+    }
+    else {
+      p->Rect(2, 2, 3, 2, DgArt->Pal(1));
+    };
+    p->Rect(1, 1, 14, 1, DgArt->Pal(23));
+    p->Rect(1, 1, 1, 14, DgArt->Pal(24));
+    return p;
+  }
+
+  method : Pillar(theme : Int) ~ DgPix {
+    p := Floor(theme, 0);
+    hi := DgArt->T(theme, 0);
+    mid := DgArt->T(theme, 1);
+    lo := DgArt->T(theme, 2);
+    dark := DgArt->T(theme, 3);
+    # a soft shadow on the floor
+    p->Rect(3, 13, 11, 2, dark);
+    # shaft
+    each(y : 12) {
+      p->Rect(4, 2 + y, 8, 1, mid);
+      p->Put(4, 2 + y, hi);
+      p->Put(5, 2 + y, hi);
+      p->Put(10, 2 + y, lo);
+      p->Put(11, 2 + y, dark);
+      if(y % 4 = 3) {
+        p->Rect(4, 2 + y, 8, 1, lo);
+      };
+    };
+    # capital and base
+    p->Rect(3, 1, 10, 2, hi);
+    p->Rect(3, 2, 10, 1, mid);
+    p->Rect(3, 12, 10, 2, lo);
+    p->Rect(3, 13, 10, 1, dark);
+    return p;
+  }
+
+  method : Spikes(theme : Int) ~ DgPix {
+    p := Floor(theme, 0);
+    p->Rect(2, 2, 12, 12, DgArt->Pal(1));
+    xs := [3, 7, 11, 5, 9, 3, 7, 11];
+    ys := [5, 3, 5, 9, 9, 13, 11, 13];
+    each(i : 8) {
+      p->Line(xs[i], ys[i], xs[i] + 1, ys[i] - 3, DgArt->Pal(22));
+      p->Put(xs[i] + 1, ys[i] - 4, DgArt->Pal(21));
+      p->Put(xs[i] + 1, ys[i] - 3, DgArt->Pal(21));
+      p->Put(xs[i], ys[i], DgArt->Pal(24));
+      p->Put(xs[i] + 2, ys[i], DgArt->Pal(24));
+      p->Put(xs[i] + 1, ys[i], DgArt->Pal(23));
+      p->Put(xs[i] + 1, ys[i] - 2, DgArt->Pal(23));
+    };
+    p->Put(7, 2, DgArt->Pal(27));
+    return p;
+  }
+
+  method : Chest(theme : Int, open : Bool) ~ DgPix {
+    p := Floor(theme, 0);
+    p->Rect(2, 12, 12, 2, DgArt->T(theme, 3));
+    if(open) {
+      # the lid tilted back, a glint of gold inside
+      p->Rect(3, 2, 10, 3, DgArt->Pal(3));
+      p->Rect(3, 2, 10, 1, DgArt->Pal(4));
+      p->Rect(3, 5, 10, 3, DgArt->Pal(1));
+      p->Rect(3, 8, 10, 5, DgArt->Pal(3));
+      p->Rect(3, 8, 10, 1, DgArt->Pal(4));
+      p->Rect(4, 5, 8, 3, DgArt->Pal(8));
+      p->Put(6, 5, DgArt->Pal(21));
+      p->Put(9, 6, DgArt->Pal(21));
+      p->Put(11, 5, DgArt->Pal(21));
+      p->Rect(3, 8, 10, 1, DgArt->Pal(31));
+      p->Rect(7, 8, 2, 3, DgArt->Pal(8));
+    }
+    else {
+      p->Rect(2, 5, 12, 8, DgArt->Pal(3));
+      p->Rect(2, 5, 12, 1, DgArt->Pal(4));
+      p->Rect(2, 4, 12, 2, DgArt->Pal(4));
+      p->Rect(3, 3, 10, 2, DgArt->Pal(4));
+      p->Rect(3, 3, 10, 1, DgArt->Pal(6));
+      p->Rect(2, 8, 12, 1, DgArt->Pal(25));
+      p->Rect(2, 4, 1, 9, DgArt->Pal(31));
+      p->Rect(13, 4, 1, 9, DgArt->Pal(31));
+      p->Rect(7, 7, 2, 3, DgArt->Pal(8));
+      p->Put(7, 7, DgArt->Pal(21));
+      p->Rect(2, 12, 12, 1, DgArt->Pal(2));
+    };
+    return p;
+  }
+
+  method : Shrine(theme : Int, lit : Bool) ~ DgPix {
+    p := Floor(theme, 0);
+    p->Rect(3, 12, 10, 2, DgArt->T(theme, 3));
+    # an altar of stone steps
+    p->Rect(3, 10, 10, 3, DgArt->Pal(23));
+    p->Rect(3, 10, 10, 1, DgArt->Pal(22));
+    p->Rect(5, 7, 6, 3, DgArt->Pal(24));
+    p->Rect(5, 7, 6, 1, DgArt->Pal(23));
+    if(lit) {
+      # a glow and a floating crystal
+      each(y : 16) {
+        each(x : 16) {
+          d := (x - 8) * (x - 8) + (y - 4) * (y - 4);
+          if(d < 34 & DgArt->Dither(x, y, 6 - d / 7) & p->Get(x, y) >= 0) {
+            p->Put(x, y, DgArt->Pal(18));
+          };
+        };
+      };
+      p->Rect(7, 1, 2, 6, DgArt->Pal(19));
+      p->Rect(6, 3, 4, 2, DgArt->Pal(19));
+      p->Put(7, 0, DgArt->Pal(20));
+      p->Put(8, 2, DgArt->Pal(21));
+      p->Put(7, 3, DgArt->Pal(21));
+      p->Put(9, 5, DgArt->Pal(16));
+      p->Put(8, 6, DgArt->Pal(16));
+    }
+    else {
+      p->Rect(7, 3, 2, 4, DgArt->Pal(24));
+      p->Rect(6, 4, 4, 2, DgArt->Pal(25));
+      p->Put(7, 4, DgArt->Pal(23));
+    };
+    return p;
+  }
+
+  method : Throne(theme : Int) ~ DgPix {
+    p := Floor(theme, 0);
+    p->Rect(3, 13, 11, 1, DgArt->T(theme, 3));
+    # a tall back in dark purple with a golden trim and a skull
+    p->Rect(3, 0, 10, 14, DgArt->Pal(2));
+    p->Rect(4, 1, 8, 11, DgArt->Pal(26));
+    p->Rect(5, 2, 6, 9, DgArt->Pal(15));
+    p->Rect(3, 0, 10, 1, DgArt->Pal(8));
+    p->Rect(3, 0, 1, 14, DgArt->Pal(31));
+    p->Rect(12, 0, 1, 14, DgArt->Pal(31));
+    p->Rect(6, 3, 4, 3, DgArt->Pal(20));
+    p->Put(7, 4, DgArt->Pal(1));
+    p->Put(9, 4, DgArt->Pal(1));
+    p->Rect(7, 6, 2, 1, DgArt->Pal(22));
+    # the seat and its red cushion
+    p->Rect(3, 9, 10, 4, DgArt->Pal(3));
+    p->Rect(4, 9, 8, 2, DgArt->Pal(27));
+    p->Rect(4, 9, 8, 1, DgArt->Pal(28));
+    p->Rect(3, 13, 10, 1, DgArt->Pal(25));
+    p->Put(3, 8, DgArt->Pal(8));
+    p->Put(12, 8, DgArt->Pal(8));
+    return p;
+  }
+}
+
+# A 5 x 7 pixel font in a 6 x 8 cell: the classic one, upper and lower case.
+class DgFont {
+  @r : Renderer;
+  @atlas : Texture;
+
+  New(r : Renderer) {
+    @r := r;
+    # 95 glyphs from the space to the tilde, 7 rows of 5 bits each, two hex digits a row
+    glyphs := [
+      "00000000000000", "04040404040004", "0A0A0A00000000", "0A0A1F0A1F0A0A", "040F140E051E04",
+      "18190204081303", "0C12140815120D", "0C040800000000", "02040808080402", "08040202020408",
+      "0004150E150400", "0004041F040400", "000000000C0408", "0000001F000000", "00000000000C0C",
+      "00010204081000", "0E11131519110E", "040C040404040E", "0E11010204081F", "1F02040201110E",
+      "02060A121F0202", "1F101E0101110E", "0608101E11110E", "1F010204080808", "0E11110E11110E",
+      "0E11110F01020C", "000C0C000C0C00", "000C0C000C0408", "02040810080402", "00001F001F0000",
+      "08040201020408", "0E110102040004", "0E11171517100E", "0E11111F111111", "1E11111E11111E",
+      "0E11101010110E", "1C12111111121C", "1F10101E10101F", "1F10101E101010", "0E11101711110F",
+      "1111111F111111", "0E04040404040E", "0702020202120C", "11121418141211", "1010101010101F",
+      "111B1515111111", "11111915131111", "0E11111111110E", "1E11111E101010", "0E11111115120D",
+      "1E11111E141211", "0F10100E01011E", "1F040404040404", "1111111111110E", "11111111110A04",
+      "1111111515150A", "11110A040A1111", "1111110A040404", "1F01020408101F", "0E08080808080E",
+      "00100804020100", "0E02020202020E", "040A1100000000", "0000000000001F", "08040200000000",
+      "00000E010F110F", "1010161911111E", "00000E1010110E", "01010D1311110F", "00000E111F100E",
+      "0609081C080808", "000F11110F010E", "10101619111111", "04000C0404040E", "0200060202120C",
+      "10101214181412", "0C04040404040E", "00001A15151111", "00001619111111", "00000E1111110E",
+      "00001E111E1010", "00000D130F0101", "00001619101010", "00000E100E011E", "08081C08080906",
+      "0000111111130D", "00001111110A04", "0000111115150A", "0000110A040A11", "000011110F010E",
+      "00001F0204081F", "02040408040402", "04040404040404", "08040402040408", "00000815020000"
+    ];
+    atlas := DgPix->New(95 * 6, 8);
+    each(g : 95) {
+      hex := Compact(glyphs[g]);
+      each(row : 7) {
+        bits := Hex(hex, row * 2) * 16 + Hex(hex, row * 2 + 1);
+        each(col : 5) {
+          if(((bits >> (4 - col)) and 1) = 1) {
+            atlas->Put(g * 6 + col, row, 16777215);
+          };
+        };
+      };
+    };
+    @atlas := atlas->ToTexture(@r);
+  }
+
+  # drop the spaces that crept into the hex strings
+  function : Compact(s : String) ~ String {
+    out := "";
+    chars := s->ToCharArray();
+    each(i : chars) {
+      if(chars[i]->As(Int) <> 32) {
+        out += chars[i]->ToString();
+      };
+    };
+    return out;
+  }
+
+  function : Hex(s : String, at : Int) ~ Int {
+    if(at >= s->Size()) {
+      return 0;
+    };
+    chars := s->ToCharArray();
+    v := chars[at]->As(Int);
+    if(v >= 48 & v <= 57) {
+      return v - 48;
+    };
+    if(v >= 65 & v <= 70) {
+      return v - 55;
+    };
+    return 0;
+  }
+
+  method : public : Draw(text : String, x : Int, y : Int, rgb : Int, scale : Int) ~ Nil {
+    @atlas->SetColorMod((rgb >> 16) and 255, (rgb >> 8) and 255, rgb and 255);
+    chars := text->ToCharArray();
+    each(i : chars) {
+      code := chars[i]->As(Int) - 32;
+      if(code >= 0 & code < 95) {
+        @r->Copy(@atlas, Rect->New(code * 6, 0, 6, 8), Rect->New(x + i * 6 * scale, y, 6 * scale, 8 * scale));
+      };
+    };
+  }
+
+  method : public : DrawShadow(text : String, x : Int, y : Int, rgb : Int, shadow : Int, scale : Int) ~ Nil {
+    Draw(text, x + scale, y + scale, shadow, scale);
+    Draw(text, x, y, rgb, scale);
+  }
+
+  method : public : Width(text : String, scale : Int) ~ Int {
+    return text->Size() * 6 * scale;
+  }
+}

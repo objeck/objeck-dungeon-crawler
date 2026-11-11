@@ -1,0 +1,341 @@
+#~
+# Tiny Dungeon: Depths -- sound. No sound files: every effect is computed (beeps, sweeps
+# and noise bursts, the way a Sound Blaster-era game would) and the dungeon music is a
+# little chiptune sequencer, a bass, an arpeggio, a kick and a hat in a minor key, that
+# changes key and tempo with the floor. One software mixer adds the music and the
+# effects that are playing, a few frames ahead, and hands the samples to the sound card.
+# A machine with no sound card simply stays silent.
+~#
+
+use Collection;
+use Game.SDL2;
+
+class DgSound {
+  @dev : AudioDevice;
+  @ok : Bool;
+  @on : Bool;
+  @music_on : Bool;
+  @rate : Int;
+  @fx : Float[][];
+  @vid : Int[];
+  @vpos : Int[];
+  @pos : Int;
+  @theme : Int;
+  @bpm : Float;
+  @shift : Int;
+  @noise : Int;
+  @freqs : Float[];
+  @volume : Float;
+  @mood : Int;
+
+  New() {
+    @rate := 22050;
+    @on := true;
+    @music_on := true;
+    @volume := 0.8;
+    @vid := Int->New[8];
+    @vpos := Int->New[8];
+    each(i : 8) {
+      @vid[i] := -1;
+    };
+    @noise := 12345;
+    @bpm := 100.0;
+
+    # note frequencies, C0 up: 12 per octave
+    @freqs := Float->New[120];
+    each(i : 120) {
+      @freqs[i] := 16.3516 * Float->Pow(2.0, i->As(Float) / 12.0);
+    };
+
+    @fx := Float[]->New[19];
+    each(i : 19) {
+      @fx[i] := Build(i);
+    };
+
+    @dev := AudioDevice->New(@rate, AudioFormat->SDL_AUDIO_F32, 1, 1024);
+    @ok := <>@dev->IsNull();
+    if(@ok) {
+      @dev->Pause(false);
+    };
+  }
+
+  method : public : IsOk() ~ Bool {
+    return @ok;
+  }
+
+  method : public : SetOn(on : Bool) ~ Nil {
+    @on := on;
+    if(<>on & @ok) {
+      @dev->Clear();
+    };
+  }
+
+  method : public : IsOn() ~ Bool {
+    return @on;
+  }
+
+  method : public : SetTheme(theme : Int) ~ Nil {
+    @theme := theme;
+    shifts := [0, -2, 3, 0, 5, -5, 2, -3, 0];
+    tempos := [96.0, 90.0, 100.0, 118.0, 84.0, 130.0, 88.0, 110.0, 104.0];
+    @shift := shifts[theme];
+    @bpm := tempos[theme];
+  }
+
+  method : public : Close() ~ Nil {
+    if(@ok) {
+      @dev->Close();
+    };
+  }
+
+  # start effect id (see Build for what each one is)
+  method : public : Play(id : Int) ~ Nil {
+    if(<>@ok | <>@on | id < 0 | id >= 19) {
+      return;
+    };
+    slot := -1;
+    each(i : 8) {
+      if(@vid[i] < 0 & slot < 0) {
+        slot := i;
+      };
+    };
+    if(slot < 0) {
+      slot := 0;
+    };
+    @vid[slot] := id;
+    @vpos[slot] := 0;
+  }
+
+  # ---- making the effects ----
+
+  method : Tone(f0 : Float, f1 : Float, secs : Float, wave : Int, vol : Float) ~ Float[] {
+    n := (secs * @rate->As(Float))->As(Int);
+    out := Float->New[n];
+    phase := 0.0;
+    each(i : n) {
+      t := i->As(Float) / n->As(Float);
+      f := f0 + (f1 - f0) * t;
+      phase += f / @rate->As(Float);
+      p := phase - Float->Floor(phase);
+      v := 0.0;
+      if(wave = 0) {
+        # square
+        if(p < 0.5) { v := 1.0; } else { v := -1.0; };
+      }
+      else if(wave = 1) {
+        # triangle
+        v := 4.0 * Float->Abs(p - 0.5) - 1.0;
+      }
+      else if(wave = 2) {
+        # saw
+        v := p * 2.0 - 1.0;
+      }
+      else {
+        # noise
+        @noise := (@noise * 1103515245 + 12345) and 2147483647;
+        v := ((@noise >> 8) % 2000)->As(Float) / 1000.0 - 1.0;
+      };
+      env := 1.0 - t;
+      if(t < 0.04) {
+        env := t / 0.04;
+      };
+      out[i] := v * env * vol;
+    };
+    return out;
+  }
+
+  method : Join(a : Float[], b : Float[]) ~ Float[] {
+    out := Float->New[a->Size() + b->Size()];
+    each(i : a->Size()) {
+      out[i] := a[i];
+    };
+    each(i : b->Size()) {
+      out[a->Size() + i] := b[i];
+    };
+    return out;
+  }
+
+  method : Mix(a : Float[], b : Float[]) ~ Float[] {
+    n := DgUtil->Max(a->Size(), b->Size());
+    out := Float->New[n];
+    each(i : n) {
+      v := 0.0;
+      if(i < a->Size()) { v += a[i]; };
+      if(i < b->Size()) { v += b[i]; };
+      out[i] := v;
+    };
+    return out;
+  }
+
+  method : Build(id : Int) ~ Float[] {
+    f := @freqs;
+    select(id) {
+      label 1: {
+        return Mix(Tone(160.0, 60.0, 0.12, 1, 0.5), Tone(0.0, 0.0, 0.06, 3, 0.35));
+      }
+      label 2: {
+        return Mix(Tone(300.0, 90.0, 0.22, 0, 0.35), Tone(0.0, 0.0, 0.1, 3, 0.3));
+      }
+      label 3: {
+        return Tone(0.0, 0.0, 0.07, 3, 0.18);
+      }
+      label 4: {
+        return Mix(Tone(220.0, 40.0, 0.35, 2, 0.35), Tone(0.0, 0.0, 0.25, 3, 0.35));
+      }
+      label 5: {
+        return Join(Tone(f[83], f[83], 0.05, 0, 0.25), Tone(f[88], f[88], 0.12, 0, 0.25));
+      }
+      label 6: {
+        return Tone(500.0, 900.0, 0.09, 0, 0.25);
+      }
+      label 7: {
+        r := Tone(f[60], f[60], 0.08, 0, 0.25);
+        r := Join(r, Tone(f[64], f[64], 0.08, 0, 0.25));
+        r := Join(r, Tone(f[67], f[67], 0.08, 0, 0.25));
+        return Join(r, Tone(f[72], f[72], 0.25, 0, 0.3));
+      }
+      label 8: {
+        return Mix(Tone(0.0, 0.0, 0.5, 3, 0.4), Tone(90.0, 30.0, 0.5, 2, 0.3));
+      }
+      label 9: {
+        return Tone(1400.0, 300.0, 0.14, 0, 0.22);
+      }
+      label 10: {
+        return Mix(Tone(200.0, 900.0, 0.12, 2, 0.15), Tone(0.0, 0.0, 0.1, 3, 0.25));
+      }
+      label 11: {
+        r := Tone(f[72], f[72], 0.06, 1, 0.3);
+        r := Join(r, Tone(f[76], f[76], 0.06, 1, 0.3));
+        r := Join(r, Tone(f[79], f[79], 0.06, 1, 0.3));
+        return Join(r, Tone(f[84], f[84], 0.15, 1, 0.3));
+      }
+      label 12: {
+        return Join(Tone(300.0, 1200.0, 0.12, 1, 0.3), Tone(1200.0, 200.0, 0.15, 1, 0.3));
+      }
+      label 13: {
+        return Mix(Tone(60.0, 80.0, 0.3, 2, 0.18), Tone(0.0, 0.0, 0.3, 3, 0.1));
+      }
+      label 14: {
+        return Mix(Tone(70.0, 45.0, 0.6, 2, 0.45), Tone(0.0, 0.0, 0.5, 3, 0.3));
+      }
+      label 15: {
+        return Tone(0.0, 0.0, 0.025, 3, 0.1);
+      }
+      label 16: {
+        r := Tone(f[67], f[67], 0.1, 0, 0.22);
+        r := Join(r, Tone(f[64], f[64], 0.1, 0, 0.22));
+        r := Join(r, Tone(f[60], f[60], 0.1, 0, 0.22));
+        return Join(r, Tone(f[55], f[55], 0.2, 0, 0.22));
+      }
+      label 17: {
+        r := Tone(f[60], f[58], 0.25, 0, 0.3);
+        r := Join(r, Tone(f[58], f[55], 0.25, 0, 0.3));
+        r := Join(r, Tone(f[55], f[50], 0.5, 0, 0.3));
+        return Mix(r, Tone(0.0, 0.0, 0.9, 3, 0.15));
+      }
+      label 18: {
+        r := Tone(f[60], f[60], 0.12, 0, 0.28);
+        r := Join(r, Tone(f[60], f[60], 0.12, 0, 0.28));
+        r := Join(r, Tone(f[60], f[60], 0.12, 0, 0.28));
+        r := Join(r, Tone(f[64], f[64], 0.3, 0, 0.28));
+        r := Join(r, Tone(f[62], f[62], 0.12, 0, 0.28));
+        r := Join(r, Tone(f[67], f[67], 0.6, 0, 0.3));
+        return r;
+      }
+      other: {
+        return Tone(440.0, 440.0, 0.05, 0, 0.1);
+      }
+    };
+    return Tone(440.0, 440.0, 0.05, 0, 0.1);
+  }
+
+  # ---- the music: one sample at a time ----
+
+  method : MusicSample(p : Int) ~ Float {
+    step_len := (@rate->As(Float) * 60.0 / (@bpm * 4.0))->As(Int);
+    step := p / step_len;
+    frac := (p % step_len)->As(Float) / step_len->As(Float);
+    bar := (step / 16) % 4;
+    s16 := step % 16;
+    roots := [9, 5, 0, 7];
+    thirds := [3, 4, 4, 4];
+    root := roots[bar] + @shift;
+    third := thirds[bar];
+
+    # bass: root on the strong steps, an octave up on the off steps
+    bass_note := 24 + root;
+    if(s16 % 4 = 2) {
+      bass_note += 12;
+    };
+    bf := @freqs[DgUtil->Clamp(bass_note, 0, 119)];
+    bp := bf * (p->As(Float)) / @rate->As(Float);
+    bph := bp - Float->Floor(bp);
+    bass := (4.0 * Float->Abs(bph - 0.5) - 1.0) * 0.30 * (1.0 - frac * 0.5);
+    if(@mood = 1 & s16 % 2 = 1) {
+      bass := bass * 0.4;
+    };
+
+    # arpeggio: chord tones in a pattern, a pulse wave with a short decay
+    pattern := [0, 1, 2, 3, 2, 1, 2, 3];
+    pick := pattern[s16 % 8];
+    semi := root;
+    if(pick = 1) { semi += third; }
+    else if(pick = 2) { semi += 7; }
+    else if(pick = 3) { semi += 12; };
+    af := @freqs[DgUtil->Clamp(48 + semi, 0, 119)];
+    ap := af * (p->As(Float)) / @rate->As(Float);
+    aph := ap - Float->Floor(ap);
+    arp := 0.0;
+    if(aph < 0.25) { arp := 1.0; } else { arp := -1.0; };
+    arp := arp * 0.10 * (1.0 - frac) * (1.0 - frac);
+
+    # a kick on the beat and a hat on the off-beats
+    drum := 0.0;
+    if(s16 % 4 = 0 & frac < 0.5) {
+      kf := 90.0 - frac * 80.0;
+      drum := Float->Sin(kf * (p->As(Float)) / @rate->As(Float) * 6.2832) * 0.35 * (1.0 - frac * 2.0);
+    };
+    if(s16 % 2 = 1 & frac < 0.2) {
+      @noise := (@noise * 1103515245 + 12345) and 2147483647;
+      drum += (((@noise >> 8) % 2000)->As(Float) / 1000.0 - 1.0) * 0.07 * (1.0 - frac * 5.0);
+    };
+    return bass + arp + drum;
+  }
+
+  # call once a frame: keeps about 100 ms of sound queued
+  method : public : Pump() ~ Nil {
+    if(<>@ok | <>@on) {
+      return;
+    };
+    queued := @dev->GetQueuedSize() / 4;
+    want := 2400;
+    if(queued >= want) {
+      return;
+    };
+    n := want - queued;
+    out := Float->New[n];
+    each(i : n) {
+      v := 0.0;
+      if(@music_on) {
+        v := MusicSample(@pos) * 0.55;
+      };
+      each(k : 8) {
+        if(@vid[k] >= 0) {
+          buf := @fx[@vid[k]];
+          if(@vpos[k] < buf->Size()) {
+            v += buf[@vpos[k]];
+            @vpos[k] += 1;
+          }
+          else {
+            @vid[k] := -1;
+          };
+        };
+      };
+      @pos += 1;
+      if(v > 1.0) { v := 1.0; };
+      if(v < -1.0) { v := -1.0; };
+      out[i] := v * @volume;
+    };
+    @dev->QueueFloats(out);
+  }
+}

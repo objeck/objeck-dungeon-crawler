@@ -27,6 +27,17 @@ A single-player Ultima-style fantasy RPG with a Wizardry-inspired first-person d
 
 ---
 
+## Also in this repository: Tiny Dungeon: Depths and Objeck Gauntlet
+
+[`depths/`](depths/) is a separate, self-contained pair of games that show off the `System.AI` library:
+a turn-based 90s roguelike (three heroes, eight generated floors, two bosses, monsters driven by
+A\*, breadth-first search, Dijkstra, minimax and Monte Carlo tree search) and a real-time Gauntlet-style
+arcade game for one or two players. All of the pixel art and sound is made by code. They share no
+code with Warden of Greyhold; see [`depths/README.md`](depths/README.md) for how to build and play them
+(`depths/build.cmd depths brun`, or `./build.sh depths brun` from that folder).
+
+---
+
 ## Quick Start
 
 ### Prerequisites
