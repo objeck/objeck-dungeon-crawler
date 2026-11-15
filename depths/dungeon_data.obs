@@ -1,0 +1,405 @@
+#~
+# Tiny Dungeon: Depths -- the data tables. No window, no sound: the constants and
+# the numbers every other file shares (tiles, monsters, items, classes, themes),
+# plus the small helpers and the seeded random generator.
+#
+# Everything a monster IS lives in one table (DgData->MonStat): hit points, attack,
+# defence, experience, speed, which brain drives it (DgBrain, in dungeon_ai.obs)
+# and how far it notices the hero. Change a row and the game changes.
+~#
+
+use Collection;
+
+# --- what a square of the map is ---
+consts DgTile {
+  WALL := 0,
+  FLOOR := 1,
+  DOOR := 2,
+  DOOR_OPEN := 3,
+  STAIRS_DOWN := 4,
+  STAIRS_UP := 5,
+  WATER := 6,
+  LAVA := 7,
+  TORCH := 8,
+  PILLAR := 9,
+  SPIKES := 10,
+  CHEST := 11,
+  CHEST_OPEN := 12,
+  SHRINE := 13,
+  SHRINE_USED := 14,
+  THRONE := 15,
+  COUNT := 16
+}
+
+# --- the monsters, in table order ---
+consts DgMon {
+  RAT := 0,
+  BAT := 1,
+  SLIME := 2,
+  SKELETON := 3,
+  GOBLIN := 4,
+  ARCHER := 5,
+  ORC := 6,
+  GHOST := 7,
+  MAGE := 8,
+  SPIDER := 9,
+  YETI := 10,
+  IMP := 11,
+  WARLORD := 12,
+  LICH := 13,
+  COUNT := 14
+}
+
+# --- the brains (what drives a monster each turn) ---
+consts DgAi {
+  BFS := 0,        # breadth-first search: the fewest steps
+  ERRATIC := 1,    # flutters: half random, half toward the hero
+  GREEDY := 2,     # straight at the hero, no planning
+  ASTAR := 3,      # A* over the local map
+  FLANK := 4,      # A*, but to a free square beside the hero, to surround
+  DIJKSTRA := 5,   # Dijkstra with walls that cost extra: walks through them
+  TACTICAL := 6,   # minimax over a small duel: kites, shoots, closes in
+  BOSS_MINIMAX := 7,
+  BOSS_MCTS := 8
+}
+
+# --- the things you find ---
+consts DgIt {
+  GOLD := 0,
+  POTION_HEAL := 1,
+  POTION_MANA := 2,
+  POTION_STR := 3,
+  SCROLL_TELEPORT := 4,
+  SCROLL_MAP := 5,
+  SCROLL_FIRE := 6,
+  WEAPON := 7,
+  ARMOR := 8,
+  GEM := 9,
+  CROWN := 10,
+  COUNT := 11
+}
+
+# --- the three heroes ---
+consts DgCls {
+  WARRIOR := 0,
+  ROGUE := 1,
+  MAGE := 2
+}
+
+# --- the hero's numbers, read through DgGame->Stat ---
+consts DgStat {
+  X := 0,
+  Y := 1,
+  HP := 2,
+  MAXHP := 3,
+  MP := 4,
+  MAXMP := 5,
+  LEVEL := 6,
+  XP := 7,
+  NEXT := 8,
+  ATK := 9,
+  DEF := 10,
+  GOLD := 11,
+  KILLS := 12,
+  DEPTH := 13,
+  SCORE := 14,
+  TURNS := 15,
+  POISON := 16,
+  CLASS := 17,
+  DIFF := 18,
+  STATE := 19,
+  WEAPON := 20,
+  ARMOR := 21,
+  STR := 22,
+  FACE := 23,
+  GEMS := 24,
+  COUNT := 25
+}
+
+# --- things that happened, for the pictures and the sounds ---
+consts DgEv {
+  HIT_MON := 0,     # x, y, damage, 1 for a critical hit
+  HIT_HERO := 1,    # x, y, damage
+  MISS := 2,        # x, y
+  KILL := 3,        # x, y, monster kind
+  PICKUP := 4,      # x, y, item kind
+  LEVELUP := 5,
+  FIREBALL := 6,    # x, y, radius
+  SHOT := 7,        # from x, y; to x, y
+  STEP := 8,        # x, y
+  DOOR := 9,        # x, y
+  CHEST := 10,      # x, y
+  STAIRS := 11,     # new depth
+  HEAL := 12,       # x, y, amount
+  TELEPORT := 13,   # x, y
+  DEAD := 14,
+  WON := 15,
+  POISON := 16,     # x, y
+  TRAP := 17,       # x, y
+  SHRINE := 18,     # x, y
+  ROAR := 19,       # x, y (a boss summoned help)
+  MAGIC := 20,      # x, y
+  SPLIT := 21,      # x, y (a slime divided)
+  BOSS_HIT := 22,   # x, y, damage (the hero hit a boss)
+  BLINK := 23,      # x, y
+  SLASH := 24       # x, y, the hero's whirlwind or shadow strike
+}
+
+class DgUtil {
+  function : Abs(a : Int) ~ Int {
+    if(a < 0) {
+      return 0 - a;
+    };
+    return a;
+  }
+
+  function : Min(a : Int, b : Int) ~ Int {
+    if(a < b) {
+      return a;
+    };
+    return b;
+  }
+
+  function : Max(a : Int, b : Int) ~ Int {
+    if(a > b) {
+      return a;
+    };
+    return b;
+  }
+
+  function : Clamp(a : Int, lo : Int, hi : Int) ~ Int {
+    if(a < lo) {
+      return lo;
+    };
+    if(a > hi) {
+      return hi;
+    };
+    return a;
+  }
+
+  function : Sign(a : Int) ~ Int {
+    if(a < 0) {
+      return -1;
+    };
+    if(a > 0) {
+      return 1;
+    };
+    return 0;
+  }
+
+  # king-move distance (diagonals count one)
+  function : Cheb(x0 : Int, y0 : Int, x1 : Int, y1 : Int) ~ Int {
+    return Max(Abs(x0 - x1), Abs(y0 - y1));
+  }
+
+  function : Manhattan(x0 : Int, y0 : Int, x1 : Int, y1 : Int) ~ Int {
+    return Abs(x0 - x1) + Abs(y0 - y1);
+  }
+}
+
+# A tiny seeded random generator: the same seed always plays the same dungeon,
+# which is what lets the tests and the demo be exact.
+class DgRand {
+  @s : Int;
+
+  New(seed : Int) {
+    @s := (seed * 2654435761 + 12345) and 2147483647;
+    if(@s = 0) {
+      @s := 1;
+    };
+    # warm up: the first outputs of a linear generator follow the seed too closely
+    each(i : 8) {
+      Next(1000);
+    };
+  }
+
+  # 0 .. n-1
+  method : public : Next(n : Int) ~ Int {
+    if(n <= 1) {
+      return 0;
+    };
+    @s := (@s * 1103515245 + 12345) and 2147483647;
+    return (@s >> 8) % n;
+  }
+
+  # a .. b, both included
+  method : public : Range(a : Int, b : Int) ~ Int {
+    return a + Next(b - a + 1);
+  }
+
+  # true pct times in a hundred
+  method : public : Chance(pct : Int) ~ Bool {
+    return Next(100) < pct;
+  }
+
+  method : public : Seed() ~ Int {
+    return @s;
+  }
+}
+
+# The tables.
+class DgData {
+  @ready : static : Bool;
+  @mon : static : Int[];
+  @mon_names : static : String[];
+  @theme_names : static : String[];
+  @theme_flavor : static : String[];
+  @class_names : static : String[];
+  @class_special : static : String[];
+  @diff_names : static : String[];
+  @weapon_names : static : String[];
+  @armor_names : static : String[];
+  @item_names : static : String[];
+
+  function : Init() ~ Nil {
+    if(@ready) {
+      return;
+    };
+
+    # per monster: hit points, attack, defence, experience, speed (0 slow, 1 normal,
+    # 2 fast), brain, how far it notices the hero, ranged reach (0 none)
+    @mon := [
+      4, 2, 0, 3, 1, 0, 7, 0,       # rat
+      5, 2, 0, 4, 2, 1, 7, 0,       # bat
+      10, 3, 0, 6, 0, 2, 6, 0,      # slime
+      12, 4, 1, 9, 1, 3, 9, 0,      # skeleton
+      10, 4, 0, 8, 1, 3, 8, 0,      # goblin
+      9, 4, 0, 11, 1, 6, 9, 5,      # skeleton archer
+      24, 6, 2, 16, 1, 4, 9, 0,     # orc
+      14, 5, 0, 18, 0, 5, 10, 0,    # ghost
+      14, 6, 0, 22, 1, 6, 9, 6,     # dark mage
+      14, 5, 1, 15, 1, 3, 8, 0,     # spider
+      36, 8, 3, 30, 1, 3, 8, 0,     # yeti
+      16, 7, 1, 24, 1, 6, 8, 4,     # fire imp
+      95, 9, 3, 150, 1, 7, 14, 5,   # Orc Warlord
+      150, 11, 3, 500, 1, 8, 16, 7  # Lich King
+    ];
+
+    @mon_names := [
+      "Giant Rat", "Cave Bat", "Green Slime", "Skeleton", "Goblin", "Skeleton Archer", "Orc",
+      "Ghost", "Dark Mage", "Giant Spider", "Yeti", "Fire Imp", "Orc Warlord", "Lich King"
+    ];
+
+    @theme_names := [
+      "The Crypt", "The Sewers", "The Caves", "The Goblin Warren", "The Frozen Halls",
+      "The Fire Hold", "The Haunted Library", "The Lich Tower"
+    ];
+
+    @theme_flavor := [
+      "Dust and old bones. Something shuffles in the dark.",
+      "Drip, drip. The water here is not water.",
+      "The walls glitter. Things with many legs live here.",
+      "Drums echo ahead. The Orc Warlord holds this hall!",
+      "Your breath hangs in the air. The floor is slick.",
+      "The stone is warm. Embers drift upward.",
+      "Pages whisper. The shelves watch you pass.",
+      "The Lich King waits on his throne. End this."
+    ];
+
+    @class_names := ["Warrior", "Rogue", "Mage"];
+    @class_special := ["Whirlwind", "Shadow Strike", "Fireball"];
+    @diff_names := ["Easy", "Normal", "Hard", "Nightmare"];
+
+    @weapon_names := [
+      "Rusty Dagger", "Short Sword", "Steel Sword", "Battle Axe", "Runed Blade", "Dragon Slayer"
+    ];
+    @armor_names := [
+      "Rags", "Leather Vest", "Chain Mail", "Scale Mail", "Plate Armor", "Mithril Mail"
+    ];
+    @item_names := [
+      "Gold", "Health Potion", "Mana Potion", "Strength Potion", "Teleport Scroll", "Map Scroll",
+      "Fire Scroll", "Weapon", "Armor", "Gem", "Lich Crown"
+    ];
+
+    @ready := true;
+  }
+
+  function : MonStat(kind : Int, col : Int) ~ Int {
+    return @mon[kind * 8 + col];
+  }
+
+  function : MonName(kind : Int) ~ String {
+    return @mon_names[kind];
+  }
+
+  function : ThemeName(theme : Int) ~ String {
+    return @theme_names[theme];
+  }
+
+  # a name short enough for the side panel
+  function : ThemeShort(theme : Int) ~ String {
+    names := ["Crypt", "Sewers", "Caves", "Warren", "Frost", "Fire Hold", "Library", "Tower"];
+    return names[theme];
+  }
+
+  function : ThemeFlavor(theme : Int) ~ String {
+    return @theme_flavor[theme];
+  }
+
+  function : ClassName(cls : Int) ~ String {
+    return @class_names[cls];
+  }
+
+  function : ClassSpecial(cls : Int) ~ String {
+    return @class_special[cls];
+  }
+
+  function : DiffName(diff : Int) ~ String {
+    return @diff_names[diff];
+  }
+
+  function : WeaponName(tier : Int) ~ String {
+    return @weapon_names[tier];
+  }
+
+  function : ArmorName(tier : Int) ~ String {
+    return @armor_names[tier];
+  }
+
+  # the name of an item kind; tier picks the weapon or the armour
+  function : ItemName(kind : Int, tier : Int) ~ String {
+    if(kind = DgIt->WEAPON) {
+      return @weapon_names[tier];
+    };
+    if(kind = DgIt->ARMOR) {
+      return @armor_names[tier];
+    };
+    return @item_names[kind];
+  }
+
+  # which monsters live on a floor of this theme (a kind appears more often when it is repeated)
+  function : Pool(theme : Int) ~ Int[] {
+    select(theme) {
+      label 0: {
+        return [0, 0, 1, 2, 3, 3, 4];
+      }
+      label 1: {
+        return [0, 0, 2, 2, 9, 4, 4];
+      }
+      label 2: {
+        return [1, 1, 9, 9, 4, 5, 3];
+      }
+      label 3: {
+        return [4, 4, 4, 6, 6, 5, 9];
+      }
+      label 4: {
+        return [10, 3, 3, 5, 1, 7, 10];
+      }
+      label 5: {
+        return [11, 11, 6, 8, 6, 3, 11];
+      }
+      label 6: {
+        return [7, 7, 8, 3, 9, 5, 8];
+      }
+      other: {
+        return [3, 7, 8, 5, 3, 6, 7];
+      }
+    };
+
+    return [0];
+  }
+
+  function : IsBoss(kind : Int) ~ Bool {
+    return kind = DgMon->WARLORD | kind = DgMon->LICH;
+  }
+}

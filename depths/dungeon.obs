@@ -1,0 +1,653 @@
+#~
+# compile: obc -src dungeon_data.obs,dungeon_level.obs,dungeon_game.obs,dungeon_ai.obs,dungeon_art.obs,dungeon_sound.obs,dungeon_view.obs,dungeon.obs -lib sdl2,sdl_game,ai,collect -dest dungeon.obe
+# run:     obr dungeon.obe
+#
+# Tiny Dungeon: Depths -- a 90s-style dungeon crawler in an SDL2 window (a 320 x 200
+# "VGA" picture, drawn from code, shown 3 times as large). Pick a Warrior, Rogue or
+# Mage and one of four levels, then descend eight floors of crypts, sewers, caves,
+# a goblin warren, frozen halls, a fire hold, a haunted library and the Lich King's
+# tower. Every floor is made fresh by a seeded generator. Fight, find potions, scrolls,
+# weapons, armour, gems and gold, open chests, pray at shrines, beat the Orc Warlord on
+# floor 4 and the Lich King on floor 8, and take his crown.
+#
+# The monsters are driven by the System.AI library (see dungeon_ai.obs): breadth-first
+# search, A*, Dijkstra, minimax and Monte Carlo tree search.
+#
+# Keys: arrows / WASD / numpad walk and fight (Q E Z C: diagonals), SPACE special move,
+# 1-8 use a pack item, I pack, . or X wait, ENTER or > stairs down, H help, F2 scanlines,
+# F3 sound, F4 watch the computer play, ESC back to the title.
+#
+# For pictures instead of play:  --screenshot out.png [--scene title|select|play|arena|
+# boss|inventory|help|dead|won] [--depth 1-8] [--class 0-2] [--diff 0-3] [--seed N]
+# [--steps N]    saves one frame and exits;  --demo [out_dir]   lets the computer play for
+# a while (and saves frames to out_dir);  --silent   no sound;  --scale 2-4   window size.
+# There is a README.md next to this file.
+~#
+
+use System.IO.Filesystem;
+use Game.SDL2;
+use Game.Framework;
+
+class DungeonApp {
+  @fw : GameFramework;
+  @r : Renderer;
+  @event : Event;
+  @art : DgArt;
+  @font : DgFont;
+  @view : DgView;
+  @sound : DgSound;
+  @game : DgGame;
+  @bot : DgBot;
+  @screen : Texture;
+
+  @state : Int;       # 0 title, 1 hero select, 2 playing, 3 pack, 4 help, 5 dead, 6 won
+  @sel_cls : Int;
+  @sel_diff : Int;
+  @inv_sel : Int;
+  @tick : Int;
+  @quit : Bool;
+  @crt : Bool;
+  @auto : Bool;       # the computer is playing
+  @end_timer : Int;
+  @seed : Int;
+  @best : Int;
+  @scale : Int;
+
+  # command line
+  @shot_file : String;
+  @shot_frame : Int;
+  @scene : String;
+  @demo : Bool;
+  @demo_dir : String;
+  @silent : Bool;
+  @arg_class : Int;
+  @arg_diff : Int;
+  @arg_depth : Int;
+  @arg_steps : Int;
+  @arg_seed : Int;
+  @keys : String[];     # --keys: a script of key names, one per few frames (for tests)
+  @key_at : Int;
+
+  function : Main(args : String[]) ~ Nil {
+    app := DungeonApp->New();
+    app->Run(args);
+  }
+
+  New() {
+    @sel_cls := 0;
+    @sel_diff := 1;
+    @crt := true;
+    @scale := 3;
+    @shot_frame := 3;
+    @arg_class := -1;
+    @arg_diff := -1;
+    @arg_depth := 0;
+    @arg_steps := 60;
+    @arg_seed := -1;
+  }
+
+  method : ParseArgs(args : String[]) ~ Nil {
+    i := 0;
+    while(i < args->Size()) {
+      a := args[i];
+      has_next := i + 1 < args->Size();
+      if(a->Equals("--screenshot") & has_next) {
+        @shot_file := args[i + 1];
+        i += 1;
+      }
+      else if(a->Equals("--scene") & has_next) {
+        @scene := args[i + 1];
+        i += 1;
+      }
+      else if(a->Equals("--class") & has_next) {
+        @arg_class := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--diff") & has_next) {
+        @arg_diff := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--depth") & has_next) {
+        @arg_depth := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--steps") & has_next) {
+        @arg_steps := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--seed") & has_next) {
+        @arg_seed := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--keys") & has_next) {
+        @keys := args[i + 1]->Split(",");
+        i += 1;
+      }
+      else if(a->Equals("--frame") & has_next) {
+        @shot_frame := args[i + 1]->ToInt();
+        i += 1;
+      }
+      else if(a->Equals("--scale") & has_next) {
+        @scale := DgUtil->Clamp(args[i + 1]->ToInt(), 1, 6);
+        i += 1;
+      }
+      else if(a->Equals("--demo")) {
+        @demo := true;
+        if(has_next & <>args[i + 1]->StartsWith("--")) {
+          @demo_dir := args[i + 1];
+          i += 1;
+        };
+      }
+      else if(a->Equals("--silent")) {
+        @silent := true;
+      };
+      i += 1;
+    };
+  }
+
+  method : Run(args : String[]) ~ Nil {
+    ParseArgs(args);
+    DgData->Init();
+    @fw := GameFramework->New(320 * @scale, 200 * @scale, "Tiny Dungeon: Depths");
+    @r := @fw->GetRenderer();
+    if(@r = Nil | @r->IsNull()) {
+      "Unable to start SDL2"->ErrorLine();
+      return;
+    };
+    @event := Event->New();
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+
+    @art := DgArt->New(@r);
+    @font := DgFont->New(@r);
+    @screen := @r->CreateTexture(PixelValue->SDL_PIXELFORMAT_ARGB8888, TextureAccess->SDL_TEXTUREACCESS_TARGET, 320, 200);
+    @view := DgView->New(@r, @art, @font);
+    if(@shot_file = Nil & <>@silent) {
+      @sound := DgSound->New();
+      @view->SetSound(@sound);
+    };
+
+    @best := LoadBest();
+    if(@arg_class >= 0) {
+      @sel_cls := DgUtil->Clamp(@arg_class, 0, 2);
+    };
+    if(@arg_diff >= 0) {
+      @sel_diff := DgUtil->Clamp(@arg_diff, 0, 3);
+    };
+
+    if(@shot_file <> Nil) {
+      SetupScene();
+    }
+    else if(@demo) {
+      @auto := true;
+      NewGame();
+    };
+
+    frames := 0;
+    work := 0;
+    while(<>@quit) {
+      @fw->FrameStart();
+      t0 := Timer->GetTicks();
+      HandleEvents();
+      ScriptedKeys();
+      Update();
+      Draw();
+      work += Timer->GetTicks() - t0;
+      if(@shot_file <> Nil & @tick = @shot_frame) {
+        if(@r->SavePNG(@shot_file)) {
+          "wrote {$@shot_file}"->PrintLine();
+        }
+        else {
+          "could not write {$@shot_file}"->ErrorLine();
+        };
+        @quit := true;
+      };
+      if(@demo) {
+        if(@demo_dir <> Nil & @tick % 90 = 0) {
+          @r->SavePNG(@demo_dir + "/demo_{$(@tick / 90)}.png");
+        };
+        if(@tick = 600) {
+          "600 frames: update and drawing took {$work} ms in all, {$(work / 600)} ms a frame (the 60 fps budget is 16 ms)"->PrintLine();
+        };
+        if(@tick >= 900 | @state >= 5) {
+          "demo over: floor {$@game->Stat(DgStat->DEPTH)}, level {$@game->Stat(DgStat->LEVEL)}, score {$@game->Stat(DgStat->SCORE)}"->PrintLine();
+          @quit := true;
+        };
+      };
+      @fw->Show();
+      @fw->FrameEnd();
+    };
+
+    if(@sound <> Nil) {
+      @sound->Close();
+    };
+    @fw->Quit();
+  }
+
+  # ---- the game ----
+
+  method : NewGame() ~ Nil {
+    seed := @arg_seed;
+    if(seed < 0) {
+      seed := Timer->GetTicks() % 100000 + 1;
+    };
+    @seed := seed;
+    @game := DgGame->New(@sel_cls, @sel_diff, seed);
+    @bot := DgBot->New(@game);
+    @view->Attach(@game);
+    @view->NewFloor();
+    @view->Consume();
+    @state := 2;
+    @end_timer := 0;
+    if(@sound <> Nil) {
+      @sound->SetTheme(0);
+    };
+  }
+
+  method : SetupScene() ~ Nil {
+    scene := @scene;
+    if(scene = Nil) {
+      scene := "play";
+    };
+    if(scene->Equals("title")) {
+      @state := 0;
+      return;
+    };
+    if(scene->Equals("select")) {
+      @state := 1;
+      return;
+    };
+    NewGame();
+    if(@arg_depth > 1) {
+      @game->Warp(@arg_depth);
+      @view->NewFloor();
+      @view->Consume();
+    };
+    if(scene->Equals("arena") | scene->Equals("boss")) {
+      depth := @game->Stat(DgStat->DEPTH);
+      if(depth <> 4 & depth <> 8) {
+        @game->Warp(4);
+        @view->NewFloor();
+      };
+      lvl := @game->Level();
+      @game->PlaceHero(lvl->ArenaX() - 6, lvl->ArenaY());
+      each(i : @game->MonSlots()) {
+        if(@game->MonKind(i) >= 0) {
+          @game->MonWake(i);
+        };
+      };
+      @view->Attach(@game);
+      @view->Consume();
+      @arg_steps := 4;
+    };
+    # let the bot play a few turns, so there is something to see
+    steps := @arg_steps;
+    each(i : steps) {
+      @bot->Step();
+      @view->Consume();
+    };
+    if(scene->Equals("inventory")) {
+      @game->Give(DgIt->SCROLL_FIRE, 0);
+      @game->Give(DgIt->WEAPON, 3);
+      @game->Give(DgIt->ARMOR, 2);
+      @game->Give(DgIt->POTION_STR, 0);
+      @state := 3;
+    }
+    else if(scene->Equals("help")) {
+      @state := 4;
+    }
+    else if(scene->Equals("dead")) {
+      @game->Hurt(9999, "a test");
+      @view->Consume();
+      @state := 5;
+    }
+    else if(scene->Equals("won")) {
+      @game->ForceEnd(2);
+      @state := 6;
+    };
+    # run the tweens to rest so the picture is not mid-slide
+    each(i : 40) {
+      @view->Update();
+    };
+    @view->ClearBanner();
+  }
+
+  method : LoadBest() ~ Int {
+    path := Runtime->GetUserDir() + Directory->GetSlash() + ".tiny_dungeon";
+    if(File->Exists(path)) {
+      text := FileReader->ReadFile(path);
+      if(text <> Nil & text->Size() > 0) {
+        return text->Trim()->ToInt();
+      };
+    };
+    return 0;
+  }
+
+  method : SaveBest() ~ Nil {
+    path := Runtime->GetUserDir() + Directory->GetSlash() + ".tiny_dungeon";
+    out := FileWriter->New(path);
+    out->WriteString(@best->ToString());
+    out->Close();
+  }
+
+  # ---- input ----
+
+  # --keys enter,enter,right,space ...: presses a key every 4 frames, for scripted tests
+  method : ScriptedKeys() ~ Nil {
+    if(@keys = Nil | @key_at >= @keys->Size() | @tick % 4 <> 0 | @tick < 8) {
+      return;
+    };
+    name := @keys[@key_at];
+    @key_at += 1;
+    code := -1;
+    if(name->Equals("enter")) { code := Scancode->SDL_SCANCODE_RETURN; }
+    else if(name->Equals("space")) { code := Scancode->SDL_SCANCODE_SPACE; }
+    else if(name->Equals("esc")) { code := Scancode->SDL_SCANCODE_ESCAPE; }
+    else if(name->Equals("up")) { code := Scancode->SDL_SCANCODE_UP; }
+    else if(name->Equals("down")) { code := Scancode->SDL_SCANCODE_DOWN; }
+    else if(name->Equals("left")) { code := Scancode->SDL_SCANCODE_LEFT; }
+    else if(name->Equals("right")) { code := Scancode->SDL_SCANCODE_RIGHT; }
+    else if(name->Equals("wait")) { code := Scancode->SDL_SCANCODE_PERIOD; }
+    else if(name->Equals("i")) { code := Scancode->SDL_SCANCODE_I; }
+    else if(name->Equals("h")) { code := Scancode->SDL_SCANCODE_H; }
+    else if(name->Equals("f4")) { code := Scancode->SDL_SCANCODE_F4; }
+    else if(name->Equals("1")) { code := Scancode->SDL_SCANCODE_1; }
+    else if(name->Equals("2")) { code := Scancode->SDL_SCANCODE_2; }
+    else if(name->Equals("3")) { code := Scancode->SDL_SCANCODE_3; };
+    if(code >= 0) {
+      Key(code, false);
+    };
+  }
+
+  method : HandleEvents() ~ Nil {
+    while(@event->Poll() <> 0) {
+      type := @event->GetType();
+      if(type = EventType->SDL_QUIT) {
+        @quit := true;
+      }
+      else if(type = EventType->SDL_KEYDOWN) {
+        repeat := @event->GetKey()->GetRepeat();
+        Key(@event->GetKey()->GetKeysym()->GetScancode(), repeat <> 0);
+      };
+    };
+  }
+
+  method : Key(code : Int, repeat : Bool) ~ Nil {
+    if(code = Scancode->SDL_SCANCODE_F2 & <>repeat) {
+      @crt := <>@crt;
+      return;
+    };
+    if(code = Scancode->SDL_SCANCODE_F3 & <>repeat) {
+      if(@sound <> Nil) {
+        @sound->SetOn(<>@sound->IsOn());
+      };
+      return;
+    };
+
+    if(@state = 0) {
+      if(repeat) { return; };
+      if(code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_KP_ENTER) {
+        @state := 1;
+        Beep(6);
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE | code = Scancode->SDL_SCANCODE_Q) {
+        @quit := true;
+      };
+    }
+    else if(@state = 1) {
+      if(repeat) { return; };
+      if(code = Scancode->SDL_SCANCODE_LEFT | code = Scancode->SDL_SCANCODE_A) {
+        @sel_cls := (@sel_cls + 2) % 3;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_RIGHT | code = Scancode->SDL_SCANCODE_D) {
+        @sel_cls := (@sel_cls + 1) % 3;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) {
+        @sel_diff := (@sel_diff + 3) % 4;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) {
+        @sel_diff := (@sel_diff + 1) % 4;
+        Beep(15);
+      }
+      else if(code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_KP_ENTER) {
+        NewGame();
+        Beep(7);
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+        @state := 0;
+      };
+    }
+    else if(@state = 2) {
+      PlayKey(code, repeat);
+    }
+    else if(@state = 3) {
+      if(repeat) { return; };
+      if(code = Scancode->SDL_SCANCODE_ESCAPE | code = Scancode->SDL_SCANCODE_I) {
+        @state := 2;
+      }
+      else if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W) {
+        if(@game->PackSize() > 0) {
+          @inv_sel := (@inv_sel + @game->PackSize() - 1) % @game->PackSize();
+        };
+      }
+      else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S) {
+        if(@game->PackSize() > 0) {
+          @inv_sel := (@inv_sel + 1) % @game->PackSize();
+        };
+      }
+      else if(code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_KP_ENTER) {
+        UseSlot(@inv_sel);
+      }
+      else if(code >= Scancode->SDL_SCANCODE_1 & code <= Scancode->SDL_SCANCODE_8) {
+        UseSlot(code - Scancode->SDL_SCANCODE_1);
+      };
+    }
+    else if(@state = 4) {
+      if(<>repeat) {
+        @state := 2;
+      };
+    }
+    else {
+      # the two endings
+      if(repeat) { return; };
+      if(code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_SPACE | code = Scancode->SDL_SCANCODE_KP_ENTER) {
+        NewGame();
+      }
+      else if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+        @state := 0;
+      };
+    };
+  }
+
+  method : Beep(id : Int) ~ Nil {
+    if(@sound <> Nil) {
+      @sound->Play(id);
+    };
+  }
+
+  method : UseSlot(i : Int) ~ Nil {
+    if(i >= 0 & i < @game->PackSize()) {
+      if(@game->UseItem(i)) {
+        @view->Consume();
+        if(@inv_sel >= @game->PackSize()) {
+          @inv_sel := DgUtil->Max(0, @game->PackSize() - 1);
+        };
+        if(@game->IsOver()) {
+          @state := 2;
+        };
+        @state := 2;
+      };
+    };
+  }
+
+  method : PlayKey(code : Int, repeat : Bool) ~ Nil {
+    dx := 0;
+    dy := 0;
+    moved := false;
+    if(code = Scancode->SDL_SCANCODE_UP | code = Scancode->SDL_SCANCODE_W | code = Scancode->SDL_SCANCODE_KP_8) {
+      dy := -1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_DOWN | code = Scancode->SDL_SCANCODE_S | code = Scancode->SDL_SCANCODE_KP_2) {
+      dy := 1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_LEFT | code = Scancode->SDL_SCANCODE_A | code = Scancode->SDL_SCANCODE_KP_4) {
+      dx := -1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_RIGHT | code = Scancode->SDL_SCANCODE_D | code = Scancode->SDL_SCANCODE_KP_6) {
+      dx := 1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_Q | code = Scancode->SDL_SCANCODE_KP_7) {
+      dx := -1;
+      dy := -1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_E | code = Scancode->SDL_SCANCODE_KP_9) {
+      dx := 1;
+      dy := -1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_Z | code = Scancode->SDL_SCANCODE_KP_1) {
+      dx := -1;
+      dy := 1;
+    }
+    else if(code = Scancode->SDL_SCANCODE_C | code = Scancode->SDL_SCANCODE_KP_3) {
+      dx := 1;
+      dy := 1;
+    };
+
+    if(dx <> 0 | dy <> 0) {
+      @auto := false;
+      if(@game->Move(dx, dy)) {
+        @view->Consume();
+      };
+      return;
+    };
+    if(repeat) {
+      return;
+    };
+
+    if(code = Scancode->SDL_SCANCODE_ESCAPE) {
+      @state := 0;
+      @auto := false;
+    }
+    else if(code = Scancode->SDL_SCANCODE_SPACE) {
+      @auto := false;
+      @game->Special();
+      @view->Consume();
+    }
+    else if(code = Scancode->SDL_SCANCODE_PERIOD | code = Scancode->SDL_SCANCODE_X | code = Scancode->SDL_SCANCODE_KP_5) {
+      @auto := false;
+      @game->Wait();
+      @view->Consume();
+    }
+    else if(code = Scancode->SDL_SCANCODE_RETURN | code = Scancode->SDL_SCANCODE_KP_ENTER) {
+      if(@game->Descend()) {
+        @view->NewFloor();
+        @view->Consume();
+        if(@sound <> Nil) {
+          @sound->SetTheme(@game->Stat(DgStat->DEPTH) - 1);
+        };
+      };
+    }
+    else if(code = Scancode->SDL_SCANCODE_I) {
+      @inv_sel := 0;
+      @state := 3;
+    }
+    else if(code = Scancode->SDL_SCANCODE_H | code = Scancode->SDL_SCANCODE_F1) {
+      @state := 4;
+    }
+    else if(code = Scancode->SDL_SCANCODE_F4) {
+      @auto := <>@auto;
+    }
+    else if(code >= Scancode->SDL_SCANCODE_1 & code <= Scancode->SDL_SCANCODE_8) {
+      @auto := false;
+      UseSlot(code - Scancode->SDL_SCANCODE_1);
+      @state := 2;
+    };
+  }
+
+  # ---- one frame ----
+
+  method : Update() ~ Nil {
+    @tick += 1;
+    if(@state = 2) {
+      # the computer plays: one action every few frames
+      if(@auto & @tick % 7 = 0 & <>@game->IsOver()) {
+        depth := @game->Stat(DgStat->DEPTH);
+        @bot->Step();
+        if(@game->Stat(DgStat->DEPTH) <> depth) {
+          @view->NewFloor();
+          if(@sound <> Nil) {
+            @sound->SetTheme(@game->Stat(DgStat->DEPTH) - 1);
+          };
+        };
+        @view->Consume();
+      };
+      if(@game->IsOver()) {
+        @end_timer += 1;
+        if(@end_timer > 100) {
+          if(@game->Stat(DgStat->SCORE) > @best) {
+            @best := @game->Stat(DgStat->SCORE);
+            if(@shot_file = Nil & <>@demo) {
+              SaveBest();
+            };
+          };
+          @state := 5;
+          if(@game->Stat(DgStat->STATE) = 2) {
+            @state := 6;
+          };
+        };
+      };
+    };
+    if(@game <> Nil) {
+      @view->Update();
+    };
+    if(@sound <> Nil) {
+      @sound->Pump();
+    };
+  }
+
+  method : Draw() ~ Nil {
+    @r->SetTarget(@screen);
+    @r->SetDrawBlendMode(BlendMode->SDL_BLENDMODE_BLEND);
+    @r->SetDrawColor(0, 0, 0, 255);
+    @r->Clear();
+
+    if(@state = 0) {
+      @view->DrawTitle(@tick);
+    }
+    else if(@state = 1) {
+      @view->DrawSelect(@tick, @sel_cls, @sel_diff);
+    }
+    else {
+      @view->DrawMap();
+      @view->DrawBanner();
+      @view->DrawHud();
+      if(@state = 3) {
+        @view->DrawInventory(@inv_sel);
+      }
+      else if(@state = 4) {
+        @view->DrawHelp();
+      }
+      else if(@state = 5) {
+        @view->DrawEnding(@tick, false);
+        @view->Text("BEST " + @best->ToString(), 130, 164, 16579126);
+      }
+      else if(@state = 6) {
+        @view->DrawEnding(@tick, true);
+        @view->Text("BEST " + @best->ToString(), 130, 164, 16579126);
+      };
+      if(@auto) {
+        @view->Text("DEMO: the computer plays (any key stops)", 8, 4, 16579126);
+      };
+    };
+
+    @r->SetTarget(Nil);
+    @r->SetDrawColor(0, 0, 0, 255);
+    @r->Clear();
+    @r->Copy(@screen, Nil, Nil);
+    if(@crt & @scale >= 2) {
+      @view->DrawScanlines(320 * @scale, 200 * @scale, @scale);
+    };
+  }
+}

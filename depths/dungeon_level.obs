@@ -1,0 +1,744 @@
+#~
+# Tiny Dungeon: Depths -- one floor of the dungeon: the map and how it is made.
+# No window, no sound. Eight themes; the Crypt, Sewers, Goblin Warren, Fire Hold,
+# Haunted Library and Lich Tower are rooms joined by corridors, the Caves and the
+# Frozen Halls are carved by cellular automata (random noise smoothed into
+# caverns), and floors 4 and 8 end in a boss arena.
+#
+# Light and sight live here too: LineClear is a Bresenham walk that stops at the
+# first opaque square, and Fov marks what the hero sees now (2) and remembers (1).
+~#
+
+use Collection;
+
+class DgLevel {
+  @w : Int;
+  @h : Int;
+  @depth : Int;
+  @theme : Int;
+  @tiles : Int[];
+  @vary : Int[];       # a per-square number for variety in the pictures
+  @seen : Int[];       # 0 never seen, 1 remembered, 2 in view now
+  @dist : Int[];       # steps from the entrance (-1 when unreachable)
+  @room : Bool[];      # true inside a room (used to place doors and decorations)
+  @rx : Int[];
+  @ry : Int[];
+  @rw : Int[];
+  @rh : Int[];
+  @rooms : Int;
+  @sx : Int;           # where the hero enters
+  @sy : Int;
+  @ex : Int;           # the stairs down (or the throne)
+  @ey : Int;
+  @arena_x : Int;      # where a boss stands (or -1)
+  @arena_y : Int;
+  @rng : DgRand;
+  @cells : Int;
+
+  New(depth : Int, seed : Int) {
+    DgData->Init();
+    @w := 48;
+    @h := 32;
+    @cells := @w * @h;
+    @depth := depth;
+    @theme := depth - 1;
+    @rng := DgRand->New(seed * 7919 + depth * 104729);
+    @tiles := Int->New[@w * @h];
+    @vary := Int->New[@w * @h];
+    @seen := Int->New[@w * @h];
+    @dist := Int->New[@w * @h];
+    @room := Bool->New[@w * @h];
+    @rx := Int->New[24];
+    @ry := Int->New[24];
+    @rw := Int->New[24];
+    @rh := Int->New[24];
+    @arena_x := -1;
+    @arena_y := -1;
+
+    each(i : @cells) {
+      @vary[i] := @rng->Next(256);
+    };
+
+    if(depth = 4 | depth = 8) {
+      GenBossFloor();
+    }
+    else if(@theme = 2 | @theme = 4) {
+      GenCave();
+    }
+    else {
+      GenRooms(depth);
+    };
+
+    Decorate();
+    Distances();
+  }
+
+  # ---- queries ----
+
+  method : public : W() ~ Int {
+    return @w;
+  }
+
+  method : public : H() ~ Int {
+    return @h;
+  }
+
+  method : public : Depth() ~ Int {
+    return @depth;
+  }
+
+  method : public : Theme() ~ Int {
+    return @theme;
+  }
+
+  method : public : InBounds(x : Int, y : Int) ~ Bool {
+    return x >= 0 & y >= 0 & x < @w & y < @h;
+  }
+
+  method : public : Tile(x : Int, y : Int) ~ Int {
+    if(x < 0 | y < 0 | x >= @w | y >= @h) {
+      return DgTile->WALL;
+    };
+    return @tiles[y * @w + x];
+  }
+
+  method : public : SetTile(x : Int, y : Int, t : Int) ~ Nil {
+    if(x >= 0 & y >= 0 & x < @w & y < @h) {
+      @tiles[y * @w + x] := t;
+    };
+  }
+
+  method : public : Vary(x : Int, y : Int) ~ Int {
+    if(x < 0 | y < 0 | x >= @w | y >= @h) {
+      return 0;
+    };
+    return @vary[y * @w + x];
+  }
+
+  method : public : Seen(x : Int, y : Int) ~ Int {
+    if(x < 0 | y < 0 | x >= @w | y >= @h) {
+      return 0;
+    };
+    return @seen[y * @w + x];
+  }
+
+  method : public : SetSeen(x : Int, y : Int, v : Int) ~ Nil {
+    if(x >= 0 & y >= 0 & x < @w & y < @h) {
+      @seen[y * @w + x] := v;
+    };
+  }
+
+  method : public : Dist(x : Int, y : Int) ~ Int {
+    if(x < 0 | y < 0 | x >= @w | y >= @h) {
+      return -1;
+    };
+    return @dist[y * @w + x];
+  }
+
+  method : public : StartX() ~ Int {
+    return @sx;
+  }
+
+  method : public : StartY() ~ Int {
+    return @sy;
+  }
+
+  method : public : ExitX() ~ Int {
+    return @ex;
+  }
+
+  method : public : ExitY() ~ Int {
+    return @ey;
+  }
+
+  method : public : ArenaX() ~ Int {
+    return @arena_x;
+  }
+
+  method : public : ArenaY() ~ Int {
+    return @arena_y;
+  }
+
+  method : public : InRoom(x : Int, y : Int) ~ Bool {
+    if(x < 0 | y < 0 | x >= @w | y >= @h) {
+      return false;
+    };
+    return @room[y * @w + x];
+  }
+
+  # can a creature stand here (a closed door is not standable, but it can be opened)
+  method : public : Walkable(x : Int, y : Int) ~ Bool {
+    t := Tile(x, y);
+    return t = DgTile->FLOOR | t = DgTile->DOOR_OPEN | t = DgTile->STAIRS_DOWN |
+      t = DgTile->STAIRS_UP | t = DgTile->SPIKES | t = DgTile->CHEST_OPEN | t = DgTile->THRONE;
+  }
+
+  # walkable, or a door that a walker opens on the way
+  method : public : Passable(x : Int, y : Int) ~ Bool {
+    return Walkable(x, y) | Tile(x, y) = DgTile->DOOR;
+  }
+
+  method : public : Opaque(x : Int, y : Int) ~ Bool {
+    t := Tile(x, y);
+    return t = DgTile->WALL | t = DgTile->DOOR | t = DgTile->TORCH | t = DgTile->PILLAR;
+  }
+
+  # something a bat or a ghost may fly over
+  method : public : Flyable(x : Int, y : Int) ~ Bool {
+    t := Tile(x, y);
+    return Passable(x, y) | t = DgTile->WATER | t = DgTile->LAVA;
+  }
+
+  method : public : RoomCount() ~ Int {
+    return @rooms;
+  }
+
+  method : public : RoomX(i : Int) ~ Int {
+    return @rx[i];
+  }
+
+  method : public : RoomY(i : Int) ~ Int {
+    return @ry[i];
+  }
+
+  method : public : RoomW(i : Int) ~ Int {
+    return @rw[i];
+  }
+
+  method : public : RoomH(i : Int) ~ Int {
+    return @rh[i];
+  }
+
+  # ---- sight ----
+
+  # is the straight line between two squares free of anything opaque (the ends excepted)?
+  method : public : LineClear(x0 : Int, y0 : Int, x1 : Int, y1 : Int) ~ Bool {
+    dx := DgUtil->Abs(x1 - x0);
+    dy := DgUtil->Abs(y1 - y0);
+    sx := DgUtil->Sign(x1 - x0);
+    sy := DgUtil->Sign(y1 - y0);
+    err := dx - dy;
+    x := x0;
+    y := y0;
+    while(true) {
+      if(x = x1 & y = y1) {
+        return true;
+      };
+      if(<>(x = x0 & y = y0) & Opaque(x, y)) {
+        return false;
+      };
+      e2 := err * 2;
+      if(e2 > 0 - dy) {
+        err -= dy;
+        x += sx;
+      };
+      if(e2 < dx) {
+        err += dx;
+        y += sy;
+      };
+    };
+
+    return true;
+  }
+
+  # what the hero at (px, py) sees now; what was in view and no longer is stays remembered
+  method : public : Fov(px : Int, py : Int, radius : Int) ~ Nil {
+    each(i : @cells) {
+      if(@seen[i] = 2) {
+        @seen[i] := 1;
+      };
+    };
+
+    r2 := radius * radius + radius;
+    for(y := py - radius; y <= py + radius; y += 1;) {
+      for(x := px - radius; x <= px + radius; x += 1;) {
+        if(InBounds(x, y)) {
+          dx := x - px;
+          dy := y - py;
+          if(dx * dx + dy * dy <= r2 & LineClear(px, py, x, y)) {
+            @seen[y * @w + x] := 2;
+          };
+        };
+      };
+    };
+  }
+
+  # a magic map: every square becomes remembered
+  method : public : RevealAll() ~ Nil {
+    each(i : @cells) {
+      if(@seen[i] = 0 & @tiles[i] <> DgTile->WALL) {
+        @seen[i] := 1;
+      };
+    };
+    # walls next to floor, so the rooms have outlines
+    for(y := 0; y < @h; y += 1;) {
+      for(x := 0; x < @w; x += 1;) {
+        if(@tiles[y * @w + x] = DgTile->WALL & @seen[y * @w + x] = 0) {
+          if(Tile(x - 1, y) <> DgTile->WALL | Tile(x + 1, y) <> DgTile->WALL |
+              Tile(x, y - 1) <> DgTile->WALL | Tile(x, y + 1) <> DgTile->WALL |
+              Tile(x - 1, y - 1) <> DgTile->WALL | Tile(x + 1, y + 1) <> DgTile->WALL) {
+            @seen[y * @w + x] := 1;
+          };
+        };
+      };
+    };
+  }
+
+  # ---- making the floor ----
+
+  method : Fill(t : Int) ~ Nil {
+    each(i : @cells) {
+      @tiles[i] := t;
+    };
+  }
+
+  method : CarveRoom(x : Int, y : Int, w : Int, h : Int) ~ Nil {
+    for(j := y; j < y + h; j += 1;) {
+      for(i := x; i < x + w; i += 1;) {
+        @tiles[j * @w + i] := DgTile->FLOOR;
+        @room[j * @w + i] := true;
+      };
+    };
+    if(@rooms < 24) {
+      @rx[@rooms] := x;
+      @ry[@rooms] := y;
+      @rw[@rooms] := w;
+      @rh[@rooms] := h;
+      @rooms += 1;
+    };
+  }
+
+  method : RoomsOverlap(x : Int, y : Int, w : Int, h : Int) ~ Bool {
+    each(i : @rooms) {
+      if(x - 1 < @rx[i] + @rw[i] & x + w + 1 > @rx[i] & y - 1 < @ry[i] + @rh[i] & y + h + 1 > @ry[i]) {
+        return true;
+      };
+    };
+    return false;
+  }
+
+  # an L-shaped corridor between two squares
+  method : Corridor(x0 : Int, y0 : Int, x1 : Int, y1 : Int) ~ Nil {
+    x := x0;
+    y := y0;
+    horizontal_first := @rng->Chance(50);
+    if(horizontal_first) {
+      while(x <> x1) {
+        CarveCell(x, y);
+        x += DgUtil->Sign(x1 - x);
+      };
+      while(y <> y1) {
+        CarveCell(x, y);
+        y += DgUtil->Sign(y1 - y);
+      };
+    }
+    else {
+      while(y <> y1) {
+        CarveCell(x, y);
+        y += DgUtil->Sign(y1 - y);
+      };
+      while(x <> x1) {
+        CarveCell(x, y);
+        x += DgUtil->Sign(x1 - x);
+      };
+    };
+    CarveCell(x1, y1);
+  }
+
+  method : CarveCell(x : Int, y : Int) ~ Nil {
+    if(x > 0 & y > 0 & x < @w - 1 & y < @h - 1 & @tiles[y * @w + x] = DgTile->WALL) {
+      @tiles[y * @w + x] := DgTile->FLOOR;
+    };
+  }
+
+  method : GenRooms(depth : Int) ~ Nil {
+    Fill(DgTile->WALL);
+    @rooms := 0;
+    wanted := 9 + @rng->Next(3);
+    each(attempt : 120) {
+      if(@rooms < wanted) {
+        rw := @rng->Range(4, 10);
+        rh := @rng->Range(3, 6);
+        rx := @rng->Range(2, @w - rw - 3);
+        ry := @rng->Range(2, @h - rh - 3);
+        if(<>RoomsOverlap(rx, ry, rw, rh)) {
+          CarveRoom(rx, ry, rw, rh);
+        };
+      };
+    };
+
+    # join every room to the next, then a few extra loops
+    for(i := 1; i < @rooms; i += 1;) {
+      Corridor(@rx[i - 1] + @rw[i - 1] / 2, @ry[i - 1] + @rh[i - 1] / 2,
+        @rx[i] + @rw[i] / 2, @ry[i] + @rh[i] / 2);
+    };
+    extra := @rooms / 4;
+    each(i : extra) {
+      a := @rng->Next(@rooms);
+      b := @rng->Next(@rooms);
+      if(a <> b) {
+        Corridor(@rx[a] + @rw[a] / 2, @ry[a] + @rh[a] / 2, @rx[b] + @rw[b] / 2, @ry[b] + @rh[b] / 2);
+      };
+    };
+
+    # the entrance is the first room, the exit is the room farthest from it
+    @sx := @rx[0] + @rw[0] / 2;
+    @sy := @ry[0] + @rh[0] / 2;
+    Distances();
+    best := 0;
+    best_d := -1;
+    each(i : @rooms) {
+      d := Dist(@rx[i] + @rw[i] / 2, @ry[i] + @rh[i] / 2);
+      if(d > best_d) {
+        best_d := d;
+        best := i;
+      };
+    };
+    @ex := @rx[best] + @rw[best] / 2;
+    @ey := @ry[best] + @rh[best] / 2;
+    SetTile(@sx, @sy, DgTile->STAIRS_UP);
+    SetTile(@ex, @ey, DgTile->STAIRS_DOWN);
+  }
+
+  # cellular automata caverns: noise, then a few rounds of "a square becomes wall when
+  # most of its neighbours are", then keep only the biggest cavern
+  method : GenCave() ~ Nil {
+    Fill(DgTile->WALL);
+    each(y : @h) {
+      each(x : @w) {
+        if(x > 0 & y > 0 & x < @w - 1 & y < @h - 1 & @rng->Chance(54)) {
+          @tiles[y * @w + x] := DgTile->FLOOR;
+        };
+      };
+    };
+    each(round : 4) {
+      next := Int->New[@w * @h];
+      each(y : @h) {
+        each(x : @w) {
+          walls := 0;
+          for(j := y - 1; j <= y + 1; j += 1;) {
+            for(i := x - 1; i <= x + 1; i += 1;) {
+              if(Tile(i, j) = DgTile->WALL) {
+                walls += 1;
+              };
+            };
+          };
+          if(x = 0 | y = 0 | x = @w - 1 | y = @h - 1 | walls >= 5) {
+            next[y * @w + x] := DgTile->WALL;
+          }
+          else {
+            next[y * @w + x] := DgTile->FLOOR;
+          };
+        };
+      };
+      @tiles := next;
+    };
+
+    KeepBiggestCavern();
+
+    # a floor square with the most distant reach is the exit; pick the entrance first
+    first := -1;
+    each(i : @cells) {
+      if(first < 0 & @tiles[i] = DgTile->FLOOR) {
+        first := i;
+      };
+    };
+    @sx := first % @w;
+    @sy := first / @w;
+    Distances();
+    # the entrance: the farthest from there (so that the entrance and the exit are far apart)
+    far := first;
+    each(i : @cells) {
+      if(@dist[i] > @dist[far]) {
+        far := i;
+      };
+    };
+    @sx := far % @w;
+    @sy := far / @w;
+    Distances();
+    far2 := far;
+    each(i : @cells) {
+      if(@dist[i] > @dist[far2]) {
+        far2 := i;
+      };
+    };
+    @ex := far2 % @w;
+    @ey := far2 / @w;
+    SetTile(@sx, @sy, DgTile->STAIRS_UP);
+    SetTile(@ex, @ey, DgTile->STAIRS_DOWN);
+
+    # a few clearings count as rooms (for decorations): around random floor squares
+    each(i : 6) {
+      cell := @rng->Next(@w * @h);
+      cx := cell % @w;
+      cy := cell / @w;
+      if(@tiles[cell] = DgTile->FLOOR & @rooms < 24) {
+        @rx[@rooms] := cx;
+        @ry[@rooms] := cy;
+        @rw[@rooms] := 1;
+        @rh[@rooms] := 1;
+        @rooms += 1;
+      };
+    };
+  }
+
+  method : KeepBiggestCavern() ~ Nil {
+    comp := Int->New[@w * @h];
+    sizes := Int->New[@w * @h + 1];
+    count := 0;
+    stack := Int->New[@w * @h];
+    each(start : @cells) {
+      if(@tiles[start] = DgTile->FLOOR & comp[start] = 0) {
+        count += 1;
+        top := 0;
+        stack[0] := start;
+        top := 1;
+        comp[start] := count;
+        while(top > 0) {
+          top -= 1;
+          cur := stack[top];
+          x := cur % @w;
+          y := cur / @w;
+          sizes[count] += 1;
+          each(d : 4) {
+            nx := x;
+            ny := y;
+            if(d = 0) { nx -= 1; }
+            else if(d = 1) { nx += 1; }
+            else if(d = 2) { ny -= 1; }
+            else { ny += 1; };
+            if(nx >= 0 & ny >= 0 & nx < @w & ny < @h) {
+              ni := ny * @w + nx;
+              if(@tiles[ni] = DgTile->FLOOR & comp[ni] = 0) {
+                comp[ni] := count;
+                stack[top] := ni;
+                top += 1;
+              };
+            };
+          };
+        };
+      };
+    };
+    best := 1;
+    for(i := 1; i <= count; i += 1;) {
+      if(sizes[i] > sizes[best]) {
+        best := i;
+      };
+    };
+    each(i : @cells) {
+      if(@tiles[i] = DgTile->FLOOR & comp[i] <> best) {
+        @tiles[i] := DgTile->WALL;
+      };
+    };
+  }
+
+  # floors 4 and 8: a few rooms, then a big hall with the boss at the far end
+  method : GenBossFloor() ~ Nil {
+    Fill(DgTile->WALL);
+    @rooms := 0;
+    # the antechamber, left
+    CarveRoom(3, 12, 7, 8);
+    # a middle room, with some company
+    CarveRoom(14, 4, 7, 6);
+    CarveRoom(14, 22, 7, 6);
+    # the arena, right
+    arena_w := 20;
+    arena_h := 14;
+    ax := @w - arena_w - 3;
+    ay := (@h - arena_h) / 2;
+    CarveRoom(ax, ay, arena_w, arena_h);
+    Corridor(6, 15, 17, 7);
+    Corridor(6, 17, 17, 24);
+    Corridor(17, 7, ax + 2, ay + 3);
+    Corridor(17, 24, ax + 2, ay + arena_h - 4);
+    # pillars to hide behind
+    for(j := ay + 2; j < ay + arena_h - 2; j += 4;) {
+      for(i := ax + 5; i < ax + arena_w - 4; i += 5;) {
+        SetTile(i, j, DgTile->PILLAR);
+        @room[j * @w + i] := false;
+      };
+    };
+    @sx := 6;
+    @sy := 16;
+    @arena_x := ax + arena_w - 4;
+    @arena_y := ay + arena_h / 2;
+    SetTile(@sx, @sy, DgTile->STAIRS_UP);
+    @ex := @arena_x + 2;
+    @ey := @arena_y;
+    if(@depth = 8) {
+      SetTile(@ex, @ey, DgTile->THRONE);
+    }
+    else {
+      SetTile(@ex, @ey, DgTile->STAIRS_DOWN);
+    };
+  }
+
+  # ---- decoration: doors, torches, pools, traps, chests, shrines ----
+
+  method : Decorate() ~ Nil {
+    # doors where a one-square gap leaves a room
+    for(y := 1; y < @h - 1; y += 1;) {
+      for(x := 1; x < @w - 1; x += 1;) {
+        if(@tiles[y * @w + x] = DgTile->FLOOR & <>@room[y * @w + x] & @rng->Chance(40) & @theme <> 2 & @theme <> 4) {
+          vertical_gap := Tile(x, y - 1) = DgTile->WALL & Tile(x, y + 1) = DgTile->WALL;
+          horizontal_gap := Tile(x - 1, y) = DgTile->WALL & Tile(x + 1, y) = DgTile->WALL;
+          beside_room := InRoom(x - 1, y) | InRoom(x + 1, y) | InRoom(x, y - 1) | InRoom(x, y + 1);
+          if(beside_room & (vertical_gap | horizontal_gap) & <>(vertical_gap & horizontal_gap)) {
+            @tiles[y * @w + x] := DgTile->DOOR;
+          };
+        };
+      };
+    };
+
+    # torches on the walls above floor squares
+    for(y := 1; y < @h - 1; y += 1;) {
+      for(x := 1; x < @w - 1; x += 1;) {
+        if(@tiles[y * @w + x] = DgTile->WALL & Tile(x, y + 1) = DgTile->FLOOR & @rng->Chance(9)) {
+          @tiles[y * @w + x] := DgTile->TORCH;
+        };
+      };
+    };
+
+    # pools of water (sewers) or lava (fire hold), inside rooms or caverns
+    if(@theme = 1 | @theme = 5 | @theme = 2) {
+      pool := DgTile->WATER;
+      if(@theme = 5) {
+        pool := DgTile->LAVA;
+      };
+      each(i : @rooms) {
+        if(@rng->Chance(60) & @rw[i] >= 4 & @rh[i] >= 3) {
+          cx := @rx[i] + 1 + @rng->Next(@rw[i] - 2);
+          cy := @ry[i] + 1 + @rng->Next(@rh[i] - 2);
+          for(j := cy - 1; j <= cy + 1; j += 1;) {
+            for(k := cx - 2; k <= cx + 2; k += 1;) {
+              if(Tile(k, j) = DgTile->FLOOR & (DgUtil->Abs(k - cx) + DgUtil->Abs(j - cy) <= 2) &
+                  k > @rx[i] & k < @rx[i] + @rw[i] - 1 & j > @ry[i] & j < @ry[i] + @rh[i] - 1 &
+                  DgUtil->Cheb(k, j, @sx, @sy) > 2 & DgUtil->Cheb(k, j, @ex, @ey) > 2) {
+                SetTile(k, j, pool);
+              };
+            };
+          };
+        };
+      };
+    };
+
+    # pillars in big rooms
+    each(i : @rooms) {
+      if(@rw[i] >= 8 & @rh[i] >= 5 & @rng->Chance(60) & @depth <> 4 & @depth <> 8) {
+        SetTile(@rx[i] + 2, @ry[i] + 1, DgTile->PILLAR);
+        SetTile(@rx[i] + @rw[i] - 3, @ry[i] + 1, DgTile->PILLAR);
+        SetTile(@rx[i] + 2, @ry[i] + @rh[i] - 2, DgTile->PILLAR);
+        SetTile(@rx[i] + @rw[i] - 3, @ry[i] + @rh[i] - 2, DgTile->PILLAR);
+      };
+    };
+
+    # spikes in corridors and rooms, chests and a shrine
+    traps := 2 + @depth / 2;
+    each(i : traps) {
+      PlaceOnFloor(DgTile->SPIKES, false);
+    };
+    chests := 1 + @rng->Next(2);
+    each(i : chests) {
+      PlaceOnFloor(DgTile->CHEST, true);
+    };
+    PlaceOnFloor(DgTile->SHRINE, true);
+
+    # the hero's entrance and the exit squares are never covered
+    SetTile(@sx, @sy, DgTile->STAIRS_UP);
+    if(@depth = 8) {
+      SetTile(@ex, @ey, DgTile->THRONE);
+    }
+    else {
+      SetTile(@ex, @ey, DgTile->STAIRS_DOWN);
+    };
+  }
+
+  # put a tile on a random plain floor square, not near the entrance
+  method : PlaceOnFloor(t : Int, in_room : Bool) ~ Nil {
+    each(attempt : 200) {
+      x := @rng->Range(2, @w - 3);
+      y := @rng->Range(2, @h - 3);
+      if(@tiles[y * @w + x] = DgTile->FLOOR & DgUtil->Cheb(x, y, @sx, @sy) > 4 &
+          DgUtil->Cheb(x, y, @ex, @ey) > 2 & (<>in_room | @room[y * @w + x] | @theme = 2 | @theme = 4)) {
+        # an obstacle (chest, shrine) must not block the way: every walkable neighbour
+        # has to be part of the same room (or, in a cavern, all four must be open)
+        open := 0;
+        outside := 0;
+        each(k : 4) {
+          nx := x;
+          ny := y;
+          if(k = 0) { nx -= 1; }
+          else if(k = 1) { nx += 1; }
+          else if(k = 2) { ny -= 1; }
+          else { ny += 1; };
+          if(Walkable(nx, ny)) {
+            open += 1;
+            if(<>InRoom(nx, ny)) {
+              outside += 1;
+            };
+          };
+        };
+        fits := open >= 3 & outside = 0;
+        if(@theme = 2 | @theme = 4) {
+          fits := open = 4;
+        };
+        if(fits | <>in_room) {
+          @tiles[y * @w + x] := t;
+          return;
+        };
+      };
+    };
+  }
+
+  # breadth-first distances (in steps) from the entrance over walkable squares and doors
+  method : Distances() ~ Nil {
+    each(i : @cells) {
+      @dist[i] := -1;
+    };
+    if(@sx <= 0 | @sy <= 0) {
+      return;
+    };
+    queue := Int->New[@w * @h];
+    head := 0;
+    tail := 0;
+    queue[0] := @sy * @w + @sx;
+    tail := 1;
+    @dist[@sy * @w + @sx] := 0;
+    while(head < tail) {
+      cur := queue[head];
+      head += 1;
+      x := cur % @w;
+      y := cur / @w;
+      each(d : 4) {
+        nx := x;
+        ny := y;
+        if(d = 0) { nx -= 1; }
+        else if(d = 1) { nx += 1; }
+        else if(d = 2) { ny -= 1; }
+        else { ny += 1; };
+        if(nx >= 0 & ny >= 0 & nx < @w & ny < @h) {
+          ni := ny * @w + nx;
+          t := @tiles[ni];
+          if(@dist[ni] < 0 & t <> DgTile->WALL & t <> DgTile->TORCH & t <> DgTile->PILLAR &
+              t <> DgTile->WATER & t <> DgTile->LAVA & t <> DgTile->CHEST & t <> DgTile->SHRINE) {
+            @dist[ni] := @dist[cur] + 1;
+            queue[tail] := ni;
+            tail += 1;
+          };
+        };
+      };
+    };
+  }
+
+  # a random plain floor square at least min_dist steps from the entrance, or -1
+  method : public : RandomFloor(rng : DgRand, min_dist : Int) ~ Int {
+    each(attempt : 300) {
+      x := rng->Range(1, @w - 2);
+      y := rng->Range(1, @h - 2);
+      if(@tiles[y * @w + x] = DgTile->FLOOR & @dist[y * @w + x] >= min_dist) {
+        return y * @w + x;
+      };
+    };
+    return -1;
+  }
+}

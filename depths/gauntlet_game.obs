@@ -1,0 +1,1601 @@
+#~
+# Objeck Gauntlet -- the rules of a real-time, Gauntlet-style arcade crawler. No window,
+# no sound: GtGame is one whole game for one or two heroes, stepped 60 times a second
+# by Step(), so the tests, the demo and the window all play by the same rules.
+#
+# What you do: pick a Warrior, Valkyrie, Wizard or Elf, shoot in eight directions, grab
+# keys (to open locked doors), food (your health drains all the time), treasure and magic
+# potions (a smart bomb), smash the monster GENERATORS that keep spawning ghosts, grunts,
+# demons and sorcerers, and walk onto the exit to go down. Eight levels, the last holding
+# the Lich King's throne. Death himself hunts you from level 3, and only a potion kills him.
+#
+# The floors come from DgLevel (dungeon_level.obs): rooms and corridors, caverns and
+# arenas in eight themes. The monsters' minds are System.AI: A* for grunts and Death,
+# Dijkstra-free straight flight for ghosts, and a Minimax search of a small duel (DgDuel,
+# dungeon_ai.obs) that makes demons and sorcerers keep their distance, shoot and blink.
+~#
+
+use Collection;
+use System.AI;
+
+consts GtCls {
+  WARRIOR := 0,
+  VALKYRIE := 1,
+  WIZARD := 2,
+  ELF := 3
+}
+
+consts GtMon {
+  GHOST := 0,
+  GRUNT := 1,
+  DEMON := 2,
+  SORCERER := 3,
+  DEATH := 4
+}
+
+consts GtIt {
+  FOOD := 0,
+  KEY := 1,
+  POTION := 2,
+  GOLD := 3,
+  GEM := 4,
+  CHEST := 5
+}
+
+consts GtEv {
+  HIT := 0,        # x, y, damage: a shot or a blow hurt a monster
+  HURT := 1,       # x, y, damage: a hero was hurt
+  KILL := 2,       # x, y, monster kind
+  GEN_DEAD := 3,   # x, y
+  PICK := 4,       # x, y, item kind
+  FIRE := 5,       # x, y, hero class: a hero fired
+  BALL := 6,       # x, y: a monster fired
+  POTION := 7,     # x, y: a magic potion went off
+  DOOR := 8,       # x, y
+  EXIT := 9,       # the next level
+  DEAD := 10,      # x, y: a hero died
+  WON := 11,
+  SPAWN := 12,     # x, y
+  BLINK := 13,     # x, y
+  FOOD := 14       # x, y, amount
+}
+
+class GtGame {
+  @nplayers : Int;
+  @diff : Int;
+  @seed : Int;
+  @level_no : Int;
+  @rng : DgRand;
+  @lvl : DgLevel;
+  @frame : Int;
+  @state : Int;         # 0 playing, 1 game over, 2 level cleared, 3 won
+  @state_t : Int;
+  @msg : String;
+  @msg_t : Int;
+
+  # heroes (index 0 and 1)
+  @cls : Int[];
+  @px : Float[];
+  @py : Float[];
+  @fx : Int[];          # facing, -1 0 1
+  @fy : Int[];
+  @health : Int[];
+  @score : Int[];
+  @keys : Int[];
+  @potions : Int[];
+  @cool : Int[];
+  @mcool : Int[];
+  @flash : Int[];
+  @in_dx : Int[];
+  @in_dy : Int[];
+  @in_fire : Bool[];
+  @in_potion : Bool[];
+  @walk : Int[];
+
+  # shots: heroes' and monsters'
+  @sx : Float[];
+  @sy : Float[];
+  @svx : Float[];
+  @svy : Float[];
+  @sdmg : Int[];
+  @sown : Int[];        # hero index, or -1 for a monster's fireball
+  @slife : Int[];
+  @scls : Int[];
+
+  # monsters
+  @mk : Int[];          # kind, or -1 for a free slot
+  @mx : Float[];
+  @my : Float[];
+  @mhp : Int[];
+  @mc : Int[];          # cooldown
+  @mtx : Float[];       # the waypoint
+  @mty : Float[];
+  @mrep : Int[];        # frames until it plans again
+  @mface : Int[];
+  @mflash : Int[];
+  @mmode : Int[];
+  @mstuck : Int[];
+  @mcount : Int;
+
+  # generators
+  @gx : Int[];
+  @gy : Int[];
+  @gk : Int[];
+  @ghp : Int[];
+  @gt : Int[];
+  @gn : Int;
+  @gblock : Bool[];
+
+  # items
+  @ik : Int[];
+  @ix : Int[];
+  @iy : Int[];
+  @iv : Int[];
+
+  # events
+  @ev : Int[];
+  @evn : Int;
+
+  # route finding
+  @pg : Graph;
+  @pg_stamp : Int;
+  @pg_ox : Int;
+  @pg_oy : Int;
+  @pg_player : Int;
+
+  New(nplayers : Int, cls0 : Int, cls1 : Int, diff : Int, seed : Int) {
+    DgData->Init();
+    @nplayers := DgUtil->Clamp(nplayers, 1, 2);
+    @diff := diff;
+    @seed := seed;
+    @cls := Int->New[2];
+    @cls[0] := cls0;
+    @cls[1] := cls1;
+    @px := Float->New[2];
+    @py := Float->New[2];
+    @fx := Int->New[2];
+    @fy := Int->New[2];
+    @health := Int->New[2];
+    @score := Int->New[2];
+    @keys := Int->New[2];
+    @potions := Int->New[2];
+    @cool := Int->New[2];
+    @mcool := Int->New[2];
+    @flash := Int->New[2];
+    @in_dx := Int->New[2];
+    @in_dy := Int->New[2];
+    @in_fire := Bool->New[2];
+    @in_potion := Bool->New[2];
+    @walk := Int->New[2];
+
+    @sx := Float->New[64];
+    @sy := Float->New[64];
+    @svx := Float->New[64];
+    @svy := Float->New[64];
+    @sdmg := Int->New[64];
+    @sown := Int->New[64];
+    @slife := Int->New[64];
+    @scls := Int->New[64];
+
+    @mk := Int->New[120];
+    @mx := Float->New[120];
+    @my := Float->New[120];
+    @mhp := Int->New[120];
+    @mc := Int->New[120];
+    @mtx := Float->New[120];
+    @mty := Float->New[120];
+    @mrep := Int->New[120];
+    @mface := Int->New[120];
+    @mflash := Int->New[120];
+    @mmode := Int->New[120];
+    @mstuck := Int->New[120];
+
+    @gx := Int->New[24];
+    @gy := Int->New[24];
+    @gk := Int->New[24];
+    @ghp := Int->New[24];
+    @gt := Int->New[24];
+
+    @ik := Int->New[160];
+    @ix := Int->New[160];
+    @iy := Int->New[160];
+    @iv := Int->New[160];
+    @ev := Int->New[1000];
+    @msg := "";
+
+    each(p : 2) {
+      c := @cls[p];
+      hp := [900, 900, 700, 700];
+      @health[p] := hp[c];
+      @fx[p] := 1;
+      @potions[p] := 1;
+      if(p >= @nplayers) {
+        @health[p] := 0;
+      };
+    };
+    StartLevel(1);
+  }
+
+  # ---- what the window may ask ----
+
+  method : public : Players() ~ Int {
+    return @nplayers;
+  }
+
+  method : public : Level() ~ DgLevel {
+    return @lvl;
+  }
+
+  method : public : LevelNo() ~ Int {
+    return @level_no;
+  }
+
+  method : public : Diff() ~ Int {
+    return @diff;
+  }
+
+  method : public : State() ~ Int {
+    return @state;
+  }
+
+  method : public : Frame() ~ Int {
+    return @frame;
+  }
+
+  method : public : Message() ~ String {
+    if(@msg_t > 0) {
+      return @msg;
+    };
+    return "";
+  }
+
+  method : public : Cls(p : Int) ~ Int {
+    return @cls[p];
+  }
+
+  method : public : X(p : Int) ~ Float {
+    return @px[p];
+  }
+
+  method : public : Y(p : Int) ~ Float {
+    return @py[p];
+  }
+
+  method : public : FaceX(p : Int) ~ Int {
+    return @fx[p];
+  }
+
+  method : public : FaceY(p : Int) ~ Int {
+    return @fy[p];
+  }
+
+  method : public : Health(p : Int) ~ Int {
+    return @health[p];
+  }
+
+  method : public : Alive(p : Int) ~ Bool {
+    return p < @nplayers & @health[p] > 0;
+  }
+
+  method : public : Score(p : Int) ~ Int {
+    return @score[p];
+  }
+
+  method : public : Keys(p : Int) ~ Int {
+    return @keys[p];
+  }
+
+  method : public : Potions(p : Int) ~ Int {
+    return @potions[p];
+  }
+
+  method : public : Flash(p : Int) ~ Int {
+    return @flash[p];
+  }
+
+  method : public : Walk(p : Int) ~ Int {
+    return @walk[p];
+  }
+
+  method : public : TotalScore() ~ Int {
+    return @score[0] + @score[1];
+  }
+
+  method : public : MonSlots() ~ Int {
+    return 120;
+  }
+
+  method : public : MonKind(i : Int) ~ Int {
+    return @mk[i];
+  }
+
+  method : public : MonX(i : Int) ~ Float {
+    return @mx[i];
+  }
+
+  method : public : MonY(i : Int) ~ Float {
+    return @my[i];
+  }
+
+  method : public : MonFace(i : Int) ~ Int {
+    return @mface[i];
+  }
+
+  method : public : MonFlash(i : Int) ~ Int {
+    return @mflash[i];
+  }
+
+  method : public : MonCount() ~ Int {
+    return @mcount;
+  }
+
+  method : public : GenCount() ~ Int {
+    return @gn;
+  }
+
+  method : public : GenX(i : Int) ~ Int {
+    return @gx[i];
+  }
+
+  method : public : GenY(i : Int) ~ Int {
+    return @gy[i];
+  }
+
+  method : public : GenKind(i : Int) ~ Int {
+    return @gk[i];
+  }
+
+  method : public : GenHp(i : Int) ~ Int {
+    return @ghp[i];
+  }
+
+  method : public : ItemSlots() ~ Int {
+    return 160;
+  }
+
+  method : public : ItemKind(i : Int) ~ Int {
+    return @ik[i];
+  }
+
+  method : public : ItemX(i : Int) ~ Int {
+    return @ix[i];
+  }
+
+  method : public : ItemY(i : Int) ~ Int {
+    return @iy[i];
+  }
+
+  method : public : ShotSlots() ~ Int {
+    return 64;
+  }
+
+  method : public : ShotLife(i : Int) ~ Int {
+    return @slife[i];
+  }
+
+  method : public : ShotX(i : Int) ~ Float {
+    return @sx[i];
+  }
+
+  method : public : ShotY(i : Int) ~ Float {
+    return @sy[i];
+  }
+
+  method : public : ShotOwner(i : Int) ~ Int {
+    return @sown[i];
+  }
+
+  method : public : ShotCls(i : Int) ~ Int {
+    return @scls[i];
+  }
+
+  method : public : EventCount() ~ Int {
+    return @evn;
+  }
+
+  method : public : Event(i : Int, field : Int) ~ Int {
+    return @ev[i * 5 + field];
+  }
+
+  method : public : ClearEvents() ~ Nil {
+    @evn := 0;
+  }
+
+  # the sprite (a DgMon kind) that stands for a Gauntlet monster
+  function : SpriteOf(kind : Int) ~ Int {
+    sprites := [DgMon->GHOST, DgMon->ORC, DgMon->IMP, DgMon->MAGE, DgMon->LICH];
+    return sprites[kind];
+  }
+
+  function : MonName(kind : Int) ~ String {
+    names := ["Ghost", "Grunt", "Demon", "Sorcerer", "Death"];
+    return names[kind];
+  }
+
+  function : ClassName(cls : Int) ~ String {
+    names := ["Warrior", "Valkyrie", "Wizard", "Elf"];
+    return names[cls];
+  }
+
+  function : ClassBlurb(cls : Int) ~ String {
+    blurbs := ["Strong axe", "Armour", "Big bombs", "Quick bow"];
+    return blurbs[cls];
+  }
+
+  # ---- helpers ----
+
+  method : Ev(kind : Int, x : Float, y : Float, a : Int, b : Int) ~ Nil {
+    if(@evn < 200) {
+      at := @evn * 5;
+      @ev[at] := kind;
+      @ev[at + 1] := x->As(Int);
+      @ev[at + 2] := y->As(Int);
+      @ev[at + 3] := a;
+      @ev[at + 4] := b;
+      @evn += 1;
+    };
+  }
+
+  method : Say(text : String) ~ Nil {
+    @msg := text;
+    @msg_t := 150;
+  }
+
+  method : TileAt(x : Float, y : Float) ~ Int {
+    return @lvl->Tile((x / 16.0)->As(Int), (y / 16.0)->As(Int));
+  }
+
+  function : SolidTile(t : Int) ~ Bool {
+    return t = DgTile->WALL | t = DgTile->TORCH | t = DgTile->PILLAR | t = DgTile->WATER |
+      t = DgTile->LAVA | t = DgTile->DOOR | t = DgTile->CHEST | t = DgTile->SHRINE | t = DgTile->SHRINE_USED;
+  }
+
+  method : SolidAt(x : Float, y : Float) ~ Bool {
+    tx := (x / 16.0)->As(Int);
+    ty := (y / 16.0)->As(Int);
+    if(GtGame->SolidTile(@lvl->Tile(tx, ty))) {
+      return true;
+    };
+    if(tx >= 0 & ty >= 0 & tx < @lvl->W() & ty < @lvl->H()) {
+      return @gblock[ty * @lvl->W() + tx];
+    };
+    return true;
+  }
+
+  # does a box of this half size centred here hit something solid?
+  method : BoxBlocked(x : Float, y : Float, half : Float) ~ Bool {
+    return SolidAt(x - half, y - half) | SolidAt(x + half, y - half) |
+      SolidAt(x - half, y + half) | SolidAt(x + half, y + half);
+  }
+
+  method : OpenDoorsAround(x : Float, y : Float, p : Int) ~ Nil {
+    # a hero pressing on a locked door uses a key
+    if(@keys[p] <= 0) {
+      return;
+    };
+    each(k : 4) {
+      cx := x;
+      cy := y;
+      if(k = 0) { cx := x - 8.0; }
+      else if(k = 1) { cx := x + 8.0; }
+      else if(k = 2) { cy := y - 8.0; }
+      else { cy := y + 8.0; };
+      tx := (cx / 16.0)->As(Int);
+      ty := (cy / 16.0)->As(Int);
+      if(@lvl->Tile(tx, ty) = DgTile->DOOR & @keys[p] > 0) {
+        @lvl->SetTile(tx, ty, DgTile->DOOR_OPEN);
+        @keys[p] -= 1;
+        Ev(GtEv->DOOR, cx, cy, 0, 0);
+        Say("You unlock the door.");
+      };
+    };
+  }
+
+  # ---- building a level ----
+
+  method : public : StartLevel(n : Int) ~ Nil {
+    @level_no := n;
+    depth := ((n - 1) % 8) + 1;
+    @rng := DgRand->New(@seed * 31 + n * 977);
+    @lvl := DgLevel->New(depth, @seed + n * 7);
+    w := @lvl->W();
+    h := @lvl->H();
+    @gblock := Bool->New[w * h];
+    @gn := 0;
+    @mcount := 0;
+    @pg_stamp := -1;
+    each(i : 120) {
+      @mk[i] := -1;
+    };
+    each(i : 160) {
+      @ik[i] := -1;
+    };
+    each(i : 64) {
+      @slife[i] := 0;
+    };
+
+    # no traps, shrines or chests as tiles: they become plain floor, food and treasure
+    each(ty : h) {
+      each(tx : w) {
+        t := @lvl->Tile(tx, ty);
+        if(t = DgTile->SPIKES | t = DgTile->SHRINE | t = DgTile->CHEST | t = DgTile->SHRINE_USED | t = DgTile->CHEST_OPEN) {
+          @lvl->SetTile(tx, ty, DgTile->FLOOR);
+          if(t = DgTile->SHRINE) {
+            PlaceItem(GtIt->FOOD, tx, ty, 150);
+          }
+          else if(t = DgTile->CHEST) {
+            PlaceItem(GtIt->CHEST, tx, ty, 150 + n * 25);
+          };
+        };
+      };
+    };
+
+    # heroes at the entrance
+    sx := @lvl->StartX() * 16 + 8;
+    sy := @lvl->StartY() * 16 + 8;
+    each(p : 2) {
+      @px[p] := (sx + p * 6)->As(Float);
+      @py[p] := (sy + 4)->As(Float);
+      @keys[p] := 0;
+      @cool[p] := 0;
+    };
+
+    Doors();
+    Generators();
+    Treasure();
+    @state := 0;
+    @state_t := 0;
+    Say("Level " + n->ToString() + ": " + DgData->ThemeName(depth - 1));
+  }
+
+  method : PlaceItem(kind : Int, tx : Int, ty : Int, v : Int) ~ Nil {
+    each(i : 160) {
+      if(@ik[i] < 0) {
+        @ik[i] := kind;
+        @ix[i] := tx;
+        @iy[i] := ty;
+        @iv[i] := v;
+        return;
+      };
+    };
+  }
+
+  # at most four locked doors, and a key for every one of them, all reachable without a door
+  method : Doors() ~ Nil {
+    w := @lvl->W();
+    h := @lvl->H();
+    closed := 0;
+    each(ty : h) {
+      each(tx : w) {
+        if(@lvl->Tile(tx, ty) = DgTile->DOOR) {
+          if(closed < 4) {
+            closed += 1;
+          }
+          else {
+            @lvl->SetTile(tx, ty, DgTile->DOOR_OPEN);
+          };
+        };
+      };
+    };
+    if(closed = 0) {
+      return;
+    };
+
+    # the squares the heroes can reach with every door shut
+    reach := Bool->New[w * h];
+    queue := Int->New[w * h];
+    head := 0;
+    tail := 1;
+    queue[0] := @lvl->StartY() * w + @lvl->StartX();
+    reach[queue[0]] := true;
+    while(head < tail) {
+      cur := queue[head];
+      head += 1;
+      cx := cur % w;
+      cy := cur / w;
+      each(d : 4) {
+        nx := cx;
+        ny := cy;
+        if(d = 0) { nx -= 1; }
+        else if(d = 1) { nx += 1; }
+        else if(d = 2) { ny -= 1; }
+        else { ny += 1; };
+        if(nx >= 0 & ny >= 0 & nx < w & ny < h) {
+          ni := ny * w + nx;
+          if(<>reach[ni] & @lvl->Walkable(nx, ny)) {
+            reach[ni] := true;
+            queue[tail] := ni;
+            tail += 1;
+          };
+        };
+      };
+    };
+
+    placed := 0;
+    each(attempt : 600) {
+      if(placed < closed + 1) {
+        x := @rng->Range(1, w - 2);
+        y := @rng->Range(1, h - 2);
+        if(reach[y * w + x] & @lvl->Tile(x, y) = DgTile->FLOOR & IsFreeSpot(x, y) & DgUtil->Cheb(x, y, @lvl->StartX(), @lvl->StartY()) > 2) {
+          PlaceItem(GtIt->KEY, x, y, 0);
+          placed += 1;
+        };
+      };
+    };
+    Say("Locked doors ahead: find the keys.");
+  }
+
+  method : IsFreeSpot(x : Int, y : Int) ~ Bool {
+    each(i : 160) {
+      if(@ik[i] >= 0 & @ix[i] = x & @iy[i] = y) {
+        return false;
+      };
+    };
+    return <>@gblock[y * @lvl->W() + x];
+  }
+
+  method : Generators() ~ Nil {
+    w := @lvl->W();
+    count := 2 + @level_no / 2 + @diff / 2;
+    if(count > 10) {
+      count := 10;
+    };
+    # which kinds live on this level
+    kinds := Int->New[4];
+    pool := 2;
+    if(@level_no >= 2) { pool := 3; };
+    if(@level_no >= 4) { pool := 4; };
+    each(i : 4) {
+      kinds[i] := i;
+    };
+    each(i : count) {
+      cell := @lvl->RandomFloor(@rng, 9);
+      if(cell >= 0) {
+        x := cell % w;
+        y := cell / w;
+        if(IsFreeSpot(x, y)) {
+          kind := kinds[@rng->Next(pool)];
+          # Death's own generator from level 3 on
+          if(@level_no >= 3 & i = 0) {
+            kind := GtMon->DEATH;
+          };
+          @gx[@gn] := x;
+          @gy[@gn] := y;
+          @gk[@gn] := kind;
+          @ghp[@gn] := 5 + @level_no + @diff;
+          @gt[@gn] := 30 + @rng->Next(60);
+          @gblock[y * w + x] := true;
+          @gn += 1;
+        };
+      };
+    };
+
+    # a few monsters already roaming
+    roamers := 4 + @level_no;
+    each(i : roamers) {
+      cell := @lvl->RandomFloor(@rng, 8);
+      if(cell >= 0 & IsFreeSpot(cell % w, cell / w)) {
+        SpawnMonster(@rng->Next(pool), (cell % w * 16 + 8)->As(Float), (cell / w * 16 + 8)->As(Float));
+      };
+    };
+  }
+
+  method : Treasure() ~ Nil {
+    w := @lvl->W();
+    food := 4 + @level_no / 3;
+    potions := 2 + @diff / 2;
+    gold := 8;
+    each(i : food) {
+      DropAtRandom(GtIt->FOOD, 150);
+    };
+    each(i : potions) {
+      DropAtRandom(GtIt->POTION, 0);
+    };
+    each(i : gold) {
+      DropAtRandom(GtIt->GOLD, 50 + @level_no * 10);
+    };
+    each(i : 3) {
+      DropAtRandom(GtIt->GEM, 200 + @level_no * 20);
+    };
+  }
+
+  method : DropAtRandom(kind : Int, v : Int) ~ Nil {
+    w := @lvl->W();
+    cell := @lvl->RandomFloor(@rng, 3);
+    if(cell >= 0 & IsFreeSpot(cell % w, cell / w)) {
+      PlaceItem(kind, cell % w, cell / w, v);
+    };
+  }
+
+  # ---- monsters ----
+
+  method : public : SpawnMonster(kind : Int, x : Float, y : Float) ~ Int {
+    each(i : 120) {
+      if(@mk[i] < 0) {
+        hp := [1, 3, 4, 4, 30];
+        scale := [80, 100, 130, 170];
+        @mk[i] := kind;
+        @mx[i] := x;
+        @my[i] := y;
+        @mhp[i] := DgUtil->Max(1, hp[kind] * (scale[@diff] + @level_no * 6) / 100);
+        if(kind = GtMon->DEATH) {
+          @mhp[i] := 1000;
+        };
+        @mc[i] := 30;
+        @mrep[i] := @rng->Next(20);
+        @mtx[i] := x;
+        @mty[i] := y;
+        @mface[i] := 1;
+        @mflash[i] := 0;
+        @mmode[i] := 0;
+        @mstuck[i] := 0;
+        @mcount += 1;
+        return i;
+      };
+    };
+    return -1;
+  }
+
+  # the nearest living hero to a point, or -1
+  method : public : NearestHero(x : Float, y : Float) ~ Int {
+    best := -1;
+    best_d := 1000000.0;
+    each(p : @nplayers) {
+      if(@health[p] > 0) {
+        dx := @px[p] - x;
+        dy := @py[p] - y;
+        d := dx * dx + dy * dy;
+        if(d < best_d) {
+          best_d := d;
+          best := p;
+        };
+      };
+    };
+    return best;
+  }
+
+  # try to move a box by (dx, dy), axis by axis; true if it moved at all
+  method : MoveBox(x : Float, y : Float, dx : Float, dy : Float, half : Float, ghost : Bool, out : Float[]) ~ Bool {
+    nx := x + dx;
+    ny := y + dy;
+    moved := false;
+    out[0] := x;
+    out[1] := y;
+    if(ghost | <>BoxBlocked(nx, y, half)) {
+      out[0] := nx;
+      if(dx <> 0.0) { moved := true; };
+    };
+    if(ghost | <>BoxBlocked(out[0], ny, half)) {
+      out[1] := ny;
+      if(dy <> 0.0) { moved := true; };
+    };
+    return moved;
+  }
+
+  # a path with System.AI: a Graph of the squares around the hero, searched with AStar
+  method : BuildGraph(p : Int) ~ Nil {
+    stamp := @frame / 10 * 4 + p;
+    if(@pg_stamp = stamp) {
+      return;
+    };
+    @pg_stamp := stamp;
+    r := 10;
+    s := r * 2 + 1;
+    hx := (@px[p] / 16.0)->As(Int);
+    hy := (@py[p] / 16.0)->As(Int);
+    @pg_ox := hx - r;
+    @pg_oy := hy - r;
+    @pg_player := p;
+    @pg := Graph->New(s * s);
+    w := @lvl->W();
+    each(j : s) {
+      y := @pg_oy + j;
+      each(i : s) {
+        x := @pg_ox + i;
+        if(i + 1 < s) {
+          LinkTiles(j * s + i, j * s + i + 1, x, y, x + 1, y, w);
+        };
+        if(j + 1 < s) {
+          LinkTiles(j * s + i, (j + 1) * s + i, x, y, x, y + 1, w);
+        };
+      };
+    };
+  }
+
+  method : Open(x : Int, y : Int, w : Int) ~ Bool {
+    if(<>@lvl->InBounds(x, y)) {
+      return false;
+    };
+    return @lvl->Walkable(x, y) & <>@gblock[y * w + x];
+  }
+
+  method : LinkTiles(a : Int, b : Int, x0 : Int, y0 : Int, x1 : Int, y1 : Int, w : Int) ~ Nil {
+    if(Open(x0, y0, w) & Open(x1, y1, w)) {
+      @pg->AddEdge(a, b, 1.0);
+      @pg->AddEdge(b, a, 1.0);
+    };
+  }
+
+  # the centre (in pixels) of the next square on an A* route from a monster to a hero;
+  # false when there is none. out gets x then y.
+  method : NextWaypoint(i : Int, p : Int, out : Float[]) ~ Bool {
+    BuildGraph(p);
+    s := 21;
+    mtx := (@mx[i] / 16.0)->As(Int);
+    mty := (@my[i] / 16.0)->As(Int);
+    gx := (@px[p] / 16.0)->As(Int);
+    gy := (@py[p] / 16.0)->As(Int);
+    if(mtx < @pg_ox | mty < @pg_oy | mtx >= @pg_ox + s | mty >= @pg_oy + s |
+        gx < @pg_ox | gy < @pg_oy | gx >= @pg_ox + s | gy >= @pg_oy + s) {
+      return false;
+    };
+    si := (mty - @pg_oy) * s + (mtx - @pg_ox);
+    gi := (gy - @pg_oy) * s + (gx - @pg_ox);
+    heur := Float->New[s * s];
+    each(rj : s) {
+      row := (@pg_oy + rj - gy);
+      each(ri : s) {
+        col := (@pg_ox + ri - gx);
+        heur[rj * s + ri] := (DgUtil->Abs(col) + DgUtil->Abs(row))->As(Float);
+      };
+    };
+    result := AStar->FindPath(@pg, si, gi, heur);
+    if(<>result->Found()) {
+      return false;
+    };
+    path := result->GetPath();
+    if(path->Size() < 2) {
+      return false;
+    };
+    nx := @pg_ox + path[1] % s;
+    ny := @pg_oy + path[1] / s;
+    out[0] := (nx * 16 + 8)->As(Float);
+    out[1] := (ny * 16 + 8)->As(Float);
+    return true;
+  }
+
+  method : MonsterSpeed(kind : Int) ~ Float {
+    base := [0.85, 0.75, 0.8, 0.95, 0.65];
+    diff := [0.8, 1.0, 1.15, 1.3];
+    return base[kind] * diff[@diff] * (1.0 + @level_no->As(Float) * 0.03);
+  }
+
+  # a monster steps toward a point
+  method : Steer(i : Int, tx : Float, ty : Float, speed : Float, ghost : Bool) ~ Nil {
+    dx := tx - @mx[i];
+    dy := ty - @my[i];
+    d := Float->Sqrt(dx * dx + dy * dy);
+    if(d < 0.5) {
+      return;
+    };
+    vx := dx / d * speed;
+    vy := dy / d * speed;
+    out := Float->New[2];
+    moved := MoveBox(@mx[i], @my[i], vx, vy, 5.0, ghost, out);
+    if(moved) {
+      @mx[i] := out[0];
+      @my[i] := out[1];
+      @mstuck[i] := 0;
+    }
+    else {
+      @mstuck[i] += 1;
+    };
+    if(vx > 0.1) {
+      @mface[i] := 1;
+    }
+    else if(vx < -0.1) {
+      @mface[i] := -1;
+    };
+  }
+
+  method : UpdateMonster(i : Int) ~ Nil {
+    kind := @mk[i];
+    p := NearestHero(@mx[i], @my[i]);
+    if(p < 0) {
+      return;
+    };
+    if(@mc[i] > 0) {
+      @mc[i] -= 1;
+    };
+    if(@mflash[i] > 0) {
+      @mflash[i] -= 1;
+    };
+    dx := @px[p] - @mx[i];
+    dy := @py[p] - @my[i];
+    dist := Float->Sqrt(dx * dx + dy * dy);
+    speed := MonsterSpeed(kind);
+
+    # too far away to care: the monster idles
+    if(dist > 230.0 & kind <> GtMon->DEATH) {
+      return;
+    };
+
+    if(kind = GtMon->GHOST) {
+      Steer(i, @px[p], @py[p], speed, true);
+    }
+    else if(kind = GtMon->GRUNT | kind = GtMon->DEATH) {
+      Chase(i, p, speed, dist);
+    }
+    else {
+      Tactical(i, p, kind, speed, dist);
+    };
+    Separate(i);
+  }
+
+  # walk along an A* route, or straight at the hero when close and in the open
+  method : Chase(i : Int, p : Int, speed : Float, dist : Float) ~ Nil {
+    mtx := (@mx[i] / 16.0)->As(Int);
+    mty := (@my[i] / 16.0)->As(Int);
+    htx := (@px[p] / 16.0)->As(Int);
+    hty := (@py[p] / 16.0)->As(Int);
+    if(dist < 40.0 & @lvl->LineClear(mtx, mty, htx, hty)) {
+      Steer(i, @px[p], @py[p], speed, false);
+      return;
+    };
+    @mrep[i] -= 1;
+    wx := @mtx[i] - @mx[i];
+    wy := @mty[i] - @my[i];
+    near_wp := wx * wx + wy * wy < 6.0;
+    if(@mrep[i] <= 0 | near_wp | @mstuck[i] > 6) {
+      out := Float->New[2];
+      if(NextWaypoint(i, p, out)) {
+        @mtx[i] := out[0];
+        @mty[i] := out[1];
+      }
+      else {
+        @mtx[i] := @px[p];
+        @mty[i] := @py[p];
+      };
+      @mrep[i] := 18 + @rng->Next(12);
+      @mstuck[i] := 0;
+    };
+    Steer(i, @mtx[i], @mty[i], speed, false);
+  }
+
+  # demons and sorcerers: a Minimax search of a small duel chooses between closing in,
+  # backing off, shooting and (for the sorcerer) blinking; it is redone twice a second
+  method : Tactical(i : Int, p : Int, kind : Int, speed : Float, dist : Float) ~ Nil {
+    @mrep[i] -= 1;
+    if(@mrep[i] <= 0) {
+      @mrep[i] := 30;
+      d := DgUtil->Clamp((dist / 16.0)->As(Int), 1, 9);
+      mtype := 0;
+      if(kind = GtMon->SORCERER) {
+        mtype := 1;
+      };
+      params := Int->New[10];
+      params[0] := 20;
+      params[1] := 20;
+      params[2] := 2;
+      params[3] := 3;
+      params[4] := 2;
+      params[5] := 6;
+      params[6] := 6;
+      params[7] := mtype;
+      params[8] := 3;
+      params[9] := 2;
+      cd1 := 0;
+      if(@mc[i] > 0) {
+        cd1 := 1;
+      };
+      depth := [2, 4, 6, 7];
+      state := DgDuel->New(params, d, 20, 20, cd1, 0, 0, 0, 0, 0);
+      searcher := Minimax->New(depth[@diff]);
+      @mmode[i] := searcher->FindBestMove(state);
+      if(@mmode[i] < 0) {
+        @mmode[i] := DgDm->APPROACH;
+      };
+      htx := (@px[p] / 16.0)->As(Int);
+      hty := (@py[p] / 16.0)->As(Int);
+      mtx := (@mx[i] / 16.0)->As(Int);
+      mty := (@my[i] / 16.0)->As(Int);
+      if(@mmode[i] = DgDm->SHOOT & @mc[i] = 0 & @lvl->LineClear(mtx, mty, htx, hty)) {
+        Fireball(i, p);
+        @mc[i] := 70;
+      }
+      else if(@mmode[i] = DgDm->SPECIAL_A & kind = GtMon->SORCERER) {
+        Blink(i, p);
+      };
+    };
+
+    mode := @mmode[i];
+    if(mode = DgDm->RETREAT) {
+      # away from the hero
+      Steer(i, @mx[i] - (@px[p] - @mx[i]), @my[i] - (@py[p] - @my[i]), speed, false);
+    }
+    else if(mode = DgDm->APPROACH | mode = DgDm->MELEE) {
+      Chase(i, p, speed, dist);
+    };
+  }
+
+  method : Fireball(i : Int, p : Int) ~ Nil {
+    dx := @px[p] - @mx[i];
+    dy := @py[p] - @my[i];
+    d := Float->Sqrt(dx * dx + dy * dy);
+    if(d < 1.0) {
+      return;
+    };
+    dmg := [8, 10, 12, 16];
+    AddShot(@mx[i], @my[i], dx / d * 2.4, dy / d * 2.4, dmg[@diff] + @level_no, -1, 0, 70);
+    Ev(GtEv->BALL, @mx[i], @my[i], 0, 0);
+  }
+
+  method : Blink(i : Int, p : Int) ~ Nil {
+    each(attempt : 20) {
+      x := @px[p] + (@rng->Range(-90, 90))->As(Float);
+      y := @py[p] + (@rng->Range(-70, 70))->As(Float);
+      dx := x - @px[p];
+      dy := y - @py[p];
+      if(dx * dx + dy * dy > 3000.0 & <>BoxBlocked(x, y, 5.0)) {
+        Ev(GtEv->BLINK, @mx[i], @my[i], 0, 0);
+        @mx[i] := x;
+        @my[i] := y;
+        Ev(GtEv->BLINK, x, y, 1, 0);
+        return;
+      };
+    };
+  }
+
+  # monsters do not stack: push apart from a neighbour that is too close
+  method : Separate(i : Int) ~ Nil {
+    each(j : 120) {
+      if(j <> i & @mk[j] >= 0) {
+        dx := @mx[i] - @mx[j];
+        dy := @my[i] - @my[j];
+        if(DgUtil->Abs(dx->As(Int)) < 8 & DgUtil->Abs(dy->As(Int)) < 8) {
+          push := 0.35;
+          if(dx < 0.0) { push := -0.35; };
+          out := Float->New[2];
+          pushy := 0.2;
+          if(dy < 0.0) { pushy := -0.2; };
+          if(@mk[i] <> GtMon->GHOST) {
+            MoveBox(@mx[i], @my[i], push, pushy, 5.0, false, out);
+            @mx[i] := out[0];
+            @my[i] := out[1];
+          }
+          else {
+            @mx[i] += push;
+            @my[i] += pushy;
+          };
+        };
+      };
+    };
+  }
+
+  # ---- shots ----
+
+  method : AddShot(x : Float, y : Float, vx : Float, vy : Float, dmg : Int, owner : Int, cls : Int, life : Int) ~ Nil {
+    each(i : 64) {
+      if(@slife[i] <= 0) {
+        @sx[i] := x;
+        @sy[i] := y;
+        @svx[i] := vx;
+        @svy[i] := vy;
+        @sdmg[i] := dmg;
+        @sown[i] := owner;
+        @scls[i] := cls;
+        @slife[i] := life;
+        return;
+      };
+    };
+  }
+
+  method : HurtMonster(m : Int, dmg : Int, p : Int) ~ Nil {
+    kind := @mk[m];
+    if(kind = GtMon->DEATH) {
+      # Death shrugs off everything but a magic potion
+      Ev(GtEv->HIT, @mx[m], @my[m], 0, 0);
+      return;
+    };
+    @mhp[m] -= dmg;
+    @mflash[m] := 5;
+    Ev(GtEv->HIT, @mx[m], @my[m], dmg, 0);
+    if(@mhp[m] <= 0) {
+      KillMonster(m, p);
+    };
+  }
+
+  method : KillMonster(m : Int, p : Int) ~ Nil {
+    kind := @mk[m];
+    points := [20, 30, 50, 70, 500];
+    Ev(GtEv->KILL, @mx[m], @my[m], kind, 0);
+    @mk[m] := -1;
+    @mcount -= 1;
+    if(p >= 0) {
+      @score[p] += points[kind];
+    };
+  }
+
+  method : HurtGenerator(g : Int, dmg : Int, p : Int) ~ Nil {
+    @ghp[g] -= dmg;
+    Ev(GtEv->HIT, (@gx[g] * 16 + 8)->As(Float), (@gy[g] * 16 + 8)->As(Float), dmg, 1);
+    if(@ghp[g] <= 0) {
+      Ev(GtEv->GEN_DEAD, (@gx[g] * 16 + 8)->As(Float), (@gy[g] * 16 + 8)->As(Float), @gk[g], 0);
+      @gblock[@gy[g] * @lvl->W() + @gx[g]] := false;
+      if(p >= 0) {
+        @score[p] += 100;
+      };
+      # close the gap in the list
+      last := @gn - 1;
+      @gx[g] := @gx[last];
+      @gy[g] := @gy[last];
+      @gk[g] := @gk[last];
+      @ghp[g] := @ghp[last];
+      @gt[g] := @gt[last];
+      @gn -= 1;
+      if(@gn = 0) {
+        Say("All the generators are gone! Find the exit.");
+      };
+    };
+  }
+
+  method : UpdateShots() ~ Nil {
+    each(i : 64) {
+      if(@slife[i] > 0) {
+        @slife[i] -= 1;
+        @sx[i] += @svx[i];
+        @sy[i] += @svy[i];
+        if(SolidAt(@sx[i], @sy[i])) {
+          # a shot that hits a locked door or a wall stops; generators are hit by tile
+          hit_gen := -1;
+          each(g : @gn) {
+            if(@gx[g] = (@sx[i] / 16.0)->As(Int) & @gy[g] = (@sy[i] / 16.0)->As(Int)) {
+              hit_gen := g;
+            };
+          };
+          if(hit_gen >= 0 & @sown[i] >= 0) {
+            HurtGenerator(hit_gen, @sdmg[i], @sown[i]);
+          };
+          @slife[i] := 0;
+        }
+        else if(@sown[i] >= 0) {
+          # a hero's shot against monsters
+          each(m : 120) {
+            if(@mk[m] >= 0 & @slife[i] > 0) {
+              ddx := @sx[i] - @mx[m];
+              ddy := @sy[i] - @my[m];
+              if(ddx > -8.0 & ddx < 8.0 & ddy > -8.0 & ddy < 8.0) {
+                HurtMonster(m, @sdmg[i], @sown[i]);
+                @slife[i] := 0;
+              };
+            };
+          };
+        }
+        else {
+          # a monster's fireball against heroes
+          each(p : @nplayers) {
+            if(@health[p] > 0 & @slife[i] > 0) {
+              ddx := @sx[i] - @px[p];
+              ddy := @sy[i] - @py[p];
+              if(ddx > -7.0 & ddx < 7.0 & ddy > -7.0 & ddy < 7.0) {
+                HurtHero(p, @sdmg[i]);
+                @slife[i] := 0;
+              };
+            };
+          };
+        };
+      };
+    };
+  }
+
+  # ---- heroes ----
+
+  method : public : SetInput(p : Int, dx : Int, dy : Int, fire : Bool, potion : Bool) ~ Nil {
+    @in_dx[p] := dx;
+    @in_dy[p] := dy;
+    @in_fire[p] := fire;
+    @in_potion[p] := potion;
+  }
+
+  method : HurtHero(p : Int, dmg : Int) ~ Nil {
+    armor := [15, 35, 0, 0];
+    d := dmg * (100 - armor[@cls[p]]) / 100;
+    scale := [70, 100, 130, 160];
+    d := DgUtil->Max(1, d * scale[@diff] / 100);
+    @health[p] -= d;
+    @flash[p] := 8;
+    Ev(GtEv->HURT, @px[p], @py[p], d, p);
+    if(@health[p] <= 0) {
+      @health[p] := 0;
+      Ev(GtEv->DEAD, @px[p], @py[p], p, 0);
+      Say(ClassName(@cls[p]) + " has died.");
+    };
+  }
+
+  method : UpdateHero(p : Int) ~ Nil {
+    if(@health[p] <= 0) {
+      return;
+    };
+    speeds := [1.3, 1.25, 1.2, 1.7];
+    dx := @in_dx[p];
+    dy := @in_dy[p];
+    if(dx <> 0 | dy <> 0) {
+      @fx[p] := dx;
+      @fy[p] := dy;
+      s := speeds[@cls[p]];
+      if(dx <> 0 & dy <> 0) {
+        s := s * 0.72;
+      };
+      out := Float->New[2];
+      if(MoveBox(@px[p], @py[p], dx->As(Float) * s, dy->As(Float) * s, 5.0, false, out)) {
+        # two heroes share one screen: neither may walk out of the other's reach
+        nx := out[0];
+        ny := out[1];
+        if(TooFar(p, nx, @py[p])) {
+          nx := @px[p];
+        };
+        if(TooFar(p, nx, ny)) {
+          ny := @py[p];
+        };
+        if(nx <> @px[p] | ny <> @py[p]) {
+          @px[p] := nx;
+          @py[p] := ny;
+          @walk[p] += 1;
+        };
+      };
+      OpenDoorsAround(@px[p], @py[p], p);
+    };
+    if(@cool[p] > 0) {
+      @cool[p] -= 1;
+    };
+    if(@mcool[p] > 0) {
+      @mcool[p] -= 1;
+    };
+    if(@flash[p] > 0) {
+      @flash[p] -= 1;
+    };
+
+    if(@in_fire[p] & @cool[p] = 0) {
+      Fire(p);
+    };
+    if(@in_potion[p]) {
+      @in_potion[p] := false;
+      if(@potions[p] > 0) {
+        Potion(p);
+      };
+    };
+
+    # warriors and valkyries hit what they touch
+    if(@cls[p] <= 1 & @mcool[p] = 0) {
+      melee := [2, 2];
+      each(m : 120) {
+        if(@mk[m] >= 0 & @mk[m] <> GtMon->DEATH) {
+          ddx := @mx[m] - @px[p];
+          ddy := @my[m] - @py[p];
+          if(ddx > -10.0 & ddx < 10.0 & ddy > -10.0 & ddy < 10.0 & @mcool[p] = 0) {
+            HurtMonster(m, melee[@cls[p]], p);
+            @mcool[p] := 14;
+          };
+        };
+      };
+    };
+
+    PickUps(p);
+  }
+
+  method : TooFar(p : Int, x : Float, y : Float) ~ Bool {
+    buddy := 1 - p;
+    if(@nplayers < 2 | @health[buddy] <= 0) {
+      return false;
+    };
+    ddx := x - @px[buddy];
+    ddy := y - @py[buddy];
+    return ddx > 130.0 | ddx < -130.0 | ddy > 80.0 | ddy < -80.0;
+  }
+
+  method : Fire(p : Int) ~ Nil {
+    cds := [16, 14, 18, 9];
+    dmgs := [3, 2, 3, 2];
+    @cool[p] := cds[@cls[p]];
+    vx := @fx[p]->As(Float);
+    vy := @fy[p]->As(Float);
+    d := Float->Sqrt(vx * vx + vy * vy);
+    if(d < 0.1) {
+      return;
+    };
+    sp := 3.6;
+    if(@cls[p] = GtCls->ELF) {
+      sp := 4.4;
+    };
+    dmg := dmgs[@cls[p]] + @level_no / 4;
+    AddShot(@px[p], @py[p], vx / d * sp, vy / d * sp, dmg, p, @cls[p], 55);
+    Ev(GtEv->FIRE, @px[p], @py[p], @cls[p], 0);
+  }
+
+  # the magic potion: a smart bomb. A wizard's is twice as strong.
+  method : Potion(p : Int) ~ Nil {
+    @potions[p] -= 1;
+    power := 6;
+    if(@cls[p] = GtCls->WIZARD) {
+      power := 12;
+    };
+    Ev(GtEv->POTION, @px[p], @py[p], 0, 0);
+    each(m : 120) {
+      if(@mk[m] >= 0) {
+        ddx := @mx[m] - @px[p];
+        ddy := @my[m] - @py[p];
+        if(ddx * ddx + ddy * ddy < 21000.0) {
+          if(@mk[m] = GtMon->DEATH) {
+            Ev(GtEv->HIT, @mx[m], @my[m], 99, 0);
+            KillMonster(m, p);
+          }
+          else {
+            HurtMonster(m, power, p);
+          };
+        };
+      };
+    };
+    each(g : @gn) {
+      ddx := (@gx[g] * 16 + 8)->As(Float) - @px[p];
+      ddy := (@gy[g] * 16 + 8)->As(Float) - @py[p];
+      if(g < @gn & ddx * ddx + ddy * ddy < 21000.0) {
+        HurtGenerator(g, power, p);
+      };
+    };
+    Say("The potion explodes!");
+  }
+
+  method : PickUps(p : Int) ~ Nil {
+    each(i : 160) {
+      if(@ik[i] >= 0) {
+        ddx := (@ix[i] * 16 + 8)->As(Float) - @px[p];
+        ddy := (@iy[i] * 16 + 8)->As(Float) - @py[p];
+        if(ddx > -9.0 & ddx < 9.0 & ddy > -9.0 & ddy < 9.0) {
+          kind := @ik[i];
+          v := @iv[i];
+          ok := true;
+          if(kind = GtIt->FOOD) {
+            @health[p] := DgUtil->Min(999, @health[p] + v);
+            Ev(GtEv->FOOD, @px[p], @py[p], v, 0);
+          }
+          else if(kind = GtIt->KEY) {
+            @keys[p] += 1;
+          }
+          else if(kind = GtIt->POTION) {
+            if(@potions[p] < 5) {
+              @potions[p] += 1;
+            }
+            else {
+              ok := false;
+            };
+          }
+          else {
+            @score[p] += v;
+          };
+          if(ok) {
+            Ev(GtEv->PICK, @px[p], @py[p], kind, v);
+            @ik[i] := -1;
+          };
+        };
+      };
+    };
+  }
+
+  # ---- time ----
+
+  method : SpawnFromGenerators() ~ Nil {
+    base := [150, 110, 80, 55];
+    interval := DgUtil->Max(40, base[@diff] - @level_no * 6);
+    each(g : @gn) {
+      if(@gt[g] > 0) {
+        @gt[g] -= 1;
+      };
+      if(@gt[g] <= 0 & @mcount < 70) {
+        gxp := (@gx[g] * 16 + 8)->As(Float);
+        gyp := (@gy[g] * 16 + 8)->As(Float);
+        p := NearestHero(gxp, gyp);
+        if(p >= 0) {
+          ddx := @px[p] - gxp;
+          ddy := @py[p] - gyp;
+          if(ddx * ddx + ddy * ddy < 48000.0) {
+            spot := FreeSpotNear(@gx[g], @gy[g]);
+            if(spot >= 0) {
+              made := SpawnMonster(@gk[g], (spot % @lvl->W() * 16 + 8)->As(Float), (spot / @lvl->W() * 16 + 8)->As(Float));
+              if(made >= 0) {
+                Ev(GtEv->SPAWN, @mx[made], @my[made], 0, 0);
+              };
+            };
+          };
+        };
+        @gt[g] := interval + @rng->Next(30);
+      };
+    };
+  }
+
+  method : FreeSpotNear(tx : Int, ty : Int) ~ Int {
+    start := @rng->Next(8);
+    each(k : 8) {
+      d := (k + start) % 8;
+      ox := 0;
+      oy := 0;
+      if(d = 0) { ox := -1; }
+      else if(d = 1) { ox := 1; }
+      else if(d = 2) { oy := -1; }
+      else if(d = 3) { oy := 1; }
+      else if(d = 4) { ox := -1; oy := -1; }
+      else if(d = 5) { ox := 1; oy := -1; }
+      else if(d = 6) { ox := -1; oy := 1; }
+      else { ox := 1; oy := 1; };
+      x := tx + ox;
+      y := ty + oy;
+      if(Open(x, y, @lvl->W())) {
+        return y * @lvl->W() + x;
+      };
+    };
+    return -1;
+  }
+
+  method : MonsterContacts() ~ Nil {
+    dmg := [6, 9, 7, 9, 40];
+    each(m : 120) {
+      if(@mk[m] >= 0 & @mc[m] <= 0) {
+        each(p : @nplayers) {
+          if(@health[p] > 0 & @mk[m] >= 0 & @mc[m] <= 0) {
+            ddx := @mx[m] - @px[p];
+            ddy := @my[m] - @py[p];
+            if(ddx > -9.0 & ddx < 9.0 & ddy > -9.0 & ddy < 9.0) {
+              HurtHero(p, dmg[@mk[m]] + @level_no / 2);
+              if(@mk[m] = GtMon->DEATH) {
+                @mc[m] := 50;
+              }
+              else {
+                @mc[m] := 22;
+              };
+            };
+          };
+        };
+      };
+    };
+  }
+
+  # one frame of the game: 1/60 of a second
+  method : public : Step() ~ Nil {
+    if(@msg_t > 0) {
+      @msg_t -= 1;
+    };
+    if(@state = 1 | @state = 3) {
+      return;
+    };
+    @frame += 1;
+
+    if(@state = 2) {
+      @state_t -= 1;
+      if(@state_t <= 0) {
+        StartLevel(@level_no + 1);
+      };
+      return;
+    };
+
+    each(p : @nplayers) {
+      UpdateHero(p);
+    };
+    UpdateShots();
+    each(m : 120) {
+      if(@mk[m] >= 0) {
+        UpdateMonster(m);
+      };
+    };
+    MonsterContacts();
+    SpawnFromGenerators();
+
+    # life drains away
+    drain := [40, 30, 26, 20];
+    if(@frame % drain[@diff] = 0) {
+      each(p : @nplayers) {
+        if(@health[p] > 0) {
+          @health[p] -= 1;
+          if(@health[p] <= 0) {
+            Ev(GtEv->DEAD, @px[p], @py[p], p, 0);
+            Say(ClassName(@cls[p]) + "'s life force ran out.");
+          };
+        };
+      };
+    };
+    if(@frame % 600 = 0 & @health[0] + @health[1] > 0 & @health[0] < 150 & @health[0] > 0) {
+      Say("Your life force is running out!");
+    };
+
+    # the exit
+    each(p : @nplayers) {
+      if(@health[p] > 0 & @state = 0) {
+        t := TileAt(@px[p], @py[p]);
+        if(t = DgTile->STAIRS_DOWN | t = DgTile->THRONE) {
+          LevelDone(p);
+        };
+      };
+    };
+
+    # everybody dead
+    if(@state = 0 & @health[0] <= 0 & (@nplayers = 1 | @health[1] <= 0)) {
+      @state := 1;
+      Say("Game over.");
+    };
+  }
+
+  method : LevelDone(p : Int) ~ Nil {
+    bonus := 100 * @level_no;
+    @score[p] += bonus;
+    if(@level_no >= 8) {
+      @state := 3;
+      @score[p] += 5000;
+      Ev(GtEv->WON, @px[p], @py[p], 0, 0);
+      Say("You escaped the dungeon!");
+      return;
+    };
+    @state := 2;
+    @state_t := 90;
+    Ev(GtEv->EXIT, @px[p], @py[p], @level_no + 1, 0);
+    Say("Level cleared! Bonus " + bonus->ToString());
+  }
+
+  # test helpers: the tests and the screenshots build their own little situations
+  method : public : KillAll() ~ Nil {
+    each(i : 120) {
+      @mk[i] := -1;
+    };
+    @mcount := 0;
+    each(g : @gn) {
+      @gblock[@gy[g] * @lvl->W() + @gx[g]] := false;
+    };
+    @gn := 0;
+    each(i : 160) {
+      @ik[i] := -1;
+    };
+  }
+
+  # plain floor in a 9 x 9 square around the first hero
+  method : public : ClearSpace() ~ Nil {
+    hx := (@px[0] / 16.0)->As(Int);
+    hy := (@py[0] / 16.0)->As(Int);
+    each(dy : 9) {
+      cy := hy - 4 + dy;
+      each(dx : 9) {
+        cx := hx - 4 + dx;
+        if(cx > 0 & cy > 0 & cx < @lvl->W() - 1 & cy < @lvl->H() - 1) {
+          @lvl->SetTile(cx, cy, DgTile->FLOOR);
+        };
+      };
+    };
+  }
+
+  method : public : NewGenerator(kind : Int, tx : Int, ty : Int) ~ Nil {
+    @gx[@gn] := tx;
+    @gy[@gn] := ty;
+    @gk[@gn] := kind;
+    @ghp[@gn] := 5;
+    @gt[@gn] := 10;
+    @gblock[ty * @lvl->W() + tx] := true;
+    @gn += 1;
+  }
+
+  method : public : HitGenerator(g : Int, dmg : Int) ~ Nil {
+    if(g >= 0 & g < @gn) {
+      HurtGenerator(g, dmg, 0);
+    };
+  }
+
+  method : public : HitMonster(m : Int, dmg : Int) ~ Nil {
+    HurtMonster(m, dmg, 0);
+  }
+
+  method : public : DropItem(kind : Int, tx : Int, ty : Int, v : Int) ~ Nil {
+    PlaceItem(kind, tx, ty, v);
+  }
+
+  method : public : Teleport(p : Int, x : Float, y : Float) ~ Nil {
+    @px[p] := x;
+    @py[p] := y;
+  }
+
+  method : public : GiveKeys(p : Int, n : Int) ~ Nil {
+    @keys[p] := n;
+  }
+
+  method : public : SetHealth(p : Int, h : Int) ~ Nil {
+    @health[p] := h;
+  }
+
+  method : public : ForceEnd(state : Int) ~ Nil {
+    @state := state;
+  }
+}

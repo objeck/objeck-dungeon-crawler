@@ -1,0 +1,82 @@
+#~
+Visual preview of the first-person dungeon renderer.
+Renders a few canned corridors to PNG files (preview_*.png) so lighting and
+texture changes can be inspected without playing through to the dungeon.
+Needs a display; not part of the headless regression suite.
+~#
+
+use Game.SDL2;
+use Game.Framework;
+
+class RenderPreview {
+	function : Main(args : String[]) ~ Nil {
+		framework := GameFramework->New(768, 512, "Render Preview");
+		if(<>framework->IsOk()) {
+			"Unable to open a window"->ErrorLine();
+			return;
+		};
+
+		renderer := framework->GetRenderer();
+		dr := DungeonRenderer->New(renderer);
+		out := args->Size() > 0 ? args[0] : ".";
+
+		# straight corridor, one shot per floor palette
+		for(fi := 1; fi <= 4; fi += 1;) {
+			Shot(framework, renderer, dr, Corridor(), fi, 40, "{$out}/preview_corridor_f{$fi}.png");
+		};
+
+		# side openings (room / intersection) and a closed door-less dead end
+		Shot(framework, renderer, dr, Junction(), 1, 40, "{$out}/preview_junction.png");
+		Shot(framework, renderer, dr, DeadEnd(), 2, 40, "{$out}/preview_deadend.png");
+
+		# the same corridor at another animation frame (torch flicker)
+		Shot(framework, renderer, dr, Corridor(), 1, 90, "{$out}/preview_corridor_flicker.png");
+
+		# cost per frame of the whole first-person view
+		view := Junction();
+		start := Game.SDL2.Timer->GetTicks();
+		for(i := 0; i < 200; i += 1;) {
+			framework->Clear();
+			dr->Render(view, 1, 1, 1, false, false, i);
+		};
+		ms := Game.SDL2.Timer->GetTicks() - start;
+		"render: {$ms} ms for 200 frames"->PrintLine();
+
+		framework->Quit();
+	}
+
+	function : Shot(framework : GameFramework, renderer : Renderer, dr : DungeonRenderer,
+			view : Int[,], fi : Int, frame : Int, file : String) ~ Nil {
+		framework->SetClearColor(Color->New(10, 6, 3));
+		framework->Clear();
+		dr->Render(view, fi, 1, 1, false, false, frame);
+		if(renderer->SavePNG(file)) {
+			"wrote {$file}"->PrintLine();
+		}
+		else {
+			"FAILED {$file}"->ErrorLine();
+		};
+	}
+
+	# view[depth, side]: side 0=left 1=middle 2=right; 0=BLOCKED 1=OPEN
+	function : Corridor() ~ Int[,] {
+		view := Int->New[5, 3];
+		for(d := 0; d < 5; d += 1;) {
+			view[d, 0] := 0; view[d, 1] := 1; view[d, 2] := 0;
+		};
+		return view;
+	}
+
+	function : Junction() ~ Int[,] {
+		view := Corridor();
+		view[1, 0] := 1; view[1, 2] := 1;
+		view[3, 0] := 1;
+		return view;
+	}
+
+	function : DeadEnd() ~ Int[,] {
+		view := Corridor();
+		view[3, 1] := 0;
+		return view;
+	}
+}
