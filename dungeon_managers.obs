@@ -897,10 +897,28 @@ class DungeonRenderer {
 	@anim_ox : Int;
 	@anim_oy : Int;
 
+	# lighting: lantern flicker for the current frame, and the wall torches
+	# visible this frame (they light the stone around them)
+	@flick : Float;
+	@torch_n : Int;
+	@torch_x : Int[];
+	@torch_y : Int[];
+	@torch_f : Float[];
+
+	# scratch: cell boundaries (0..1) along one row of stone/slabs
+	@bnd : Float[];
+
 	New(renderer : Renderer) {
 		@renderer := renderer;
 		@anim_ox := 0;
 		@anim_oy := 0;
+
+		@flick := 1.0;
+		@torch_n := 0;
+		@torch_x := Int->New[8];
+		@torch_y := Int->New[8];
+		@torch_f := Float->New[8];
+		@bnd := Float->New[8];
 
 		@vx := Int->New[4];
 		@vy := Int->New[4];
@@ -920,11 +938,13 @@ class DungeonRenderer {
 
 		# brightness per depth
 		@bright := Float->New[5];
+		# matches Light(z) at integer depths, for the decorations that still
+		# shade by whole depth steps
 		@bright[0] := 1.0;
-		@bright[1] := 0.78;
-		@bright[2] := 0.58;
-		@bright[3] := 0.42;
-		@bright[4] := 0.30;
+		@bright[1] := 0.83;
+		@bright[2] := 0.56;
+		@bright[3] := 0.36;
+		@bright[4] := 0.24;
 
 		# wall colors per floor
 		@wall_r := Int->New[4]; @wall_g := Int->New[4]; @wall_b := Int->New[4];
@@ -1177,6 +1197,17 @@ class DungeonRenderer {
 		if(fi < 0) { fi := 0; };
 		if(fi > 3) { fi := 3; };
 
+		# lantern flicker (two out-of-step sines so it never looks periodic)
+		t := frame->As(Float);
+		@flick := 1.0 + Float->Sin(t * 0.13) * 0.04 + Float->Sin(t * 0.37 + 1.0) * 0.025;
+
+		# wall torches in view: left walls on odd depths, right on even,
+		# only where a wall actually stands there
+		@torch_n := 0;
+		for(td := 0; td < 4; td += 1;) {
+			AddTorch(td, view[td, 0], view[td, 2], frame);
+		};
+
 		# fill viewport background with deepest fog color
 		@renderer->SetDrawColor(Br(@ceil_r[fi], 4), Br(@ceil_g[fi], 4), Br(@ceil_b[fi], 4), 255);
 		@renderer->FillRect(Rect->New(15, 7, 414, 303));
@@ -1274,24 +1305,195 @@ class DungeonRenderer {
 		};
 	}
 
+	# ------------------------------------------------------------------
+	# Lighting
+	# ------------------------------------------------------------------
+
+	# lantern light at depth z (0 = at the player, 5 = vanishing point):
+	# a smooth inverse-square falloff instead of whole-step fog
+	method : Light(z : Float) ~ Float {
+		return @flick / (1.0 + 0.2 * z * z);
+	}
+
+	# deterministic 0..999 noise from three small ints (stable between frames,
+	# so stone does not shimmer as the player walks)
+	method : Hash(a : Int, b : Int, c : Int) ~ Int {
+		h := a * 374761 + b * 668265 + c * 69069 + 12345;
+		h := (h * 1103515245 + 12345) % 2147483647;
+		if(h < 0) { h := 0 - h; };
+		h := (h * 48271) % 2147483647;
+		return (h / 7) % 1000;
+	}
+
+	# register a wall torch (if a wall stands where it would hang)
+	method : AddTorch(d : Int, left : Int, right : Int, frame : Int) ~ Nil {
+		if(d % 2 = 1 & <>IsOpen(left)) {
+			PushTorch(TorchX(d, true), TorchY(d), d, frame);
+		};
+		if(d % 2 = 0 & <>IsOpen(right)) {
+			PushTorch(TorchX(d, false), TorchY(d), d, frame);
+		};
+	}
+
+	method : PushTorch(x : Int, y : Int, d : Int, frame : Int) ~ Nil {
+		@torch_x[@torch_n] := x;
+		@torch_y[@torch_n] := y;
+		ph := frame->As(Float) * 0.23 + d->As(Float) * 1.9;
+		@torch_f[@torch_n] := 0.85 + Float->Sin(ph) * 0.1 + Float->Sin(ph * 2.7) * 0.05;
+		@torch_n += 1;
+	}
+
+	method : TorchX(d : Int, is_left : Bool) ~ Int {
+		if(is_left) {
+			return (L(d) + L(d+1)) / 2 + 5;
+		};
+		return (R(d) + R(d+1)) / 2 - 5;
+	}
+
+	method : TorchY(d : Int) ~ Int {
+		return (T(d) + B(d)) / 2 - 10;
+	}
+
+	# extra light (0..~0.8) that the visible wall torches throw on a point
+	method : TorchLight(px : Int, py : Int) ~ Float {
+		sum := 0.0;
+		for(i := 0; i < @torch_n; i += 1;) {
+			dx := (px - @torch_x[i])->As(Float);
+			dy := (py - @torch_y[i])->As(Float);
+			f := 1.0 - (dx * dx + dy * dy) / 9000.0;
+			if(f > 0.0) {
+				sum += f * f * 0.5 * @torch_f[i];
+			};
+		};
+		return sum;
+	}
+
+	# shade a base colour: depth falloff + torch light, warmed where lit,
+	# with a little per-stone variation (var in percent)
+	method : Shade(r : Int, g : Int, b : Int, z : Float, boost : Float, vary : Int) ~ Color {
+		lum := Light(z) + boost;
+		v := 1.0 + vary->As(Float) / 100.0;
+		k := lum * v;
+		rr := (r->As(Float) * k * (1.06 + boost * 0.35))->As(Int);
+		gg := (g->As(Float) * k * (1.0 + boost * 0.10))->As(Int);
+		bb := (b->As(Float) * k * (0.94 - boost * 0.25))->As(Int);
+		return Color->New(Clamp(rr), Clamp(gg), Clamp(bb));
+	}
+
+	method : Clamp(v : Int) ~ Int {
+		if(v > 255) { return 255; };
+		if(v < 0) { return 0; };
+		return v;
+	}
+
+	# fill @bnd with the cell boundaries for one course of stones; odd courses
+	# are offset by half a stone (running bond). Returns the cell count.
+	method : Bounds(cols : Int, odd : Bool) ~ Int {
+		if(odd) {
+			@bnd[0] := 0.0;
+			for(i := 1; i <= cols; i += 1;) {
+				@bnd[i] := (i->As(Float) - 0.5) / cols->As(Float);
+			};
+			@bnd[cols + 1] := 1.0;
+			return cols + 1;
+		};
+		for(i := 0; i <= cols; i += 1;) {
+			@bnd[i] := i->As(Float) / cols->As(Float);
+		};
+		return cols;
+	}
+
+	# point on the quad (x0..x1 across the near edge n and far edge f)
+	method : Lerp(a : Int, b : Int, t : Float) ~ Int {
+		return a + ((b - a)->As(Float) * t)->As(Int);
+	}
+
+	# ------------------------------------------------------------------
+	# Floor and ceiling: slabs laid in a running bond, lit by depth + torches
+	# ------------------------------------------------------------------
+
 	method : DrawCeiling(d : Int, fi : Int) ~ Nil {
-		color := CeilCol(fi, d);
-		sn := @shift[d]; sf := @shift[d+1];
-		@vx[0] := L(d);   @vy[0] := T(d) + sn;
-		@vx[1] := R(d);   @vy[1] := T(d) + sn;
-		@vx[2] := R(d+1); @vy[2] := T(d+1) + sf;
-		@vx[3] := L(d+1); @vy[3] := T(d+1) + sf;
-		@renderer->FilledPolygonColor(@vx, @vy, color);
+		DrawSlabs(d, fi, false);
 	}
 
 	method : DrawFloor(d : Int, fi : Int) ~ Nil {
-		color := FloorCol(fi, d);
+		DrawSlabs(d, fi, true);
+	}
+
+	method : DrawSlabs(d : Int, fi : Int, is_floor : Bool) ~ Nil {
 		sn := @shift[d]; sf := @shift[d+1];
-		@vx[0] := L(d);   @vy[0] := B(d) + sn;
-		@vx[1] := R(d);   @vy[1] := B(d) + sn;
-		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
-		@vx[3] := L(d+1); @vy[3] := B(d+1) + sf;
-		@renderer->FilledPolygonColor(@vx, @vy, color);
+		yn : Int; yf : Int;
+		if(is_floor) {
+			yn := B(d) + sn; yf := B(d+1) + sf;
+		}
+		else {
+			yn := T(d) + sn; yf := T(d+1) + sf;
+		};
+
+		br : Int; bg : Int; bb : Int;
+		if(is_floor) {
+			br := @flr_r[fi]; bg := @flr_g[fi]; bb := @flr_b[fi];
+		}
+		else {
+			br := @ceil_r[fi]; bg := @ceil_g[fi]; bb := @ceil_b[fi];
+		};
+
+		# grout: the whole band, dark
+		@vx[0] := L(d);   @vy[0] := yn;
+		@vx[1] := R(d);   @vy[1] := yn;
+		@vx[2] := R(d+1); @vy[2] := yf;
+		@vx[3] := L(d+1); @vy[3] := yf;
+		@renderer->FilledPolygonColor(@vx, @vy, Shade(br * 7 / 10, bg * 7 / 10, bb * 7 / 10, d->As(Float) + 0.5, 0.0, 0));
+
+		# nearer bands get two courses of slabs, far ones a single course
+		courses := d < 3 ? 2 : 1;
+		for(c := 0; c < courses; c += 1;) {
+			DrawSlabCourse(d, fi, is_floor, c, courses, yn, yf, br, bg, bb);
+		};
+	}
+
+	method : DrawSlabCourse(d : Int, fi : Int, is_floor : Bool, c : Int, courses : Int,
+			yn : Int, yf : Int, br : Int, bg : Int, bb : Int) ~ Nil {
+		cols := is_floor ? 3 : 2;
+		n := Bounds(cols, c % 2 = 1);
+		t0 := (c->As(Float) + 0.06) / courses->As(Float);
+		t1 := (c->As(Float) + 0.94) / courses->As(Float);
+		tc := (t0 + t1) / 2.0;
+		for(k := 0; k < n; k += 1;) {
+			DrawSlab(d, fi, is_floor, c, k, @bnd[k], @bnd[k + 1], t0, t1, tc, yn, yf, br, bg, bb);
+		};
+	}
+
+	method : DrawSlab(d : Int, fi : Int, is_floor : Bool, c : Int, k : Int, s0 : Float, s1 : Float,
+			t0 : Float, t1 : Float, tc : Float, yn : Int, yf : Int, br : Int, bg : Int, bb : Int) ~ Nil {
+		# keep a hair of grout between slabs, but run flush to the walls
+		g := 0.02;
+		a := s0 > 0.0 ? s0 + g : s0;
+		b := s1 < 1.0 ? s1 - g : s1;
+
+		# four corners: across (s) at near (t0) and far (t1)
+		xn0 := Lerp(L(d), R(d), a);     xn1 := Lerp(L(d), R(d), b);
+		xf0 := Lerp(L(d+1), R(d+1), a); xf1 := Lerp(L(d+1), R(d+1), b);
+		ya := Lerp(yn, yf, t0);
+		yb := Lerp(yn, yf, t1);
+		@vx[0] := Lerp(xn0, xf0, t0); @vy[0] := ya;
+		@vx[1] := Lerp(xn1, xf1, t0); @vy[1] := ya;
+		@vx[2] := Lerp(xn1, xf1, t1); @vy[2] := yb;
+		@vx[3] := Lerp(xn0, xf0, t1); @vy[3] := yb;
+
+		cx := Lerp(Lerp(xn0, xf0, tc), Lerp(xn1, xf1, tc), 0.5);
+		cy := Lerp(yn, yf, tc);
+		z := d->As(Float) + tc;
+		spread := is_floor ? 14 : 7;
+		koff := is_floor ? 0 : 50;
+		vary := Hash(d + c * 7, k + koff, fi) % (spread * 2 + 1) - spread;
+		@renderer->FilledPolygonColor(@vx, @vy, Shade(br, bg, bb, z, TorchLight(cx, cy), vary));
+
+		# a lit edge on the near side of each floor slab gives it thickness
+		if(is_floor) {
+			@renderer->LineColor(@vx[0], @vy[0], @vx[1], @vy[1],
+				Shade(br + 30, bg + 28, bb + 24, z - 0.1, TorchLight(cx, cy), vary));
+		};
 	}
 
 	method : DrawBridgeFloor(d : Int) ~ Nil {
@@ -1321,17 +1523,92 @@ class DungeonRenderer {
 		@renderer->HLineColor(L(d), R(d), B(d) + sn, Color->New(40, 25, 10));
 	}
 
-	method : DrawLeftWall(d : Int, fi : Int) ~ Nil {
-		color := WallCol(fi, d);
+	# ------------------------------------------------------------------
+	# Side walls: courses of cut stone with mortar, bevelled and torch-lit
+	# ------------------------------------------------------------------
+	method : DrawSideStone(d : Int, fi : Int, is_left : Bool) ~ Nil {
 		sn := @shift[d]; sf := @shift[d+1];
-		@vx[0] := L(d);   @vy[0] := T(d) + sn;
-		@vx[1] := L(d+1); @vy[1] := T(d+1) + sf;
-		@vx[2] := L(d+1); @vy[2] := B(d+1) + sf;
-		@vx[3] := L(d);   @vy[3] := B(d) + sn;
-		@renderer->FilledPolygonColor(@vx, @vy, color);
+		x0 : Int; x1 : Int;
+		if(is_left) {
+			x0 := L(d); x1 := L(d+1);
+		}
+		else {
+			x0 := R(d); x1 := R(d+1);
+		};
+		t0 := T(d) + sn; t1 := T(d+1) + sf;
+		b0 := B(d) + sn; b1 := B(d+1) + sf;
+		side := is_left ? 0 : 1;
 
-		# mortar lines
-		DrawSideTexture(d, fi, true);
+		# mortar: the whole wall, dark
+		@vx[0] := x0; @vy[0] := t0;
+		@vx[1] := x1; @vy[1] := t1;
+		@vx[2] := x1; @vy[2] := b1;
+		@vx[3] := x0; @vy[3] := b0;
+		@renderer->FilledPolygonColor(@vx, @vy,
+			Shade(@wall_r[fi] * 5 / 10, @wall_g[fi] * 5 / 10, @wall_b[fi] * 5 / 10, d->As(Float) + 0.5, 0.0, 0));
+
+		rows := 4;
+		for(j := 0; j < rows; j += 1;) {
+			DrawSideCourse(d, fi, side, j, rows, x0, x1, t0, t1, b0, b1);
+		};
+	}
+
+	method : DrawSideCourse(d : Int, fi : Int, side : Int, j : Int, rows : Int,
+			x0 : Int, x1 : Int, t0 : Int, t1 : Int, b0 : Int, b1 : Int) ~ Nil {
+		n := Bounds(2, j % 2 = 1);
+		v0 := (j->As(Float) + 0.035) / rows->As(Float);
+		v1 := (j->As(Float) + 0.965) / rows->As(Float);
+		for(k := 0; k < n; k += 1;) {
+			DrawSideBlock(d, fi, side, j, k, @bnd[k], @bnd[k + 1], v0, v1, x0, x1, t0, t1, b0, b1);
+		};
+	}
+
+	method : DrawSideBlock(d : Int, fi : Int, side : Int, j : Int, k : Int, u0 : Float, u1 : Float,
+			v0 : Float, v1 : Float, x0 : Int, x1 : Int, t0 : Int, t1 : Int, b0 : Int, b1 : Int) ~ Nil {
+		g := 0.03;
+		a := u0 > 0.0 ? u0 + g : u0;
+		b := u1 < 1.0 ? u1 - g : u1;
+
+		# top/bottom of the wall at the block's left (a) and right (b) edge
+		ta := Lerp(t0, t1, a); ba := Lerp(b0, b1, a);
+		tb := Lerp(t0, t1, b); bb := Lerp(b0, b1, b);
+		xa := Lerp(x0, x1, a);
+		xb := Lerp(x0, x1, b);
+
+		@vx[0] := xa; @vy[0] := Lerp(ta, ba, v0);
+		@vx[1] := xb; @vy[1] := Lerp(tb, bb, v0);
+		@vx[2] := xb; @vy[2] := Lerp(tb, bb, v1);
+		@vx[3] := xa; @vy[3] := Lerp(ta, ba, v1);
+
+		uc := (u0 + u1) / 2.0;
+		vc := (v0 + v1) / 2.0;
+		cx := Lerp(x0, x1, uc);
+		cy := Lerp(Lerp(t0, t1, uc), Lerp(b0, b1, uc), vc);
+		z := d->As(Float) + uc;
+		boost := TorchLight(cx, cy);
+
+		# right-hand walls sit a touch further from the lantern
+		vary := Hash(d * 3 + side, j * 5 + k, fi + 11) % 21 - 10 - side * 4;
+		@renderer->FilledPolygonColor(@vx, @vy, Shade(@wall_r[fi], @wall_g[fi], @wall_b[fi], z, boost, vary));
+
+		# bevel: lit upper edge
+		@renderer->LineColor(@vx[0], @vy[0], @vx[1], @vy[1],
+			Shade(@wall_r[fi] + 35, @wall_g[fi] + 32, @wall_b[fi] + 28, z, boost, vary));
+
+		# an occasional cracked stone
+		if(Hash(d + 1, j * 9 + k, fi + 3) % 16 = 0) {
+			mx := (@vx[0] + @vx[2]) / 2;
+			my := (@vy[0] + @vy[2]) / 2;
+			ch := (@vy[3] - @vy[0]) / 3;
+			crack := Shade(@wall_r[fi] / 3, @wall_g[fi] / 3, @wall_b[fi] / 3, z, boost, 0);
+			@renderer->LineColor(mx - ch / 2, my - ch, mx + ch / 4, my - ch / 3, crack);
+			@renderer->LineColor(mx + ch / 4, my - ch / 3, mx - ch / 3, my + ch / 4, crack);
+			@renderer->LineColor(mx - ch / 3, my + ch / 4, mx + ch / 2, my + ch, crack);
+		};
+	}
+
+	method : DrawLeftWall(d : Int, fi : Int) ~ Nil {
+		DrawSideStone(d, fi, true);
 
 		# wall torch on every other depth
 		if(d % 2 = 1 & d < 4) {
@@ -1344,56 +1621,50 @@ class DungeonRenderer {
 	# adjacent tile is open.  Used in rooms and at corridor intersections
 	# instead of leaving the side as a dark strip.
 	method : DrawLeftOpening(d : Int, fi : Int) ~ Nil {
-		sn := @shift[d]; sf := @shift[d+1];
-		near_mid_y := (T(d) + B(d)) / 2 + sn;
-		far_mid_y  := (T(d+1) + B(d+1)) / 2 + sf;
-
-		# ceiling half
-		@vx[0] := L(d);   @vy[0] := T(d) + sn;
-		@vx[1] := L(d+1); @vy[1] := T(d+1) + sf;
-		@vx[2] := L(d+1); @vy[2] := far_mid_y;
-		@vx[3] := L(d);   @vy[3] := near_mid_y;
-		@renderer->FilledPolygonColor(@vx, @vy, CeilCol(fi, d));
-
-		# floor half
-		@vx[0] := L(d);   @vy[0] := near_mid_y;
-		@vx[1] := L(d+1); @vy[1] := far_mid_y;
-		@vx[2] := L(d+1); @vy[2] := B(d+1) + sf;
-		@vx[3] := L(d);   @vy[3] := B(d) + sn;
-		@renderer->FilledPolygonColor(@vx, @vy, FloorCol(fi, d));
+		DrawOpening(d, fi, true);
 	}
 
 	method : DrawRightOpening(d : Int, fi : Int) ~ Nil {
+		DrawOpening(d, fi, false);
+	}
+
+	# The space beyond an open side tile: ceiling melts into floor through a
+	# smooth gradient (no hard seam), dimmer than the corridor it opens off.
+	method : DrawOpening(d : Int, fi : Int, is_left : Bool) ~ Nil {
+		strips := 8;
+		for(i := 0; i < strips; i += 1;) {
+			DrawOpeningStrip(d, fi, is_left, i, strips);
+		};
+	}
+
+	method : DrawOpeningStrip(d : Int, fi : Int, is_left : Bool, i : Int, strips : Int) ~ Nil {
 		sn := @shift[d]; sf := @shift[d+1];
-		near_mid_y := (T(d) + B(d)) / 2 + sn;
-		far_mid_y  := (T(d+1) + B(d+1)) / 2 + sf;
+		x0 : Int; x1 : Int;
+		if(is_left) {
+			x0 := L(d); x1 := L(d+1);
+		}
+		else {
+			x0 := R(d); x1 := R(d+1);
+		};
 
-		# ceiling half
-		@vx[0] := R(d);   @vy[0] := T(d) + sn;
-		@vx[1] := R(d+1); @vy[1] := T(d+1) + sf;
-		@vx[2] := R(d+1); @vy[2] := far_mid_y;
-		@vx[3] := R(d);   @vy[3] := near_mid_y;
-		@renderer->FilledPolygonColor(@vx, @vy, CeilCol(fi, d));
+		t0 := i->As(Float) / strips->As(Float);
+		t1 := (i + 1)->As(Float) / strips->As(Float);
+		tm := (t0 + t1) / 2.0;
 
-		# floor half
-		@vx[0] := R(d);   @vy[0] := near_mid_y;
-		@vx[1] := R(d+1); @vy[1] := far_mid_y;
-		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
-		@vx[3] := R(d);   @vy[3] := B(d) + sn;
-		@renderer->FilledPolygonColor(@vx, @vy, FloorCol(fi, d));
+		@vx[0] := x0; @vy[0] := Lerp(T(d) + sn, B(d) + sn, t0);
+		@vx[1] := x1; @vy[1] := Lerp(T(d+1) + sf, B(d+1) + sf, t0);
+		@vx[2] := x1; @vy[2] := Lerp(T(d+1) + sf, B(d+1) + sf, t1);
+		@vx[3] := x0; @vy[3] := Lerp(T(d) + sn, B(d) + sn, t1);
+
+		# ceiling colour at the top, floor colour at the bottom, a touch darker
+		cr := Lerp(@ceil_r[fi], @flr_r[fi], tm) * 8 / 10;
+		cg := Lerp(@ceil_g[fi], @flr_g[fi], tm) * 8 / 10;
+		cb := Lerp(@ceil_b[fi], @flr_b[fi], tm) * 8 / 10;
+		@renderer->FilledPolygonColor(@vx, @vy, Shade(cr, cg, cb, d->As(Float) + 0.5, 0.0, 0));
 	}
 
 	method : DrawRightWall(d : Int, fi : Int) ~ Nil {
-		color := WallCol(fi, d);
-		sn := @shift[d]; sf := @shift[d+1];
-		@vx[0] := R(d);   @vy[0] := T(d) + sn;
-		@vx[1] := R(d+1); @vy[1] := T(d+1) + sf;
-		@vx[2] := R(d+1); @vy[2] := B(d+1) + sf;
-		@vx[3] := R(d);   @vy[3] := B(d) + sn;
-		@renderer->FilledPolygonColor(@vx, @vy, color);
-
-		# mortar lines
-		DrawSideTexture(d, fi, false);
+		DrawSideStone(d, fi, false);
 
 		# wall torch on even depths
 		if(d % 2 = 0 & d < 4) {
@@ -1401,90 +1672,113 @@ class DungeonRenderer {
 		};
 	}
 
+	# Front wall: five courses of cut stone in a running bond, mortar between,
+	# each stone shaded by lantern distance and nearby torches
 	method : DrawFrontWall(d : Int, fi : Int) ~ Nil {
-		color := WallCol(fi, d);
 		sn := @shift[d];
-		@renderer->BoxColor(L(d), T(d) + sn, R(d), B(d) + sn, color);
+		top := T(d) + sn;
+		bot := B(d) + sn;
 
-		dark := WallDark(fi, d);
-		wall_h := B(d) - T(d);
-		wall_w := R(d) - L(d);
+		# mortar: the whole wall, dark
+		@renderer->BoxColor(L(d), top, R(d), bot,
+			Shade(@wall_r[fi] * 5 / 10, @wall_g[fi] * 5 / 10, @wall_b[fi] * 5 / 10, d->As(Float), 0.0, 0));
 
-		# horizontal mortar lines
-		rows := 4;
-		row_sp := wall_h / (rows + 1);
-		for(i := 1; i <= rows; i += 1;) {
-			y := T(d) + sn + row_sp * i;
-			@renderer->HLineColor(L(d) + 2, R(d) - 2, y, dark);
+		rows := 5;
+		for(j := 0; j < rows; j += 1;) {
+			DrawFrontCourse(d, fi, j, rows, top, bot);
 		};
-
-		# vertical mortar (brick pattern, offset every other row)
-		cols := 3;
-		col_sp := wall_w / (cols + 1);
-		for(i := 1; i <= cols; i += 1;) {
-			for(j := 0; j <= rows; j += 1;) {
-				y_s := T(d) + sn + row_sp * j;
-				y_e := T(d) + sn + row_sp * (j + 1);
-				if(y_e > B(d) + sn) { y_e := B(d) + sn; };
-
-				offset := 0;
-				if(j % 2 = 1) { offset := col_sp / 2; };
-				x := L(d) + col_sp * i + offset;
-				if(x > L(d) + 2 & x < R(d) - 2) {
-					@renderer->VlineColor(x, y_s + 1, y_e - 1, dark);
-				};
-			};
-		};
-
-		# highlight on top edge
-		light := WallLight(fi, d);
-		@renderer->HLineColor(L(d), R(d), T(d) + sn + 1, light);
 	}
 
-	method : DrawSideTexture(d : Int, fi : Int, is_left : Bool) ~ Nil {
-		dark := WallDark(fi, d);
-		rows := 3;
-		near_h := B(d) - T(d);
-		far_h := B(d+1) - T(d+1);
+	method : DrawFrontCourse(d : Int, fi : Int, j : Int, rows : Int, top : Int, bot : Int) ~ Nil {
+		n := Bounds(4, j % 2 = 1);
+		wall_l := L(d);
+		wall_w := R(d) - L(d);
+		y0 := Lerp(top, bot, (j->As(Float) + 0.05) / rows->As(Float));
+		y1 := Lerp(top, bot, (j->As(Float) + 0.95) / rows->As(Float));
+		for(k := 0; k < n; k += 1;) {
+			DrawFrontBlock(d, fi, j, k, wall_l, wall_w, @bnd[k], @bnd[k + 1], y0, y1);
+		};
+	}
 
-		for(i := 1; i <= rows; i += 1;) {
-			t := i->As(Float) / (rows + 1)->As(Float);
-			near_y := T(d) + (near_h->As(Float) * t)->As(Int);
-			far_y := T(d+1) + (far_h->As(Float) * t)->As(Int);
+	method : DrawFrontBlock(d : Int, fi : Int, j : Int, k : Int, wall_l : Int, wall_w : Int,
+			u0 : Float, u1 : Float, y0 : Int, y1 : Int) ~ Nil {
+		g := 0.012;
+		a := u0 > 0.0 ? u0 + g : u0;
+		b := u1 < 1.0 ? u1 - g : u1;
+		xa := wall_l + (wall_w->As(Float) * a)->As(Int);
+		xb := wall_l + (wall_w->As(Float) * b)->As(Int);
 
-			if(is_left) {
-				@renderer->LineColor(L(d), near_y, L(d+1), far_y, dark);
-			}
-			else {
-				@renderer->LineColor(R(d), near_y, R(d+1), far_y, dark);
-			};
+		cx := (xa + xb) / 2;
+		cy := (y0 + y1) / 2;
+		z := d->As(Float);
+		boost := TorchLight(cx, cy);
+		vary := Hash(d + 20, j * 7 + k, fi + 5) % 21 - 10;
+
+		@renderer->BoxColor(xa, y0, xb, y1, Shade(@wall_r[fi], @wall_g[fi], @wall_b[fi], z, boost, vary));
+
+		# bevel: lit top edge, shadowed bottom edge
+		@renderer->HLineColor(xa, xb, y0, Shade(@wall_r[fi] + 35, @wall_g[fi] + 32, @wall_b[fi] + 28, z, boost, vary));
+		@renderer->HLineColor(xa, xb, y1, Shade(@wall_r[fi] / 2, @wall_g[fi] / 2, @wall_b[fi] / 2, z, boost, vary));
+
+		# an occasional cracked stone
+		if(Hash(d + 2, j * 9 + k, fi + 7) % 14 = 0 & xb - xa > 8) {
+			ch := (y1 - y0) / 3;
+			crack := Shade(@wall_r[fi] / 3, @wall_g[fi] / 3, @wall_b[fi] / 3, z, boost, 0);
+			@renderer->LineColor(cx - ch / 2, y0 + 1, cx + ch / 4, cy - ch / 3, crack);
+			@renderer->LineColor(cx + ch / 4, cy - ch / 3, cx - ch / 3, cy + ch / 4, crack);
+			@renderer->LineColor(cx - ch / 3, cy + ch / 4, cx + ch / 2, y1 - 1, crack);
+		};
+	}
+
+	# Soft light: stacked translucent discs so the edge fades instead of
+	# showing a hard rim (alpha accumulates toward the centre)
+	method : SoftGlow(cx : Int, cy : Int, radius : Int, r : Int, g : Int, b : Int, strength : Int) ~ Nil {
+		# the view is 15..429 x 7..310 and the HUD sits right against it, so
+		# never let a glow spill past the nearest edge
+		room := cx - 15;
+		if(429 - cx < room) { room := 429 - cx; };
+		if(cy - 7 < room) { room := cy - 7; };
+		if(310 - cy < room) { room := 310 - cy; };
+		if(radius > room) { radius := room; };
+		if(radius < 2) { return; };
+
+		steps := 8;
+		a := strength / steps;
+		if(a < 1) { a := 1; };
+		for(i := 0; i < steps; i += 1;) {
+			rad := radius * (steps - i) / steps;
+			@renderer->FilledCircleColor(cx, cy, rad, Color->New(r, g, b, a));
 		};
 	}
 
 	method : DrawWallTorch(d : Int, fi : Int, is_left : Bool) ~ Nil {
 		# torch mounted on a side wall
-		mid_x : Int;
-		if(is_left) {
-			mid_x := (L(d) + L(d+1)) / 2 + 5;
-		}
-		else {
-			mid_x := (R(d) + R(d+1)) / 2 - 5;
-		};
-		mid_y := (T(d) + B(d)) / 2 - 10;
+		mid_x := TorchX(d, is_left);
+		mid_y := TorchY(d);
 
 		sc := 4 - d;
 		if(sc < 1) { sc := 1; };
 
+		# find this torch's flicker (it was registered in Render)
+		fl := 0.9;
+		for(i := 0; i < @torch_n; i += 1;) {
+			if(@torch_x[i] = mid_x & @torch_y[i] = mid_y) {
+				fl := @torch_f[i];
+			};
+		};
+
+		# light on the wall: a wide warm pool, then a tight hot core
+		SoftGlow(mid_x, mid_y - sc, sc * 9 + 14, 255, 140, 40, (60.0 * fl)->As(Int));
+		SoftGlow(mid_x, mid_y - sc * 2, sc * 3 + 4, 255, 200, 90, (70.0 * fl)->As(Int));
+
 		# iron bracket
 		@renderer->ThickLineColor(mid_x, mid_y + sc * 3, mid_x, mid_y, 2, Color->New(Br(90, d), Br(70, d), Br(45, d)));
 
-		# flame
-		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2, sc * 2 + 1, Color->New(Br(255, d), Br(150, d), Br(30, d), 200));
-		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2 - 1, sc + 1, Color->New(Br(255, d), Br(220, d), Br(80, d), 220));
-
-		# glow on wall
-		glow_r := sc * 8 + 12;
-		@renderer->FilledCircleColor(mid_x, mid_y - sc, glow_r, Color->New(255, 140, 40, 8));
+		# flame, breathing with the flicker
+		fr := ((sc * 2 + 1)->As(Float) * (0.85 + fl * 0.3))->As(Int);
+		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2, fr, Color->New(255, 130, 25, 215));
+		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2 - 1, sc + 1, Color->New(255, 215, 80, 235));
+		@renderer->FilledCircleColor(mid_x, mid_y - sc * 2, sc / 2 + 1, Color->New(255, 250, 200, 245));
 	}
 
 	# Draw a stone plaque mounted on a front wall
@@ -1594,19 +1888,30 @@ class DungeonRenderer {
 		};
 	}
 
+	# Ambient finish over the whole view: a warm pool of lantern light around
+	# the player, and a soft vignette that darkens toward the viewport edges.
 	method : DrawTorchGlow(fi : Int, frame : Int) ~ Nil {
-		flicker := (Float->Sin(frame->As(Float) * 0.15) * 8.0)->As(Int);
-		alpha := 18 + flicker;
-		if(alpha < 5) { alpha := 5; };
-		if(alpha > 40) { alpha := 40; };
+		# lantern pool low and central, breathing with the flicker
+		lantern := (30.0 * @flick)->As(Int);
+		SoftGlow(222, 170, 140, 255, 170, 80, lantern);
 
-		glow := Color->New(255, 180, 80, alpha);
-		@renderer->FilledCircleColor(35, 280, 55, glow);
-		@renderer->FilledCircleColor(409, 280, 55, glow);
+		# vignette: ten nested frames, each a touch darker toward the edge
+		for(i := 0; i < 10; i += 1;) {
+			DrawVignetteRing(i);
+		};
+	}
 
-		core := Color->New(255, 200, 120, alpha + 10);
-		@renderer->FilledCircleColor(35, 285, 30, core);
-		@renderer->FilledCircleColor(409, 285, 30, core);
+	method : DrawVignetteRing(i : Int) ~ Nil {
+		f := 1.0 - i->As(Float) / 10.0;
+		a := (95.0 * f * f)->As(Int);
+		if(a < 1) { return; };
+		w := 6;
+		c := Color->New(0, 0, 0, a);
+		o := i * w;
+		@renderer->BoxColor(15, 7 + o, 429, 7 + o + w - 1, c);
+		@renderer->BoxColor(15, 310 - o - w + 1, 429, 310 - o, c);
+		@renderer->BoxColor(15 + o, 7 + o + w, 15 + o + w - 1, 310 - o - w, c);
+		@renderer->BoxColor(429 - o - w + 1, 7 + o + w, 429 - o, 310 - o - w, c);
 	}
 
 	method : DrawSpecialTile(d : Int, tile_type : Int, fi : Int) ~ Nil {
